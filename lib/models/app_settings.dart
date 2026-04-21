@@ -17,7 +17,7 @@ class AppSettings {
 
   AppSettings({
     this.detectorBaseUrl = 'http://127.0.0.1:8080',
-    this.streamPath = '/',
+    this.streamPath = 'rtsp://127.0.0.1:8554/live',
     this.apiBasePath = '/api',
     this.cameraPipeline =
         'libcamerasrc ! '
@@ -132,7 +132,10 @@ class AppSettings {
 
   Uri _resolveUri(String pathOrUrl) {
     final base = _normalizeBaseUri(detectorBaseUrl);
-    return pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')
+    return pathOrUrl.startsWith('http://') ||
+            pathOrUrl.startsWith('https://') ||
+            pathOrUrl.startsWith('rtsp://') ||
+            pathOrUrl.startsWith('rtsps://')
         ? Uri.parse(pathOrUrl)
         : base.resolve(pathOrUrl);
   }

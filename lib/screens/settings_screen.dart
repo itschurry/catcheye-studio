@@ -39,7 +39,7 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   _TextField(
-                    label: 'Stream Path',
+                    label: 'Stream Path / URL',
                     value: settings.streamPath,
                     onChanged: settingsProvider.updateStreamPath,
                   ),

@@ -2,7 +2,7 @@
 
 원격 라즈베리파이5에서 실행 중인 `catcheye-guard` 검출기를 제어하고, ROI JSON을 편집하고, 실시간 프리뷰 스트림을 확인하기 위한 Flutter 데스크톱 앱입니다.
 
-현재 코드는 Linux 데스크톱 환경을 기준으로 작성되어 있으며, 검출 앱은 별도 라즈베리파이에서 HTTP 스트림과 제어 API를 제공한다고 가정합니다.
+현재 코드는 Linux 데스크톱 환경을 기준으로 작성되어 있으며, 검출 앱은 별도 라즈베리파이에서 RTSP 스트림과 제어 API를 제공한다고 가정합니다.
 
 ## 주요 기능
 
@@ -10,8 +10,8 @@
   - 원격 `catcheye-guard` 시작/중지
   - 원격 상태, 연결 대상, 스트림 URL, 최근 동작 로그 확인
 - `Viewer`
-  - 원격 HTTP 스트림에서 JPEG 프레임 표시
-  - 연결 상태, FPS, 누적 프레임 수 확인
+  - 원격 RTSP 스트림 재생
+  - 연결 상태, 연결 URL 확인
 - `ROI Editor`
   - ROI JSON 파일 열기/새로 만들기/저장/다른 이름으로 저장
   - 원격 장치에서 ROI 다운로드/업로드
@@ -62,7 +62,7 @@ test/                          위젯 테스트
 - Flutter SDK 설치
 - Linux 데스크톱 타깃 사용 가능 환경
 - 원격 라즈베리파이5에서 실행 중인 `catcheye-guard`
-- 원격 장치에서 HTTP 스트림과 제어 API 제공
+- 원격 장치에서 RTSP 스트림과 제어 API 제공
 - 필요 시 원격 장치 기준 모델/메타데이터/ROI 설정 파일
   - `.param`
   - `.bin`
@@ -99,7 +99,7 @@ flutter test
 4. `ROI Editor`에서 로컬 ROI 파일을 편집하거나 `Load ROI From Device`로 원격 ROI를 불러옵니다.
 5. `Push ROI To Device`로 편집한 ROI를 원격 장치에 올립니다.
 6. `Dashboard`에서 `Start`/`Stop`으로 원격 검출기를 제어합니다.
-7. `Viewer`에서 원격 HTTP 스트림에 연결합니다.
+7. `Viewer`에서 원격 RTSP 스트림에 연결합니다.
 
 ## 원격 제어 API
 
@@ -142,10 +142,10 @@ flutter test
 `Viewer`는 기본적으로 아래 URL로 연결합니다.
 
 ```text
-http://127.0.0.1:8080/
+rtsp://127.0.0.1:8554/live
 ```
 
-실제 운영에서는 `Settings`의 `Detector Base URL`과 `Stream Path`를 조합한 URL을 사용합니다. 앱은 HTTP 응답 바디에서 JPEG 시작/종료 마커를 찾아 프레임을 추출하므로, 일반적인 MJPEG 스트림(`multipart/x-mixed-replace`)이나 연속 JPEG 바이트 스트림을 받을 수 있습니다.
+실제 운영에서는 `Settings`의 `Detector Base URL`과 `Stream Path`(또는 전체 RTSP URL)를 조합한 URL을 사용합니다. `Viewer`는 `media_kit` 기반 플레이어로 RTSP 스트림을 직접 재생합니다.
 
 ## ROI JSON 형식
 
