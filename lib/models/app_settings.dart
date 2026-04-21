@@ -1,6 +1,8 @@
 // catcheye-guard remote detector settings model
 
 class AppSettings {
+  static const int defaultRtspPort = 8554;
+
   String detectorBaseUrl;
   String streamPath;
   String apiBasePath;
@@ -131,13 +133,27 @@ class AppSettings {
   }
 
   Uri _resolveUri(String pathOrUrl) {
-    final base = _normalizeBaseUri(detectorBaseUrl);
-    return pathOrUrl.startsWith('http://') ||
+    if (pathOrUrl.startsWith('http://') ||
             pathOrUrl.startsWith('https://') ||
             pathOrUrl.startsWith('rtsp://') ||
             pathOrUrl.startsWith('rtsps://')
-        ? Uri.parse(pathOrUrl)
-        : base.resolve(pathOrUrl);
+    ) {
+      return Uri.parse(pathOrUrl);
+    }
+
+    final rtspBase = _buildRtspBaseUri(detectorBaseUrl);
+    final normalizedPath = pathOrUrl.startsWith('/') ? pathOrUrl : '/$pathOrUrl';
+    return rtspBase.replace(path: normalizedPath);
+  }
+
+  static Uri _buildRtspBaseUri(String rawUrl) {
+    final httpBase = _normalizeBaseUri(rawUrl);
+    return Uri(
+      scheme: 'rtsp',
+      host: httpBase.host,
+      port: defaultRtspPort,
+      path: '/',
+    );
   }
 
   static Uri _normalizeBaseUri(String rawUrl) {

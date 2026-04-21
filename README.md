@@ -145,7 +145,7 @@ flutter test
 rtsp://127.0.0.1:8554/live
 ```
 
-실제 운영에서는 `Settings`의 `Detector Base URL`과 `Stream Path`(또는 전체 RTSP URL)를 조합한 URL을 사용합니다. `Viewer`는 `media_kit` 기반 플레이어로 RTSP 스트림을 직접 재생합니다.
+실제 운영에서는 `Settings`의 `Detector Base URL`과 `Stream Path`(또는 전체 RTSP URL)를 조합한 URL을 사용합니다. `Stream Path`가 `/live` 같은 상대 경로면 `rtsp://<detector-host>:8554/<path>`로 자동 해석합니다. `Viewer`는 `media_kit` 기반 플레이어로 RTSP 스트림을 직접 재생합니다.
 
 ## ROI JSON 형식
 
