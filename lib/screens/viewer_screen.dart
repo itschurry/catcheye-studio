@@ -5,7 +5,7 @@ import '../providers/settings_provider.dart';
 import '../services/frame_receiver_service.dart';
 import '../widgets/live_viewer.dart';
 
-/// Live preview viewer screen — connects to the remote detector HTTP stream.
+/// Live preview viewer screen — connects to the remote detector RTSP stream.
 
 class ViewerScreen extends StatelessWidget {
   const ViewerScreen({super.key});
@@ -23,7 +23,10 @@ class ViewerScreen extends StatelessWidget {
 
             // Frame viewer
             Expanded(
-              child: LiveViewer(frameData: receiver.currentFrame),
+              child: LiveViewer(
+                controller: receiver.videoController,
+                connected: receiver.connected,
+              ),
             ),
 
             // Status bar
@@ -93,7 +96,7 @@ class ViewerScreen extends StatelessWidget {
             OutlinedButton.icon(
               icon: const Icon(Icons.power_off, size: 16),
               label: const Text('Disconnect'),
-              onPressed: receiver.disconnect,
+              onPressed: () => receiver.disconnect(),
             ),
           ],
 
@@ -140,18 +143,14 @@ class ViewerScreen extends StatelessWidget {
           const SizedBox(width: 16),
           _StatusChip(
             label: 'FPS',
-            value: '${receiver.fps}',
-            color: receiver.fps > 20
-                ? Colors.green
-                : receiver.fps > 10
-                    ? Colors.orange
-                    : Colors.red,
+            value: 'N/A (RTSP)',
+            color: Colors.grey,
           ),
           const SizedBox(width: 16),
           _StatusChip(
             label: 'Frames',
-            value: '${receiver.frameCount}',
-            color: Colors.cyan,
+            value: 'N/A (RTSP)',
+            color: Colors.grey,
           ),
           const Spacer(),
           Text(
@@ -180,8 +179,8 @@ class ViewerScreen extends StatelessWidget {
           controller: controller,
           autofocus: true,
           decoration: const InputDecoration(
-            labelText: 'HTTP stream URL',
-            hintText: 'http://192.168.0.10:8080/',
+            labelText: 'RTSP stream URL',
+            hintText: 'rtsp://192.168.0.10:8554/live',
             border: OutlineInputBorder(),
           ),
           style: const TextStyle(fontFamily: 'monospace', fontSize: 13),

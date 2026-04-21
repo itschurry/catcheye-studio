@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart';
 import 'package:provider/provider.dart';
 
 import 'providers/roi_config_provider.dart';
@@ -12,6 +13,7 @@ import 'services/frame_receiver_service.dart';
 import 'services/process_manager_service.dart';
 
 void main() {
+  MediaKit.ensureInitialized();
   runApp(const CatchEyeGuardApp());
 }
 

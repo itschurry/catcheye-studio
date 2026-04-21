@@ -1,22 +1,22 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 
-/// Displays a live JPEG frame stream with minimal overhead.
-
+/// Displays an RTSP stream player.
 class LiveViewer extends StatelessWidget {
-  final Uint8List? frameData;
+  final VideoController controller;
+  final bool connected;
   final BoxFit fit;
 
   const LiveViewer({
     super.key,
-    required this.frameData,
+    required this.controller,
+    required this.connected,
     this.fit = BoxFit.contain,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (frameData == null || frameData!.isEmpty) {
+    if (!connected) {
       return Container(
         color: Colors.black,
         child: const Center(
@@ -26,7 +26,7 @@ class LiveViewer extends StatelessWidget {
               Icon(Icons.videocam_off, size: 48, color: Colors.grey),
               SizedBox(height: 8),
               Text(
-                'No frame',
+                'No stream',
                 style: TextStyle(color: Colors.grey),
               ),
             ],
@@ -37,13 +37,10 @@ class LiveViewer extends StatelessWidget {
 
     return Container(
       color: Colors.black,
-      child: Center(
-        child: Image.memory(
-          frameData!,
-          fit: fit,
-          gaplessPlayback: true, // Prevents flicker between frames
-          filterQuality: FilterQuality.low, // Fastest rendering
-        ),
+      child: Video(
+        controller: controller,
+        fit: fit,
+        controls: NoVideoControls,
       ),
     );
   }
