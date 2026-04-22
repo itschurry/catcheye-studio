@@ -2,7 +2,7 @@
 
 원격 라즈베리파이5에서 실행 중인 `catcheye-guard` 검출기를 제어하고, ROI JSON을 편집하고, 실시간 프리뷰 스트림을 확인하기 위한 Flutter 데스크톱 앱입니다.
 
-현재 코드는 Linux 데스크톱 환경을 기준으로 작성되어 있으며, 검출 앱은 별도 라즈베리파이에서 RTSP 스트림과 제어 API를 제공한다고 가정합니다.
+주 사용 환경은 Windows 데스크톱이며, 검출 앱은 별도 라즈베리파이5에서 RTSP 스트림과 제어 API를 제공한다고 가정합니다. Linux 관련 내용은 보조 실행 환경이나 트러블슈팅 용도로만 참고하면 돼.
 
 ## 주요 기능
 
@@ -60,7 +60,7 @@ test/                          위젯 테스트
 다음 환경을 전제로 합니다.
 
 - Flutter SDK 설치
-- Linux 데스크톱 타깃 사용 가능 환경
+- Windows 데스크톱 타깃 사용 가능 환경
 - 원격 라즈베리파이5에서 실행 중인 `catcheye-guard`
 - 원격 장치에서 RTSP 스트림과 제어 API 제공
 - 필요 시 원격 장치 기준 모델/메타데이터/ROI 설정 파일
@@ -71,7 +71,7 @@ test/                          위젯 테스트
 
 `pubspec.yaml` 기준 SDK 제약은 `Dart ^3.11.1` 입니다.
 
-## 실행 방법
+## Windows 실행 방법
 
 의존성 설치:
 
@@ -79,10 +79,34 @@ test/                          위젯 테스트
 flutter pub get
 ```
 
-Linux 데스크톱으로 실행:
+Windows 데스크톱 활성화:
 
 ```bash
-flutter run -d linux
+flutter config --enable-windows-desktop
+```
+
+사용 가능한 디바이스 확인:
+
+```bash
+flutter devices
+```
+
+프로젝트에 `windows/` 러너가 아직 없으면 생성:
+
+```bash
+flutter create --platforms=windows .
+```
+
+Windows 데스크톱으로 실행:
+
+```bash
+flutter run -d windows
+```
+
+Windows 빌드:
+
+```bash
+flutter build windows
 ```
 
 테스트 실행:
@@ -90,6 +114,71 @@ flutter run -d linux
 ```bash
 flutter test
 ```
+
+## Linux 참고 사항
+
+아래 내용은 Linux에서 보조적으로 실행하거나 디버깅할 때만 필요해. Windows가 주 타깃이면 평소엔 무시해도 된다.
+
+### Linux 빌드 필수 패키지
+
+이 앱은 Linux 데스크톱에서 `media_kit`, `media_kit_video`, `volume_controller` 플러그인을 사용하므로 시스템 개발 패키지가 필요해.
+
+최소한 아래 패키지는 먼저 깔아둬.
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  pkg-config \
+  libasound2-dev \
+  libmpv-dev \
+  libepoxy-dev
+```
+
+패키지가 빠져 있으면 보통 아래 같은 에러로 터져.
+
+- `Could NOT find ALSA (missing: ALSA_LIBRARY ALSA_INCLUDE_DIR)`
+- `Target "media_kit_video_plugin" links to: PkgConfig::mpv but the target was not found`
+
+### Linux 런타임 오디오 스택
+
+이 앱은 RTSP 프리뷰를 `media_kit` 기반 플레이어로 재생하므로, Linux 실행 환경에 기본 오디오 스택이 없는 경우 런타임에서 ALSA 또는 오디오 컨트롤러 초기화 에러가 날 수 있어.
+
+먼저 유틸리티 패키지를 깔아.
+
+```bash
+sudo apt install alsa-utils
+sudo apt install pulseaudio-utils
+```
+
+오디오 장치가 실제로 잡히는지 확인:
+
+```bash
+aplay -l
+pactl info
+```
+
+런타임에서 아래 같은 에러가 나면 기본 오디오 장치가 없거나 깨진 상태일 가능성이 커.
+
+- `ALSA lib ... cannot find card '0'`
+- `Failed to create AudioController: Failed to attach mixer to card: default`
+- `Segmentation fault (core dumped)`
+
+### 사운드카드가 없는 환경
+
+헤드리스 머신, VM, 일부 WSL 환경처럼 실제 사운드카드가 없으면 더미 ALSA 장치를 만들어.
+
+```bash
+sudo modprobe snd-dummy
+aplay -l
+```
+
+부팅 후에도 유지하려면:
+
+```bash
+echo snd-dummy | sudo tee /etc/modules-load.d/snd-dummy.conf
+```
+
+최소 기준은 `aplay -l` 했을 때 카드가 하나라도 보여야 한다는 거야.
 
 ## 기본 사용 흐름
 
@@ -183,7 +272,8 @@ ROI 편집기는 아래 구조의 JSON을 사용합니다.
 - 설정값은 메모리에만 유지되며 앱 재시작 후 자동 복원되지 않습니다.
 - 로컬 `.json` ROI 파일 편집과 원격 ROI 업로드/다운로드를 함께 지원합니다.
 - ROI 기본 자동 로드는 특정 고정 경로를 후보로 검사하는 형태로 유지되어 있습니다.
-- 플랫폼 코드는 현재 `linux/`만 포함되어 있어 사실상 Linux 데스크톱 사용이 전제됩니다.
+- Windows를 주 타깃으로 사용한다.
+- Linux 실행 경로는 보조 확인용이며, `media_kit` 런타임 의존성 때문에 오디오/그래픽 스택 이슈가 더 쉽게 드러날 수 있다.
 
 ## 개발 메모
 

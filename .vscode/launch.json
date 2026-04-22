@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Flutter: Run Linux",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "flutter run -d linux",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Flutter: Run Built Linux App",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "${workspaceFolder}/build/linux/x64/release/bundle/catcheye_guard_app",
+      "cwd": "${workspaceFolder}"
+      // "preLaunchTask": "Flutter: Build Linux"
+    }
+  ]
+}
