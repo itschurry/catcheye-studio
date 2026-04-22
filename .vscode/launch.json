@@ -12,7 +12,7 @@
       "name": "Flutter: Run Built Windows App",
       "type": "node-terminal",
       "request": "launch",
-      "command": "${workspaceFolder}/build/windows/runner/Release/catcheye_guard_app.exe",
+      "command": "${workspaceFolder}/build/windows/x64/runner/Release/catcheye_guard_app.exe",
       "cwd": "${workspaceFolder}"
       // "preLaunchTask": "Flutter: Build Windows"
     }
