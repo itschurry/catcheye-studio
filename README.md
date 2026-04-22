@@ -2,7 +2,7 @@
 
 원격 라즈베리파이5에서 실행 중인 `catcheye-guard` 검출기를 제어하고, ROI JSON을 편집하고, 실시간 프리뷰 스트림을 확인하기 위한 Flutter 데스크톱 앱입니다.
 
-주 사용 환경은 Windows 데스크톱이며, 검출 앱은 별도 라즈베리파이5에서 RTSP 스트림과 제어 API를 제공한다고 가정합니다. Linux 관련 내용은 보조 실행 환경이나 트러블슈팅 용도로만 참고하면 돼.
+주 사용 환경은 Windows 데스크톱이며, 검출 앱은 별도 라즈베리파이5에서 RTSP 스트림과 제어 API를 제공한다고 가정합니다.
 
 ## 주요 기능
 
@@ -51,7 +51,6 @@ lib/
   screens/                     각 화면 UI
   services/                    원격 제어, 프레임 수신, ROI 파일 입출력
   widgets/                     ROI 캔버스, 뷰어, 존 편집 패널
-linux/                         Linux 데스크톱 러너
 test/                          위젯 테스트
 ```
 
@@ -115,29 +114,6 @@ flutter build windows
 flutter test
 ```
 
-## Linux 참고 사항
-
-아래 내용은 Linux에서 보조적으로 실행하거나 디버깅할 때만 필요해. Windows가 주 타깃이면 평소엔 무시해도 된다.
-
-### Linux 빌드 필수 패키지
-
-이 앱은 Linux 데스크톱에서 `media_kit`, `media_kit_video`, `volume_controller` 플러그인을 사용하므로 시스템 개발 패키지가 필요해.
-
-최소한 아래 패키지는 먼저 깔아둬.
-
-```bash
-sudo apt-get update
-sudo apt-get install -y \
-  pkg-config \
-  libasound2-dev \
-  libmpv-dev \
-  libepoxy-dev
-```
-
-패키지가 빠져 있으면 보통 아래 같은 에러로 터져.
-
-- `Could NOT find ALSA (missing: ALSA_LIBRARY ALSA_INCLUDE_DIR)`
-- `Target "media_kit_video_plugin" links to: PkgConfig::mpv but the target was not found`
 
 ### Linux 런타임 오디오 스택
 
