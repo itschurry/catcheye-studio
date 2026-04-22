@@ -9,12 +9,12 @@
       "cwd": "${workspaceFolder}"
     },
     {
-      "name": "Flutter: Run Built Linux App",
+      "name": "Flutter: Run Built Windows App",
       "type": "node-terminal",
       "request": "launch",
-      "command": "${workspaceFolder}/build/linux/x64/release/bundle/catcheye_guard_app",
+      "command": "${workspaceFolder}/build/windows/runner/Release/catcheye_guard_app.exe",
       "cwd": "${workspaceFolder}"
-      // "preLaunchTask": "Flutter: Build Linux"
+      // "preLaunchTask": "Flutter: Build Windows"
     }
   ]
 }

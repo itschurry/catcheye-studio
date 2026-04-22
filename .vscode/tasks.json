@@ -5,9 +5,7 @@
       "label": "Flutter: Clean",
       "type": "shell",
       "command": "flutter",
-      "args": [
-        "clean"
-      ],
+      "args": ["clean"],
       "group": "build",
       "problemMatcher": []
     },
@@ -15,21 +13,15 @@
       "label": "Flutter: Pub Get",
       "type": "shell",
       "command": "flutter",
-      "args": [
-        "pub",
-        "get"
-      ],
+      "args": ["pub", "get"],
       "group": "build",
       "problemMatcher": []
     },
     {
-      "label": "Flutter: Build Linux",
+      "label": "Flutter: Build Windows",
       "type": "shell",
       "command": "flutter",
-      "args": [
-        "build",
-        "linux"
-      ],
+      "args": ["build", "windows"],
       "group": {
         "kind": "build",
         "isDefault": false
