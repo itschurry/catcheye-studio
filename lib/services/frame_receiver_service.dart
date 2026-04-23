@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show Size;
 
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
@@ -27,6 +28,8 @@ class FrameReceiverService extends ChangeNotifier {
   int _framesThisSecond = 0;
   StreamTransport? _transport;
 
+  Size? _frameSize;
+
   bool get connected => _connected;
   bool get connecting => _connecting;
   String? get errorMessage => _errorMessage;
@@ -38,6 +41,7 @@ class FrameReceiverService extends ChangeNotifier {
   StreamTransport? get transport => _transport;
   bool get isRtsp => _transport == StreamTransport.rtsp;
   bool get isWebSocket => _transport == StreamTransport.websocket;
+  Size? get frameSize => _frameSize;
 
   static const String defaultStreamUrl = 'ws://127.0.0.1:8080';
 
@@ -102,6 +106,7 @@ class FrameReceiverService extends ChangeNotifier {
     _fps = 0;
     _framesThisSecond = 0;
     _transport = null;
+    _frameSize = null;
     _closingWebSocket = false;
   }
 
@@ -175,8 +180,39 @@ class FrameReceiverService extends ChangeNotifier {
       _currentFrame = Uint8List.fromList(data);
       _frameCount++;
       _framesThisSecond++;
+      if (_frameSize == null) {
+        final detected = _parseJpegSize(_currentFrame!);
+        if (detected != null) {
+          _frameSize = detected;
+        }
+      }
       notifyListeners();
     }
+  }
+
+  /// Parses JPEG SOF marker to extract image dimensions.
+  Size? _parseJpegSize(Uint8List bytes) {
+    if (bytes.length < 4) return null;
+    if (bytes[0] != 0xFF || bytes[1] != 0xD8) return null;
+
+    int i = 2;
+    while (i + 4 <= bytes.length) {
+      if (bytes[i] != 0xFF) break;
+      final marker = bytes[i + 1];
+      if (marker == 0xD8 || marker == 0xD9) {
+        i += 2;
+        continue;
+      }
+      if (i + 4 > bytes.length) break;
+      final segLen = (bytes[i + 2] << 8) | bytes[i + 3];
+      if (marker >= 0xC0 && marker <= 0xC3 && segLen >= 7 && i + 9 <= bytes.length) {
+        final h = (bytes[i + 5] << 8) | bytes[i + 6];
+        final w = (bytes[i + 7] << 8) | bytes[i + 8];
+        if (w > 0 && h > 0) return Size(w.toDouble(), h.toDouble());
+      }
+      i += 2 + segLen;
+    }
+    return null;
   }
 
   void _startFpsCounter() {

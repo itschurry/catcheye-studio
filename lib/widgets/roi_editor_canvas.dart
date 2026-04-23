@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/roi_config.dart';
 import '../providers/roi_config_provider.dart';
+import '../services/frame_receiver_service.dart';
 import 'roi_canvas_painter.dart';
 
 /// Canvas widget for visually editing ROI polygons
@@ -19,6 +20,33 @@ class _RoiEditorCanvasState extends State<RoiEditorCanvas> {
   int? _draggingPoint;
   int? _hoveredZone;
   int? _hoveredPoint;
+  FrameReceiverService? _frameReceiver;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final receiver = context.read<FrameReceiverService>();
+    if (_frameReceiver != receiver) {
+      _frameReceiver?.removeListener(_syncFrameSize);
+      _frameReceiver = receiver;
+      _frameReceiver!.addListener(_syncFrameSize);
+    }
+  }
+
+  void _syncFrameSize() {
+    final size = _frameReceiver?.frameSize;
+    if (size == null) return;
+    context.read<RoiConfigProvider>().syncImageSize(
+          size.width.round(),
+          size.height.round(),
+        );
+  }
+
+  @override
+  void dispose() {
+    _frameReceiver?.removeListener(_syncFrameSize);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

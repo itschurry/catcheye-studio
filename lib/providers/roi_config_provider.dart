@@ -49,6 +49,31 @@ class RoiConfigProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Updates image dimensions and scales existing points proportionally.
+  /// Does not mark the config as dirty — this is auto-detected from the stream.
+  void syncImageSize(int width, int height) {
+    if (width <= 0 || height <= 0) return;
+    if (_config.imageWidth == width && _config.imageHeight == height) return;
+
+    final scaleX = _config.imageWidth > 0 ? width / _config.imageWidth : 1.0;
+    final scaleY = _config.imageHeight > 0 ? height / _config.imageHeight : 1.0;
+
+    final scaledZones = _config.allowedZones.map((zone) {
+      return zone.copyWith(
+        points: zone.points
+            .map((p) => RoiPoint(x: p.x * scaleX, y: p.y * scaleY))
+            .toList(),
+      );
+    }).toList();
+
+    _config = _config.copyWith(
+      imageWidth: width,
+      imageHeight: height,
+      allowedZones: scaledZones,
+    );
+    notifyListeners();
+  }
+
   void updateConfig({
     String? cameraId,
     int? imageWidth,
