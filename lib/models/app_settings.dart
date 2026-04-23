@@ -19,7 +19,7 @@ class AppSettings {
 
   AppSettings({
     this.detectorBaseUrl = 'http://127.0.0.1:8080',
-    this.streamPath = 'rtsp://127.0.0.1:8554/live',
+    this.streamPath = 'ws://127.0.0.1:8080',
     this.apiBasePath = '/api',
     this.cameraPipeline =
         'libcamerasrc ! '
