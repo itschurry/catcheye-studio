@@ -39,7 +39,7 @@ class FrameReceiverService extends ChangeNotifier {
   bool get isRtsp => _transport == StreamTransport.rtsp;
   bool get isWebSocket => _transport == StreamTransport.websocket;
 
-  static const String defaultStreamUrl = 'rtsp://127.0.0.1:8554/live';
+  static const String defaultStreamUrl = 'rtsp://127.0.0.1:8554/stream';
 
   FrameReceiverService() {
     _playingSubscription = _player.stream.playing.listen((isPlaying) {
