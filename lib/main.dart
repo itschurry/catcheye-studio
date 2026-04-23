@@ -4,13 +4,9 @@ import 'package:provider/provider.dart';
 
 import 'providers/roi_config_provider.dart';
 import 'providers/settings_provider.dart';
-import 'screens/dashboard_screen.dart';
-import 'screens/log_viewer_screen.dart';
 import 'screens/roi_editor_screen.dart';
-import 'screens/settings_screen.dart';
 import 'screens/viewer_screen.dart';
 import 'services/frame_receiver_service.dart';
-import 'services/process_manager_service.dart';
 
 void main() {
   MediaKit.ensureInitialized();
@@ -26,7 +22,6 @@ class CatchEyeGuardApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => RoiConfigProvider()..tryLoadDefault()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
-        ChangeNotifierProvider(create: (_) => ProcessManagerService()),
         ChangeNotifierProvider(create: (_) => FrameReceiverService()),
       ],
       child: MaterialApp(
@@ -55,11 +50,6 @@ class _AppShellState extends State<AppShell> {
 
   static const _destinations = [
     NavigationRailDestination(
-      icon: Icon(Icons.dashboard_outlined),
-      selectedIcon: Icon(Icons.dashboard),
-      label: Text('Dashboard'),
-    ),
-    NavigationRailDestination(
       icon: Icon(Icons.live_tv_outlined),
       selectedIcon: Icon(Icons.live_tv),
       label: Text('Viewer'),
@@ -69,24 +59,11 @@ class _AppShellState extends State<AppShell> {
       selectedIcon: Icon(Icons.edit_location_alt),
       label: Text('ROI Editor'),
     ),
-    NavigationRailDestination(
-      icon: Icon(Icons.settings_outlined),
-      selectedIcon: Icon(Icons.settings),
-      label: Text('Settings'),
-    ),
-    NavigationRailDestination(
-      icon: Icon(Icons.article_outlined),
-      selectedIcon: Icon(Icons.article),
-      label: Text('Logs'),
-    ),
   ];
 
   static const _screens = [
-    DashboardScreen(),
     ViewerScreen(),
     RoiEditorScreen(),
-    SettingsScreen(),
-    LogViewerScreen(),
   ];
 
   @override

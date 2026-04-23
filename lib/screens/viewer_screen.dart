@@ -18,7 +18,7 @@ class ViewerScreen extends StatelessWidget {
         return Column(
           children: [
             // Toolbar
-            _buildToolbar(context, receiver, settings.streamUri.toString()),
+            _buildToolbar(context, receiver, settings.streamUri.toString(), settings.detectorBaseUrl),
             const Divider(height: 1),
 
             // Frame viewer
@@ -43,6 +43,7 @@ class ViewerScreen extends StatelessWidget {
     BuildContext context,
     FrameReceiverService receiver,
     String defaultStreamUrl,
+    String defaultApiBaseUrl,
   ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -68,7 +69,7 @@ class ViewerScreen extends StatelessWidget {
               icon: const Icon(Icons.link, size: 16),
               label: const Text('Change URL'),
               onPressed: () =>
-                  _showConnectDialog(context, receiver, defaultStreamUrl),
+                  _showConnectDialog(context, receiver, defaultStreamUrl, defaultApiBaseUrl),
             ),
           ] else if (receiver.connecting) ...[
             const SizedBox(
@@ -193,23 +194,39 @@ class ViewerScreen extends StatelessWidget {
     BuildContext context,
     FrameReceiverService receiver,
     String defaultStreamUrl,
+    String defaultApiBaseUrl,
   ) {
-    final controller = TextEditingController(text: defaultStreamUrl);
+    final streamController = TextEditingController(text: defaultStreamUrl);
+    final apiController = TextEditingController(text: defaultApiBaseUrl);
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Connect to Stream'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'RTSP or WebSocket URL',
-            hintText:
-                'rtsp://192.168.0.10:8554/live 또는 ws://192.168.0.10:8080/',
-            border: OutlineInputBorder(),
-          ),
-          style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+        title: const Text('Connect'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: streamController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Stream URL',
+                hintText: 'rtsp://192.168.0.10:8554/live  또는  ws://192.168.0.10:8080/',
+                border: OutlineInputBorder(),
+              ),
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: apiController,
+              decoration: const InputDecoration(
+                labelText: 'API Base URL',
+                hintText: 'http://192.168.0.10:8080',
+                border: OutlineInputBorder(),
+              ),
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -219,7 +236,10 @@ class ViewerScreen extends StatelessWidget {
           FilledButton(
             onPressed: () {
               Navigator.pop(ctx);
-              receiver.connect(controller.text.trim());
+              final sp = context.read<SettingsProvider>();
+              sp.updateStreamPath(streamController.text.trim());
+              sp.updateDetectorBaseUrl(apiController.text.trim());
+              receiver.connect(streamController.text.trim());
             },
             child: const Text('Connect'),
           ),

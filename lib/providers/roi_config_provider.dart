@@ -5,20 +5,16 @@ import 'package:flutter/material.dart';
 import '../models/roi_config.dart';
 import '../services/roi_config_service.dart';
 
-/// ROI config state management Provider
-
 class RoiConfigProvider extends ChangeNotifier {
   CameraRoiConfig _config = CameraRoiConfig.defaultConfig();
   String? _filePath;
   bool _isDirty = false;
-  List<String> _validationIssues = [];
   int _selectedZoneIndex = -1;
   String? _errorMessage;
 
   CameraRoiConfig get config => _config;
   String? get filePath => _filePath;
   bool get isDirty => _isDirty;
-  List<String> get validationIssues => _validationIssues;
   int get selectedZoneIndex => _selectedZoneIndex;
   String? get errorMessage => _errorMessage;
 
@@ -50,24 +46,7 @@ class RoiConfigProvider extends ChangeNotifier {
     _isDirty = false;
     _errorMessage = null;
     _selectedZoneIndex = _config.allowedZones.isNotEmpty ? 0 : -1;
-    _validate();
     notifyListeners();
-  }
-
-  Future<void> saveToFile([String? path]) async {
-    final savePath = path ?? _filePath;
-    if (savePath == null) return;
-
-    try {
-      await RoiConfigService.saveToFile(_config, savePath);
-      _filePath = savePath;
-      _isDirty = false;
-      _errorMessage = null;
-      notifyListeners();
-    } catch (e) {
-      _errorMessage = 'Save failed: $e';
-      notifyListeners();
-    }
   }
 
   void updateConfig({
@@ -81,7 +60,6 @@ class RoiConfigProvider extends ChangeNotifier {
       imageHeight: imageHeight,
     );
     _isDirty = true;
-    _validate();
     notifyListeners();
   }
 
@@ -101,7 +79,6 @@ class RoiConfigProvider extends ChangeNotifier {
     _config.allowedZones.add(zone);
     _selectedZoneIndex = index;
     _isDirty = true;
-    _validate();
     notifyListeners();
   }
 
@@ -112,7 +89,6 @@ class RoiConfigProvider extends ChangeNotifier {
       _selectedZoneIndex = _config.allowedZones.length - 1;
     }
     _isDirty = true;
-    _validate();
     notifyListeners();
   }
 
@@ -139,7 +115,6 @@ class RoiConfigProvider extends ChangeNotifier {
     if (pointIndex < 0 || pointIndex >= zone.points.length) return;
     zone.points[pointIndex] = RoiPoint(x: x, y: y);
     _isDirty = true;
-    _validate();
     notifyListeners();
   }
 
@@ -147,7 +122,6 @@ class RoiConfigProvider extends ChangeNotifier {
     if (zoneIndex < 0 || zoneIndex >= _config.allowedZones.length) return;
     _config.allowedZones[zoneIndex].points.add(point);
     _isDirty = true;
-    _validate();
     notifyListeners();
   }
 
@@ -157,21 +131,9 @@ class RoiConfigProvider extends ChangeNotifier {
     if (pointIndex < 0 || pointIndex >= zone.points.length) return;
     zone.points.removeAt(pointIndex);
     _isDirty = true;
-    _validate();
     notifyListeners();
   }
 
-  void newConfig() {
-    _config = CameraRoiConfig.defaultConfig();
-    _filePath = null;
-    _isDirty = false;
-    _selectedZoneIndex = -1;
-    _errorMessage = null;
-    _validationIssues = [];
-    notifyListeners();
-  }
-
-  /// Auto-detect default ROI file
   Future<void> tryLoadDefault() async {
     final candidates = [
       '/mnt/d/workspace-windows/catcheye-guard/models/roi_cam_default.json',
@@ -182,9 +144,5 @@ class RoiConfigProvider extends ChangeNotifier {
         return;
       }
     }
-  }
-
-  void _validate() {
-    _validationIssues = RoiConfigService.validate(_config);
   }
 }

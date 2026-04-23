@@ -1,4 +1,3 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -112,31 +111,9 @@ class RoiEditorScreen extends StatelessWidget {
 
           // Action buttons
           IconButton(
-            icon: const Icon(Icons.note_add_outlined, size: 20),
-            tooltip: 'New Config',
-            onPressed: provider.newConfig,
-          ),
-          IconButton(
-            icon: const Icon(Icons.folder_open, size: 20),
-            tooltip: 'Open File',
-            onPressed: () => _openFile(context, provider),
-          ),
-          IconButton(
             icon: const Icon(Icons.cloud_download_outlined, size: 20),
             tooltip: 'Load ROI From Device',
             onPressed: () => _loadFromDevice(context, provider),
-          ),
-          IconButton(
-            icon: const Icon(Icons.save, size: 20),
-            tooltip: 'Save',
-            onPressed: provider.isDirty
-                ? () => _saveFile(context, provider)
-                : null,
-          ),
-          IconButton(
-            icon: const Icon(Icons.save_as, size: 20),
-            tooltip: 'Save As',
-            onPressed: () => _saveAsFile(context, provider),
           ),
           IconButton(
             icon: const Icon(Icons.cloud_upload_outlined, size: 20),
@@ -186,47 +163,6 @@ class RoiEditorScreen extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  Future<void> _openFile(BuildContext context, RoiConfigProvider provider) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['json'],
-      dialogTitle: 'Open ROI Config File',
-    );
-    if (result != null && result.files.single.path != null) {
-      await provider.loadFromFile(result.files.single.path!);
-    }
-  }
-
-  Future<void> _saveFile(BuildContext context, RoiConfigProvider provider) async {
-    if (provider.filePath != null) {
-      await provider.saveToFile();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Saved'), duration: Duration(seconds: 1)),
-        );
-      }
-    } else {
-      await _saveAsFile(context, provider);
-    }
-  }
-
-  Future<void> _saveAsFile(BuildContext context, RoiConfigProvider provider) async {
-    final result = await FilePicker.platform.saveFile(
-      dialogTitle: 'Save ROI Config File',
-      fileName: 'roi_config.json',
-      type: FileType.custom,
-      allowedExtensions: ['json'],
-    );
-    if (result != null) {
-      await provider.saveToFile(result);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Saved: $result'), duration: const Duration(seconds: 2)),
-        );
-      }
-    }
   }
 
   Future<void> _loadFromDevice(

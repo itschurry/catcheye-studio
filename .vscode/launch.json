@@ -2,10 +2,10 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Flutter: Run Linux",
+      "name": "Flutter: Run Windows App",
       "type": "node-terminal",
       "request": "launch",
-      "command": "flutter run -d linux",
+      "command": "flutter run -d windows",
       "cwd": "${workspaceFolder}"
     },
     {

@@ -5,41 +5,11 @@ import '../models/app_settings.dart';
 import '../models/roi_config.dart';
 import 'roi_config_service.dart';
 
-class RemoteStatus {
-  final String rawStatus;
-  final String? message;
-
-  const RemoteStatus({
-    required this.rawStatus,
-    this.message,
-  });
-}
-
 class RemoteGuardApiService {
   final HttpClient _client = HttpClient();
 
-  Future<AppSettings> fetchSettings(AppSettings connectionSettings) async {
-    final json = await _requestJson(
-      'GET',
-      connectionSettings.buildApiUri('settings'),
-    );
-    return AppSettings.fromRemoteJson(json);
-  }
-
-  Future<void> pushSettings(AppSettings settings) async {
-    await _requestJson(
-      'PUT',
-      settings.buildApiUri('settings'),
-      body: settings.toRemoteJson(),
-      expectedStatusCodes: const {200, 204},
-    );
-  }
-
   Future<CameraRoiConfig> fetchRoi(AppSettings settings) async {
-    final json = await _requestJson(
-      'GET',
-      settings.buildApiUri('roi'),
-    );
+    final json = await _requestJson('GET', settings.buildApiUri('roi'));
     return RoiConfigService.fromJsonString(jsonEncode(json));
   }
 
@@ -49,34 +19,6 @@ class RemoteGuardApiService {
       settings.buildApiUri('roi'),
       body: config.toJson(),
       expectedStatusCodes: const {200, 204},
-    );
-  }
-
-  Future<RemoteStatus> fetchStatus(AppSettings settings) async {
-    final json = await _requestJson(
-      'GET',
-      settings.buildApiUri('status'),
-    );
-    final rawStatus = json['status']?.toString() ?? 'unknown';
-    return RemoteStatus(
-      rawStatus: rawStatus,
-      message: json['message']?.toString(),
-    );
-  }
-
-  Future<void> startDetector(AppSettings settings) async {
-    await _requestJson(
-      'POST',
-      settings.buildApiUri('start'),
-      expectedStatusCodes: const {200, 202, 204},
-    );
-  }
-
-  Future<void> stopDetector(AppSettings settings) async {
-    await _requestJson(
-      'POST',
-      settings.buildApiUri('stop'),
-      expectedStatusCodes: const {200, 202, 204},
     );
   }
 
@@ -90,7 +32,9 @@ class RemoteGuardApiService {
     request.headers.contentType = ContentType.json;
     request.headers.set(HttpHeaders.acceptHeader, 'application/json');
     if (body != null) {
-      request.write(jsonEncode(body));
+      final bodyBytes = utf8.encode(jsonEncode(body));
+      request.headers.contentLength = bodyBytes.length;
+      request.add(bodyBytes);
     }
 
     final response = await request.close();
