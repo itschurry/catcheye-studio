@@ -77,8 +77,9 @@ class AppSettings {
     final normalizedBase = apiBasePath.endsWith('/')
         ? apiBasePath.substring(0, apiBasePath.length - 1)
         : apiBasePath;
-    final normalizedEndpoint =
-        endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+    final normalizedEndpoint = endpoint.startsWith('/')
+        ? endpoint.substring(1)
+        : endpoint;
     return _resolveUri('$normalizedBase/$normalizedEndpoint');
   }
 
@@ -134,15 +135,18 @@ class AppSettings {
 
   Uri _resolveUri(String pathOrUrl) {
     if (pathOrUrl.startsWith('http://') ||
-            pathOrUrl.startsWith('https://') ||
-            pathOrUrl.startsWith('rtsp://') ||
-            pathOrUrl.startsWith('rtsps://')
-    ) {
+        pathOrUrl.startsWith('https://') ||
+        pathOrUrl.startsWith('ws://') ||
+        pathOrUrl.startsWith('wss://') ||
+        pathOrUrl.startsWith('rtsp://') ||
+        pathOrUrl.startsWith('rtsps://')) {
       return Uri.parse(pathOrUrl);
     }
 
     final rtspBase = _buildRtspBaseUri(detectorBaseUrl);
-    final normalizedPath = pathOrUrl.startsWith('/') ? pathOrUrl : '/$pathOrUrl';
+    final normalizedPath = pathOrUrl.startsWith('/')
+        ? pathOrUrl
+        : '/$pathOrUrl';
     return rtspBase.replace(path: normalizedPath);
   }
 
@@ -158,7 +162,8 @@ class AppSettings {
 
   static Uri _normalizeBaseUri(String rawUrl) {
     final trimmed = rawUrl.trim();
-    final withScheme = trimmed.startsWith('http://') || trimmed.startsWith('https://')
+    final withScheme =
+        trimmed.startsWith('http://') || trimmed.startsWith('https://')
         ? trimmed
         : 'http://$trimmed';
     final uri = Uri.parse(withScheme);

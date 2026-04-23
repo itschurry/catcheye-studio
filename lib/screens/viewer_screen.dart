@@ -5,7 +5,7 @@ import '../providers/settings_provider.dart';
 import '../services/frame_receiver_service.dart';
 import '../widgets/live_viewer.dart';
 
-/// Live preview viewer screen — connects to the remote detector RTSP stream.
+/// Live preview viewer screen — connects to the remote detector RTSP or WebSocket stream.
 
 class ViewerScreen extends StatelessWidget {
   const ViewerScreen({super.key});
@@ -26,6 +26,8 @@ class ViewerScreen extends StatelessWidget {
               child: LiveViewer(
                 controller: receiver.videoController,
                 connected: receiver.connected,
+                isRtsp: receiver.isRtsp,
+                frameData: receiver.currentFrame,
               ),
             ),
 
@@ -65,7 +67,8 @@ class ViewerScreen extends StatelessWidget {
             OutlinedButton.icon(
               icon: const Icon(Icons.link, size: 16),
               label: const Text('Change URL'),
-              onPressed: () => _showConnectDialog(context, receiver, defaultStreamUrl),
+              onPressed: () =>
+                  _showConnectDialog(context, receiver, defaultStreamUrl),
             ),
           ] else if (receiver.connecting) ...[
             const SizedBox(
@@ -88,7 +91,10 @@ class ViewerScreen extends StatelessWidget {
                 children: [
                   Icon(Icons.circle, size: 8, color: Colors.green),
                   SizedBox(width: 6),
-                  Text('Connected', style: TextStyle(fontSize: 12, color: Colors.green)),
+                  Text(
+                    'Connected',
+                    style: TextStyle(fontSize: 12, color: Colors.green),
+                  ),
                 ],
               ),
             ),
@@ -125,7 +131,10 @@ class ViewerScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusBar(FrameReceiverService receiver, String defaultStreamUrl) {
+  Widget _buildStatusBar(
+    FrameReceiverService receiver,
+    String defaultStreamUrl,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       color: Colors.black26,
@@ -136,21 +145,39 @@ class ViewerScreen extends StatelessWidget {
             value: receiver.connected
                 ? 'Connected'
                 : receiver.connecting
-                    ? 'Connecting'
-                    : 'Disconnected',
+                ? 'Connecting'
+                : 'Disconnected',
             color: receiver.connected ? Colors.green : Colors.grey,
           ),
           const SizedBox(width: 16),
           _StatusChip(
             label: 'FPS',
-            value: 'N/A (RTSP)',
-            color: Colors.grey,
+            value: receiver.isWebSocket ? '${receiver.fps}' : 'N/A (RTSP)',
+            color: receiver.isWebSocket
+                ? receiver.fps > 20
+                      ? Colors.green
+                      : receiver.fps > 10
+                      ? Colors.orange
+                      : Colors.red
+                : Colors.grey,
           ),
           const SizedBox(width: 16),
           _StatusChip(
             label: 'Frames',
-            value: 'N/A (RTSP)',
-            color: Colors.grey,
+            value: receiver.isWebSocket
+                ? '${receiver.frameCount}'
+                : 'N/A (RTSP)',
+            color: receiver.isWebSocket ? Colors.cyan : Colors.grey,
+          ),
+          const SizedBox(width: 16),
+          _StatusChip(
+            label: 'Transport',
+            value: receiver.isWebSocket
+                ? 'WebSocket'
+                : receiver.isRtsp
+                ? 'RTSP'
+                : 'Idle',
+            color: receiver.connected ? Colors.blueAccent : Colors.grey,
           ),
           const Spacer(),
           Text(
@@ -167,9 +194,7 @@ class ViewerScreen extends StatelessWidget {
     FrameReceiverService receiver,
     String defaultStreamUrl,
   ) {
-    final controller = TextEditingController(
-      text: defaultStreamUrl,
-    );
+    final controller = TextEditingController(text: defaultStreamUrl);
 
     showDialog(
       context: context,
@@ -179,8 +204,9 @@ class ViewerScreen extends StatelessWidget {
           controller: controller,
           autofocus: true,
           decoration: const InputDecoration(
-            labelText: 'RTSP stream URL',
-            hintText: 'rtsp://192.168.0.10:8554/live',
+            labelText: 'RTSP or WebSocket URL',
+            hintText:
+                'rtsp://192.168.0.10:8554/live 또는 ws://192.168.0.10:8080/',
             border: OutlineInputBorder(),
           ),
           style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
