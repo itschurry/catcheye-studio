@@ -18,7 +18,12 @@ class ViewerScreen extends StatelessWidget {
         return Column(
           children: [
             // Toolbar
-            _buildToolbar(context, receiver, settings.streamUri.toString(), settings.detectorBaseUrl),
+            _buildToolbar(
+              context,
+              receiver,
+              settings.streamUri.toString(),
+              settings.detectorBaseUrl,
+            ),
             const Divider(height: 1),
 
             // Frame viewer
@@ -68,8 +73,12 @@ class ViewerScreen extends StatelessWidget {
             OutlinedButton.icon(
               icon: const Icon(Icons.link, size: 16),
               label: const Text('Change URL'),
-              onPressed: () =>
-                  _showConnectDialog(context, receiver, defaultStreamUrl, defaultApiBaseUrl),
+              onPressed: () => _showConnectDialog(
+                context,
+                receiver,
+                defaultStreamUrl,
+                defaultApiBaseUrl,
+              ),
             ),
           ] else if (receiver.connecting) ...[
             const SizedBox(
@@ -211,7 +220,8 @@ class ViewerScreen extends StatelessWidget {
               autofocus: true,
               decoration: const InputDecoration(
                 labelText: 'Stream URL',
-                hintText: 'rtsp://192.168.0.10:8554/live  또는  ws://192.168.0.10:8080/',
+                hintText:
+                    'rtsp://192.168.0.10:8554/live  또는  ws://192.168.0.10:8080/',
                 border: OutlineInputBorder(),
               ),
               style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
@@ -234,12 +244,15 @@ class ViewerScreen extends StatelessWidget {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
               final sp = context.read<SettingsProvider>();
-              sp.updateStreamPath(streamController.text.trim());
-              sp.updateDetectorBaseUrl(apiController.text.trim());
-              receiver.connect(streamController.text.trim());
+              final streamUrl = streamController.text.trim();
+              await sp.updateConnectionUrls(
+                streamPath: streamUrl,
+                detectorBaseUrl: apiController.text.trim(),
+              );
+              receiver.connect(streamUrl);
             },
             child: const Text('Connect'),
           ),

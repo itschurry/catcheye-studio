@@ -1,14 +1,17 @@
 class AppSettings {
   static const int defaultRtspPort = 8554;
+  static const String defaultDetectorBaseUrl = 'http://127.0.0.1:8090';
+  static const String defaultStreamPath = 'ws://127.0.0.1:8080';
+  static const String defaultApiBasePath = '/api';
 
   String detectorBaseUrl;
   String streamPath;
   String apiBasePath;
 
   AppSettings({
-    this.detectorBaseUrl = 'http://127.0.0.1:8090',
-    this.streamPath = 'ws://127.0.0.1:8080',
-    this.apiBasePath = '/api',
+    this.detectorBaseUrl = defaultDetectorBaseUrl,
+    this.streamPath = defaultStreamPath,
+    this.apiBasePath = defaultApiBasePath,
   });
 
   Uri get streamUri => _resolveUri(streamPath);
@@ -35,7 +38,9 @@ class AppSettings {
     }
 
     final rtspBase = _buildRtspBaseUri(detectorBaseUrl);
-    final normalizedPath = pathOrUrl.startsWith('/') ? pathOrUrl : '/$pathOrUrl';
+    final normalizedPath = pathOrUrl.startsWith('/')
+        ? pathOrUrl
+        : '/$pathOrUrl';
     return rtspBase.replace(path: normalizedPath);
   }
 

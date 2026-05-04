@@ -8,20 +8,26 @@ import 'screens/roi_editor_screen.dart';
 import 'screens/viewer_screen.dart';
 import 'services/frame_receiver_service.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
-  runApp(const CatchEyeGuardApp());
+  final settingsProvider = await SettingsProvider.load();
+  runApp(CatchEyeGuardApp(settingsProvider: settingsProvider));
 }
 
 class CatchEyeGuardApp extends StatelessWidget {
-  const CatchEyeGuardApp({super.key});
+  const CatchEyeGuardApp({super.key, required this.settingsProvider});
+
+  final SettingsProvider settingsProvider;
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => RoiConfigProvider()..tryLoadDefault()),
-        ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        ChangeNotifierProvider(
+          create: (_) => RoiConfigProvider()..tryLoadDefault(),
+        ),
+        ChangeNotifierProvider.value(value: settingsProvider),
         ChangeNotifierProvider(create: (_) => FrameReceiverService()),
       ],
       child: MaterialApp(
@@ -61,10 +67,7 @@ class _AppShellState extends State<AppShell> {
     ),
   ];
 
-  static const _screens = [
-    ViewerScreen(),
-    RoiEditorScreen(),
-  ];
+  static const _screens = [ViewerScreen(), RoiEditorScreen()];
 
   @override
   Widget build(BuildContext context) {
@@ -104,9 +107,7 @@ class _AppShellState extends State<AppShell> {
             destinations: _destinations,
           ),
           const VerticalDivider(thickness: 1, width: 1),
-          Expanded(
-            child: _screens[_selectedIndex],
-          ),
+          Expanded(child: _screens[_selectedIndex]),
         ],
       ),
     );

@@ -18,10 +18,10 @@
       "problemMatcher": []
     },
     {
-      "label": "Flutter: Build Windows",
+      "label": "Flutter: Build MacOS",
       "type": "shell",
       "command": "flutter",
-      "args": ["build", "windows"],
+      "args": ["build", "macos"],
       "group": {
         "kind": "build",
         "isDefault": false
