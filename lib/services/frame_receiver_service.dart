@@ -17,7 +17,6 @@ class FrameReceiverService extends ChangeNotifier {
   StreamSubscription<bool>? _playingSubscription;
   StreamSubscription<dynamic>? _webSocketSubscription;
   WebSocket? _webSocket;
-  Timer? _fpsTimer;
   bool _closingWebSocket = false;
   bool _connected = false;
   bool _connecting = false;
@@ -26,8 +25,8 @@ class FrameReceiverService extends ChangeNotifier {
   Uint8List? _currentFrame;
   Map<String, dynamic>? _latestMetadata;
   int _frameCount = 0;
-  int _fps = 0;
-  int _framesThisSecond = 0;
+  double _fps = 0;
+  double? _previousSourceTimestampMs;
   StreamTransport? _transport;
 
   Size? _frameSize;
@@ -45,8 +44,24 @@ class FrameReceiverService extends ChangeNotifier {
     if (value is num) return value.toDouble();
     return null;
   }
+
+  String? get wallClockText {
+    final timestamp = _latestMetadata?['wall_timestamp_ms'];
+    if (timestamp is! num) return null;
+
+    final dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp.toInt());
+    final year = dateTime.year.toString().padLeft(4, '0');
+    final month = dateTime.month.toString().padLeft(2, '0');
+    final day = dateTime.day.toString().padLeft(2, '0');
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    final second = dateTime.second.toString().padLeft(2, '0');
+    return '$year-$month-$day'
+        '_$hour:$minute:$second';
+  }
+
   int get frameCount => _frameCount;
-  int get fps => _fps;
+  double get fps => _fps;
   Uri? get connectedUri => _connectedUri;
   VideoController get videoController => _videoController;
   StreamTransport? get transport => _transport;
@@ -72,7 +87,7 @@ class FrameReceiverService extends ChangeNotifier {
     _errorMessage = null;
     _fps = 0;
     _frameCount = 0;
-    _framesThisSecond = 0;
+    _previousSourceTimestampMs = null;
     notifyListeners();
 
     try {
@@ -105,8 +120,6 @@ class FrameReceiverService extends ChangeNotifier {
     _closingWebSocket = true;
     _connected = false;
     _connecting = false;
-    _fpsTimer?.cancel();
-    _fpsTimer = null;
     await _webSocketSubscription?.cancel();
     _webSocketSubscription = null;
     await _closeWebSocket();
@@ -116,7 +129,7 @@ class FrameReceiverService extends ChangeNotifier {
     _latestMetadata = null;
     _frameCount = 0;
     _fps = 0;
-    _framesThisSecond = 0;
+    _previousSourceTimestampMs = null;
     _transport = null;
     _frameSize = null;
     _closingWebSocket = false;
@@ -150,7 +163,6 @@ class FrameReceiverService extends ChangeNotifier {
     _transport = StreamTransport.websocket;
     _currentFrame = null;
     _webSocket = await WebSocket.connect(uri.toString());
-    _startFpsCounter();
 
     _webSocketSubscription = _webSocket!.listen(
       _onWebSocketData,
@@ -192,7 +204,6 @@ class FrameReceiverService extends ChangeNotifier {
     if (data is List<int>) {
       _currentFrame = Uint8List.fromList(data);
       _frameCount++;
-      _framesThisSecond++;
       if (_frameSize == null) {
         final detected = _parseJpegSize(_currentFrame!);
         if (detected != null) {
@@ -207,7 +218,23 @@ class FrameReceiverService extends ChangeNotifier {
     final decoded = jsonDecode(data);
     if (decoded is! Map<String, dynamic>) return;
     _latestMetadata = decoded;
+    _updateFpsFromMetadata(decoded);
     notifyListeners();
+  }
+
+  void _updateFpsFromMetadata(Map<String, dynamic> metadataFrame) {
+    final timestamp = metadataFrame['source_timestamp_ms'];
+    if (timestamp is! num) return;
+
+    final currentTimestampMs = timestamp.toDouble();
+    final previousTimestampMs = _previousSourceTimestampMs;
+    if (previousTimestampMs != null) {
+      final frameIntervalMs = currentTimestampMs - previousTimestampMs;
+      if (frameIntervalMs > 0) {
+        _fps = 1000.0 / frameIntervalMs;
+      }
+    }
+    _previousSourceTimestampMs = currentTimestampMs;
   }
 
   /// Parses JPEG SOF marker to extract image dimensions.
@@ -225,7 +252,10 @@ class FrameReceiverService extends ChangeNotifier {
       }
       if (i + 4 > bytes.length) break;
       final segLen = (bytes[i + 2] << 8) | bytes[i + 3];
-      if (marker >= 0xC0 && marker <= 0xC3 && segLen >= 7 && i + 9 <= bytes.length) {
+      if (marker >= 0xC0 &&
+          marker <= 0xC3 &&
+          segLen >= 7 &&
+          i + 9 <= bytes.length) {
         final h = (bytes[i + 5] << 8) | bytes[i + 6];
         final w = (bytes[i + 7] << 8) | bytes[i + 8];
         if (w > 0 && h > 0) return Size(w.toDouble(), h.toDouble());
@@ -233,16 +263,6 @@ class FrameReceiverService extends ChangeNotifier {
       i += 2 + segLen;
     }
     return null;
-  }
-
-  void _startFpsCounter() {
-    _fpsTimer?.cancel();
-    _framesThisSecond = 0;
-    _fpsTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      _fps = _framesThisSecond;
-      _framesThisSecond = 0;
-      notifyListeners();
-    });
   }
 
   bool _isWebSocketUri(Uri uri) => uri.scheme == 'ws' || uri.scheme == 'wss';
@@ -268,7 +288,6 @@ class FrameReceiverService extends ChangeNotifier {
   @override
   void dispose() {
     _playingSubscription?.cancel();
-    _fpsTimer?.cancel();
     _webSocketSubscription?.cancel();
     _webSocket?.close();
     _player.dispose();

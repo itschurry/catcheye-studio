@@ -146,6 +146,7 @@ class ViewerScreen extends StatelessWidget {
     String defaultStreamUrl,
   ) {
     final inferenceMs = receiver.isWebSocket ? receiver.inferenceMs : null;
+    final wallClockText = receiver.isWebSocket ? receiver.wallClockText : null;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -164,7 +165,10 @@ class ViewerScreen extends StatelessWidget {
           const SizedBox(width: 16),
           _StatusChip(
             label: 'FPS',
-            value: receiver.isWebSocket ? '${receiver.fps}' : 'N/A (RTSP)',
+            value: receiver.isWebSocket
+                ? receiver.fps.toStringAsFixed(1)
+                : 'N/A (RTSP)',
+            valueWidth: 34,
             color: receiver.isWebSocket
                 ? receiver.fps > 20
                       ? Colors.green
@@ -189,6 +193,7 @@ class ViewerScreen extends StatelessWidget {
                       ? 'N/A'
                       : '${inferenceMs.toStringAsFixed(1)} ms'
                 : 'N/A (RTSP)',
+            valueWidth: 54,
             color: inferenceMs == null
                 ? Colors.grey
                 : inferenceMs <= 33.0
@@ -196,6 +201,13 @@ class ViewerScreen extends StatelessWidget {
                 : inferenceMs <= 100.0
                 ? Colors.orange
                 : Colors.red,
+          ),
+          const SizedBox(width: 16),
+          _StatusChip(
+            label: 'Wall',
+            value: receiver.isWebSocket ? wallClockText ?? 'N/A' : 'N/A (RTSP)',
+            valueWidth: 132,
+            color: wallClockText == null ? Colors.grey : Colors.lightBlueAccent,
           ),
           const SizedBox(width: 16),
           _StatusChip(
@@ -284,11 +296,13 @@ class _StatusChip extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
+  final double? valueWidth;
 
   const _StatusChip({
     required this.label,
     required this.value,
     required this.color,
+    this.valueWidth,
   });
 
   @override
@@ -300,12 +314,16 @@ class _StatusChip extends StatelessWidget {
           '$label: ',
           style: const TextStyle(fontSize: 11, color: Colors.grey),
         ),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            color: color,
+        SizedBox(
+          width: valueWidth,
+          child: Text(
+            value,
+            textAlign: valueWidth == null ? TextAlign.start : TextAlign.right,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
           ),
         ),
       ],
