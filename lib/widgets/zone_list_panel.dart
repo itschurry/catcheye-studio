@@ -59,15 +59,20 @@ class ZoneListPanel extends StatelessWidget {
 
                         return Container(
                           color: isSelected
-                              ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
+                              ? Theme.of(context).colorScheme.primaryContainer
+                                    .withValues(alpha: 0.3)
                               : null,
                           child: ListTile(
                             dense: true,
                             selected: isSelected,
                             leading: Icon(
-                              zone.enabled ? Icons.visibility : Icons.visibility_off,
+                              zone.enabled
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
                               size: 18,
-                              color: zone.enabled ? Colors.cyanAccent : Colors.grey,
+                              color: zone.enabled
+                                  ? Colors.cyanAccent
+                                  : Colors.grey,
                             ),
                             title: Text(
                               zone.name,
@@ -90,11 +95,18 @@ class ZoneListPanel extends StatelessWidget {
                                 ),
                                 const PopupMenuItem(
                                   value: 'delete',
-                                  child: Text('Delete', style: TextStyle(color: Colors.red)),
+                                  child: Text(
+                                    'Delete',
+                                    style: TextStyle(color: Colors.red),
+                                  ),
                                 ),
                               ],
-                              onSelected: (action) =>
-                                  _onZoneAction(context, provider, index, action),
+                              onSelected: (action) => _onZoneAction(
+                                context,
+                                provider,
+                                index,
+                                action,
+                              ),
                             ),
                             onTap: () => provider.selectZone(index),
                           ),
@@ -114,7 +126,10 @@ class ZoneListPanel extends StatelessWidget {
     );
   }
 
-  Widget _buildSelectedZoneInfo(BuildContext context, RoiConfigProvider provider) {
+  Widget _buildSelectedZoneInfo(
+    BuildContext context,
+    RoiConfigProvider provider,
+  ) {
     final zone = provider.selectedZone!;
     final config = provider.config;
     return Padding(
@@ -137,7 +152,10 @@ class ZoneListPanel extends StatelessWidget {
               Expanded(
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.add, size: 14),
-                  label: const Text('Add Point', style: TextStyle(fontSize: 12)),
+                  label: const Text(
+                    'Add Point',
+                    style: TextStyle(fontSize: 12),
+                  ),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                   ),
@@ -149,13 +167,39 @@ class ZoneListPanel extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: zone.points.length,
+              itemBuilder: (context, pointIndex) {
+                final point = zone.points[pointIndex];
+                final canRemove = zone.points.length > 3;
+                return _PointRow(
+                  index: pointIndex,
+                  point: point,
+                  canRemove: canRemove,
+                  onRemove: canRemove
+                      ? () => provider.removePoint(
+                          provider.selectedZoneIndex,
+                          pointIndex,
+                        )
+                      : null,
+                );
+              },
+            ),
+          ),
         ],
       ),
     );
   }
 
   void _onZoneAction(
-      BuildContext context, RoiConfigProvider provider, int index, String action) {
+    BuildContext context,
+    RoiConfigProvider provider,
+    int index,
+    String action,
+  ) {
     switch (action) {
       case 'toggle':
         provider.toggleZoneEnabled(index);
@@ -170,9 +214,13 @@ class ZoneListPanel extends StatelessWidget {
   }
 
   void _showRenameDialog(
-      BuildContext context, RoiConfigProvider provider, int index) {
-    final controller =
-        TextEditingController(text: provider.config.allowedZones[index].name);
+    BuildContext context,
+    RoiConfigProvider provider,
+    int index,
+  ) {
+    final controller = TextEditingController(
+      text: provider.config.allowedZones[index].name,
+    );
 
     showDialog(
       context: context,
@@ -207,5 +255,52 @@ class ZoneListPanel extends StatelessWidget {
       return RoiPoint(x: (last.x + first.x) / 2, y: (last.y + first.y) / 2);
     }
     return RoiPoint(x: config.imageWidth / 2.0, y: config.imageHeight / 2.0);
+  }
+}
+
+class _PointRow extends StatelessWidget {
+  final int index;
+  final RoiPoint point;
+  final bool canRemove;
+  final VoidCallback? onRemove;
+
+  const _PointRow({
+    required this.index,
+    required this.point,
+    required this.canRemove,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 30,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 24,
+            child: Text(
+              '${index + 1}',
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              'x ${point.x.toStringAsFixed(0)}, y ${point.y.toStringAsFixed(0)}',
+              style: const TextStyle(fontSize: 11),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 16),
+            tooltip: canRemove ? 'Delete Point' : 'Polygon needs 3 points',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+            color: canRemove ? Colors.redAccent : Colors.grey,
+            onPressed: onRemove,
+          ),
+        ],
+      ),
+    );
   }
 }
