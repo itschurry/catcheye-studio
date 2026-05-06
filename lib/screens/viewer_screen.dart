@@ -145,6 +145,8 @@ class ViewerScreen extends StatelessWidget {
     FrameReceiverService receiver,
     String defaultStreamUrl,
   ) {
+    final inferenceMs = receiver.isWebSocket ? receiver.inferenceMs : null;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       color: Colors.black26,
@@ -178,6 +180,22 @@ class ViewerScreen extends StatelessWidget {
                 ? '${receiver.frameCount}'
                 : 'N/A (RTSP)',
             color: receiver.isWebSocket ? Colors.cyan : Colors.grey,
+          ),
+          const SizedBox(width: 16),
+          _StatusChip(
+            label: 'Inference',
+            value: receiver.isWebSocket
+                ? inferenceMs == null
+                      ? 'N/A'
+                      : '${inferenceMs.toStringAsFixed(1)} ms'
+                : 'N/A (RTSP)',
+            color: inferenceMs == null
+                ? Colors.grey
+                : inferenceMs <= 33.0
+                ? Colors.green
+                : inferenceMs <= 100.0
+                ? Colors.orange
+                : Colors.red,
           ),
           const SizedBox(width: 16),
           _StatusChip(

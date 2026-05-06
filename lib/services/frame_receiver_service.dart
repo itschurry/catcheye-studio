@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' show Size;
 
@@ -23,6 +24,7 @@ class FrameReceiverService extends ChangeNotifier {
   String? _errorMessage;
   Uri? _connectedUri;
   Uint8List? _currentFrame;
+  Map<String, dynamic>? _latestMetadata;
   int _frameCount = 0;
   int _fps = 0;
   int _framesThisSecond = 0;
@@ -34,6 +36,15 @@ class FrameReceiverService extends ChangeNotifier {
   bool get connecting => _connecting;
   String? get errorMessage => _errorMessage;
   Uint8List? get currentFrame => _currentFrame;
+  Map<String, dynamic>? get latestMetadata => _latestMetadata;
+  double? get inferenceMs {
+    final metadata = _latestMetadata?['metadata'];
+    if (metadata is! Map<String, dynamic>) return null;
+
+    final value = metadata['inference_ms'];
+    if (value is num) return value.toDouble();
+    return null;
+  }
   int get frameCount => _frameCount;
   int get fps => _fps;
   Uri? get connectedUri => _connectedUri;
@@ -102,6 +113,7 @@ class FrameReceiverService extends ChangeNotifier {
     await _player.stop();
     _connectedUri = null;
     _currentFrame = null;
+    _latestMetadata = null;
     _frameCount = 0;
     _fps = 0;
     _framesThisSecond = 0;
@@ -173,6 +185,7 @@ class FrameReceiverService extends ChangeNotifier {
 
   void _onWebSocketData(dynamic data) {
     if (data is String) {
+      _onWebSocketMetadata(data);
       return;
     }
 
@@ -188,6 +201,13 @@ class FrameReceiverService extends ChangeNotifier {
       }
       notifyListeners();
     }
+  }
+
+  void _onWebSocketMetadata(String data) {
+    final decoded = jsonDecode(data);
+    if (decoded is! Map<String, dynamic>) return;
+    _latestMetadata = decoded;
+    notifyListeners();
   }
 
   /// Parses JPEG SOF marker to extract image dimensions.
