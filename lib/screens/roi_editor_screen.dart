@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/roi_config.dart';
 import '../providers/roi_config_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/remote_guard_api_service.dart';
@@ -49,9 +50,7 @@ class RoiEditorScreen extends StatelessWidget {
                     width: 280,
                     decoration: BoxDecoration(
                       border: Border(
-                        left: BorderSide(
-                          color: Theme.of(context).dividerColor,
-                        ),
+                        left: BorderSide(color: Theme.of(context).dividerColor),
                       ),
                     ),
                     child: const ZoneListPanel(),
@@ -75,6 +74,25 @@ class RoiEditorScreen extends StatelessWidget {
           const Text(
             'ROI Editor',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(width: 16),
+          SegmentedButton<RoiConfigKind>(
+            segments: const [
+              ButtonSegment(
+                value: RoiConfigKind.person,
+                label: Text('Person ROI'),
+                icon: Icon(Icons.person_outline),
+              ),
+              ButtonSegment(
+                value: RoiConfigKind.pallet,
+                label: Text('Pallet ROI'),
+                icon: Icon(Icons.inventory_2_outlined),
+              ),
+            ],
+            selected: {provider.selectedKind},
+            onSelectionChanged: (selection) {
+              provider.selectKind(selection.first);
+            },
           ),
           const SizedBox(width: 16),
 
@@ -112,12 +130,12 @@ class RoiEditorScreen extends StatelessWidget {
           // Action buttons
           IconButton(
             icon: const Icon(Icons.cloud_download_outlined, size: 20),
-            tooltip: 'Load ROI From Device',
+            tooltip: 'Load ${provider.selectedKind.label} From Device',
             onPressed: () => _loadFromDevice(context, provider),
           ),
           IconButton(
             icon: const Icon(Icons.cloud_upload_outlined, size: 20),
-            tooltip: 'Push ROI To Device',
+            tooltip: 'Push ${provider.selectedKind.label} To Device',
             onPressed: () => _pushToDevice(context, provider),
           ),
         ],
@@ -171,22 +189,24 @@ class RoiEditorScreen extends StatelessWidget {
   ) async {
     final settings = context.read<SettingsProvider>().settings;
     final api = RemoteGuardApiService();
+    final kind = provider.selectedKind;
 
     try {
-      final config = await api.fetchRoi(settings);
+      final config = await api.fetchRoi(settings, kind: kind);
       provider.loadFromConfig(
         config,
-        sourceLabel: settings.buildApiUri('roi').toString(),
+        sourceLabel: settings.buildApiUri(kind.endpoint).toString(),
+        kind: kind,
       );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ROI loaded from device')),
+          SnackBar(content: Text('${kind.label} loaded from device')),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load ROI: $e')),
+          SnackBar(content: Text('Failed to load ${kind.label}: $e')),
         );
       }
     }
@@ -198,18 +218,19 @@ class RoiEditorScreen extends StatelessWidget {
   ) async {
     final settings = context.read<SettingsProvider>().settings;
     final api = RemoteGuardApiService();
+    final kind = provider.selectedKind;
 
     try {
-      await api.pushRoi(settings, provider.config);
+      await api.pushRoi(settings, provider.config, kind: kind);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ROI pushed to device')),
+          SnackBar(content: Text('${kind.label} pushed to device')),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to push ROI: $e')),
+          SnackBar(content: Text('Failed to push ${kind.label}: $e')),
         );
       }
     }

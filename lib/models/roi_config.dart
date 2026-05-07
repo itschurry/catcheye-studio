@@ -1,5 +1,15 @@
 // ROI data models — 1:1 mapping with catcheye-guard C++ models
 
+enum RoiConfigKind {
+  person(endpoint: 'roi', label: 'Person ROI'),
+  pallet(endpoint: 'pallet-roi', label: 'Pallet ROI');
+
+  const RoiConfigKind({required this.endpoint, required this.label});
+
+  final String endpoint;
+  final String label;
+}
+
 class RoiPoint {
   double x;
   double y;
@@ -48,11 +58,11 @@ class RoiPolygon {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'enabled': enabled,
-        'points': points.map((p) => p.toJson()).toList(),
-      };
+    'id': id,
+    'name': name,
+    'enabled': enabled,
+    'points': points.map((p) => p.toJson()).toList(),
+  };
 
   RoiPolygon copyWith({
     String? id,
@@ -87,7 +97,8 @@ class CameraRoiConfig {
       cameraId: json['camera_id'] as String? ?? '',
       imageWidth: json['image_width'] as int? ?? 0,
       imageHeight: json['image_height'] as int? ?? 0,
-      allowedZones: (json['allowed_zones'] as List<dynamic>?)
+      allowedZones:
+          (json['allowed_zones'] as List<dynamic>?)
               ?.map((z) => RoiPolygon.fromJson(z as Map<String, dynamic>))
               .toList() ??
           [],
@@ -95,11 +106,11 @@ class CameraRoiConfig {
   }
 
   Map<String, dynamic> toJson() => {
-        'camera_id': cameraId,
-        'image_width': imageWidth,
-        'image_height': imageHeight,
-        'allowed_zones': allowedZones.map((z) => z.toJson()).toList(),
-      };
+    'camera_id': cameraId,
+    'image_width': imageWidth,
+    'image_height': imageHeight,
+    'allowed_zones': allowedZones.map((z) => z.toJson()).toList(),
+  };
 
   factory CameraRoiConfig.defaultConfig() {
     return CameraRoiConfig(
@@ -120,8 +131,8 @@ class CameraRoiConfig {
       cameraId: cameraId ?? this.cameraId,
       imageWidth: imageWidth ?? this.imageWidth,
       imageHeight: imageHeight ?? this.imageHeight,
-      allowedZones: allowedZones ??
-          this.allowedZones.map((z) => z.copyWith()).toList(),
+      allowedZones:
+          allowedZones ?? this.allowedZones.map((z) => z.copyWith()).toList(),
     );
   }
 }

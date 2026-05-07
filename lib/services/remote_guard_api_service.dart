@@ -8,15 +8,22 @@ import 'roi_config_service.dart';
 class RemoteGuardApiService {
   final HttpClient _client = HttpClient();
 
-  Future<CameraRoiConfig> fetchRoi(AppSettings settings) async {
-    final json = await _requestJson('GET', settings.buildApiUri('roi'));
+  Future<CameraRoiConfig> fetchRoi(
+    AppSettings settings, {
+    RoiConfigKind kind = RoiConfigKind.person,
+  }) async {
+    final json = await _requestJson('GET', settings.buildApiUri(kind.endpoint));
     return RoiConfigService.fromJsonString(jsonEncode(json));
   }
 
-  Future<void> pushRoi(AppSettings settings, CameraRoiConfig config) async {
+  Future<void> pushRoi(
+    AppSettings settings,
+    CameraRoiConfig config, {
+    RoiConfigKind kind = RoiConfigKind.person,
+  }) async {
     await _requestJson(
       'PUT',
-      settings.buildApiUri('roi'),
+      settings.buildApiUri(kind.endpoint),
       body: config.toJson(),
       expectedStatusCodes: const {200, 204},
     );
@@ -40,7 +47,9 @@ class RemoteGuardApiService {
     final response = await request.close();
     final responseBody = await response.transform(utf8.decoder).join();
     if (!expectedStatusCodes.contains(response.statusCode)) {
-      final errorBody = responseBody.isEmpty ? response.reasonPhrase : responseBody;
+      final errorBody = responseBody.isEmpty
+          ? response.reasonPhrase
+          : responseBody;
       throw HttpException(
         'Request failed (${response.statusCode}) for $uri: $errorBody',
         uri: uri,
