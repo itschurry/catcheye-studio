@@ -65,11 +65,14 @@ class RoiEditorScreen extends StatelessWidget {
   }
 
   Widget _buildToolbar(BuildContext context, RoiConfigProvider provider) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: colorScheme.surface,
       child: Row(
         children: [
-          const Icon(Icons.edit_location_alt, size: 20),
+          Icon(Icons.edit_location_alt, size: 20, color: colorScheme.secondary),
           const SizedBox(width: 8),
           const Text(
             'ROI Editor',
@@ -144,41 +147,43 @@ class RoiEditorScreen extends StatelessWidget {
   }
 
   Widget _buildConfigInfoBar(RoiConfigProvider provider) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      color: Colors.black26,
-      child: Row(
-        children: [
-          _InfoChip(
-            label: 'Camera',
-            value: provider.config.cameraId.isEmpty
-                ? 'N/A'
-                : provider.config.cameraId,
-          ),
-          const SizedBox(width: 16),
-          _InfoChip(
-            label: 'Resolution',
-            value:
-                '${provider.config.imageWidth} × ${provider.config.imageHeight}',
-          ),
-          const SizedBox(width: 16),
-          _InfoChip(
-            label: 'Zones',
-            value: '${provider.config.allowedZones.length}',
-          ),
-          const Spacer(),
-          if (provider.errorMessage != null)
-            Row(
-              children: [
-                const Icon(Icons.error_outline, size: 14, color: Colors.red),
-                const SizedBox(width: 4),
-                Text(
-                  provider.errorMessage!,
-                  style: const TextStyle(fontSize: 11, color: Colors.red),
-                ),
-              ],
+    return Builder(
+      builder: (context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        child: Row(
+          children: [
+            _InfoChip(
+              label: 'Camera',
+              value: provider.config.cameraId.isEmpty
+                  ? 'N/A'
+                  : provider.config.cameraId,
             ),
-        ],
+            const SizedBox(width: 16),
+            _InfoChip(
+              label: 'Resolution',
+              value:
+                  '${provider.config.imageWidth} × ${provider.config.imageHeight}',
+            ),
+            const SizedBox(width: 16),
+            _InfoChip(
+              label: 'Zones',
+              value: '${provider.config.allowedZones.length}',
+            ),
+            const Spacer(),
+            if (provider.errorMessage != null)
+              Row(
+                children: [
+                  const Icon(Icons.error_outline, size: 14, color: Colors.red),
+                  const SizedBox(width: 4),
+                  Text(
+                    provider.errorMessage!,
+                    style: const TextStyle(fontSize: 11, color: Colors.red),
+                  ),
+                ],
+              ),
+          ],
+        ),
       ),
     );
   }

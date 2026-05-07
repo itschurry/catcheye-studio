@@ -37,7 +37,7 @@ class ViewerScreen extends StatelessWidget {
             ),
 
             // Status bar
-            _buildStatusBar(receiver, settings.streamUri.toString()),
+            _buildStatusBar(context, receiver, settings.streamUri.toString()),
           ],
         );
       },
@@ -50,11 +50,14 @@ class ViewerScreen extends StatelessWidget {
     String defaultStreamUrl,
     String defaultApiBaseUrl,
   ) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: colorScheme.surface,
       child: Row(
         children: [
-          const Icon(Icons.live_tv, size: 20),
+          Icon(Icons.live_tv, size: 20, color: colorScheme.secondary),
           const SizedBox(width: 8),
           const Text(
             'Live Viewer',
@@ -116,8 +119,6 @@ class ViewerScreen extends StatelessWidget {
             ),
           ],
 
-          const Spacer(),
-
           // Error message
           if (receiver.errorMessage != null)
             Flexible(
@@ -136,21 +137,35 @@ class ViewerScreen extends StatelessWidget {
                 ],
               ),
             ),
+          const Spacer(),
+          Container(
+            height: 38,
+            width: 226,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F6F5),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: colorScheme.primary),
+            ),
+            child: Image.asset('assets/logo.png', fit: BoxFit.contain),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildStatusBar(
+    BuildContext context,
     FrameReceiverService receiver,
     String defaultStreamUrl,
   ) {
+    final connected = receiver.connected;
     final inferenceMs = receiver.isWebSocket ? receiver.inferenceMs : null;
     final wallClockText = receiver.isWebSocket ? receiver.wallClockText : null;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      color: Colors.black26,
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
       child: Row(
         children: [
           _StatusChip(
@@ -165,11 +180,15 @@ class ViewerScreen extends StatelessWidget {
           const SizedBox(width: 16),
           _StatusChip(
             label: 'FPS',
-            value: receiver.isWebSocket
+            value: !connected
+                ? '-'
+                : receiver.isWebSocket
                 ? receiver.fps.toStringAsFixed(1)
                 : 'N/A (RTSP)',
             valueWidth: 34,
-            color: receiver.isWebSocket
+            color: !connected
+                ? Colors.grey
+                : receiver.isWebSocket
                 ? receiver.fps > 20
                       ? Colors.green
                       : receiver.fps > 10
@@ -180,21 +199,27 @@ class ViewerScreen extends StatelessWidget {
           const SizedBox(width: 16),
           _StatusChip(
             label: 'Frames',
-            value: receiver.isWebSocket
+            value: !connected
+                ? '-'
+                : receiver.isWebSocket
                 ? '${receiver.frameCount}'
                 : 'N/A (RTSP)',
-            color: receiver.isWebSocket ? Colors.cyan : Colors.grey,
+            color: connected && receiver.isWebSocket
+                ? Colors.cyan
+                : Colors.grey,
           ),
           const SizedBox(width: 16),
           _StatusChip(
             label: 'Inference',
-            value: receiver.isWebSocket
+            value: !connected
+                ? '-'
+                : receiver.isWebSocket
                 ? inferenceMs == null
                       ? 'N/A'
                       : '${inferenceMs.toStringAsFixed(1)} ms'
                 : 'N/A (RTSP)',
             valueWidth: 54,
-            color: inferenceMs == null
+            color: !connected || inferenceMs == null
                 ? Colors.grey
                 : inferenceMs <= 33.0
                 ? Colors.green
@@ -205,9 +230,15 @@ class ViewerScreen extends StatelessWidget {
           const SizedBox(width: 16),
           _StatusChip(
             label: 'Wall',
-            value: receiver.isWebSocket ? wallClockText ?? 'N/A' : 'N/A (RTSP)',
+            value: !connected
+                ? '-'
+                : receiver.isWebSocket
+                ? wallClockText ?? 'N/A'
+                : 'N/A (RTSP)',
             valueWidth: 132,
-            color: wallClockText == null ? Colors.grey : Colors.lightBlueAccent,
+            color: !connected || wallClockText == null
+                ? Colors.grey
+                : Colors.lightBlueAccent,
           ),
           const SizedBox(width: 16),
           _StatusChip(
