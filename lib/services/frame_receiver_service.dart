@@ -23,21 +23,15 @@ enum ViewerStreamEncoding {
   }
 }
 
-class PointCloudPoint {
-  final double x;
-  final double y;
-  final double z;
-
-  const PointCloudPoint({required this.x, required this.y, required this.z});
-}
-
 class PointCloudData {
-  final List<PointCloudPoint> points;
+  final Float32List xyz;
+  final int pointCount;
   final double minZ;
   final double maxZ;
 
   const PointCloudData({
-    required this.points,
+    required this.xyz,
+    required this.pointCount,
     required this.minZ,
     required this.maxZ,
   });
@@ -52,7 +46,8 @@ class PointCloudData {
     }
 
     final data = ByteData.sublistView(bytes);
-    final points = <PointCloudPoint>[];
+    final xyz = Float32List(pointCount * 3);
+    var validPointCount = 0;
     double? minZ;
     double? maxZ;
     for (var i = 0; i < pointCount; i++) {
@@ -63,13 +58,28 @@ class PointCloudData {
       if (!x.isFinite || !y.isFinite || !z.isFinite) {
         continue;
       }
-      points.add(PointCloudPoint(x: x, y: y, z: z));
+      final writeOffset = validPointCount * 3;
+      xyz[writeOffset] = x;
+      xyz[writeOffset + 1] = y;
+      xyz[writeOffset + 2] = z;
+      validPointCount++;
       minZ = minZ == null ? z : (z < minZ ? z : minZ);
       maxZ = maxZ == null ? z : (z > maxZ ? z : maxZ);
     }
 
-    return PointCloudData(points: points, minZ: minZ ?? 0, maxZ: maxZ ?? 1);
+    return PointCloudData(
+      xyz: xyz,
+      pointCount: validPointCount,
+      minZ: minZ ?? 0,
+      maxZ: maxZ ?? 1,
+    );
   }
+
+  double xAt(int index) => xyz[index * 3];
+
+  double yAt(int index) => xyz[index * 3 + 1];
+
+  double zAt(int index) => xyz[index * 3 + 2];
 }
 
 class ViewerStreamFrame {
@@ -502,12 +512,9 @@ class FrameReceiverService extends ChangeNotifier {
       }
     }
 
-    _streams
-      ..clear()
-      ..addAll(nextStreams);
+    _streams.addAll(nextStreams);
     _selectedStreamKey = _selectNextStreamKey();
-    _currentFrame = selectedFrame?.jpegBytes;
-    _frameSize = selectedFrame?.size ?? _parseJpegSize(_currentFrame!);
+    _syncSelectedFrameState();
     _errorMessage = null;
     _frameCount++;
     _pendingStreams = null;
@@ -532,6 +539,7 @@ class FrameReceiverService extends ChangeNotifier {
       ..clear()
       ..[frame.key] = frame;
     _selectedStreamKey = frame.key;
+    _syncSelectedFrameState();
     _errorMessage = null;
     _frameCount++;
   }
@@ -599,9 +607,25 @@ class FrameReceiverService extends ChangeNotifier {
   void selectStream(String key) {
     if (!_streams.containsKey(key) || _selectedStreamKey == key) return;
     _selectedStreamKey = key;
-    _currentFrame = _streams[key]!.jpegBytes;
-    _frameSize = _streams[key]!.size ?? _parseJpegSize(_currentFrame!);
+    _syncSelectedFrameState();
     notifyListeners();
+  }
+
+  void _syncSelectedFrameState() {
+    final frame = selectedFrame;
+    if (frame == null) {
+      _currentFrame = null;
+      _frameSize = null;
+      return;
+    }
+    if (!frame.isJpeg) {
+      _currentFrame = null;
+      _frameSize = frame.size;
+      return;
+    }
+
+    _currentFrame = frame.jpegBytes;
+    _frameSize = frame.size ?? _parseJpegSize(frame.jpegBytes);
   }
 
   static String _metadataString(Object? value, {String defaultValue = ''}) =>

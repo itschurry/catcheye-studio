@@ -22,6 +22,9 @@ class _ViewerScreenState extends State<ViewerScreen> {
   double? _depthMin;
   double? _depthMax;
   String? _lastPointCloudKey;
+  bool _viewportLocked = false;
+  PointCloudViewport? _lockedViewport;
+  String? _lockedViewportStreamKey;
 
   @override
   Widget build(BuildContext context) {
@@ -76,6 +79,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
             axisScale: _axisScale,
             depthMin: _effectiveDepthMin(selectedFrame),
             depthMax: _effectiveDepthMax(selectedFrame),
+            viewportLocked: _isViewportLocked(selectedFrame),
             onPointSizeChanged: (value) => setState(() => _pointSize = value),
             onShowAxisChanged: (value) => setState(() => _showAxis = value),
             onAxisScaleChanged: (value) => setState(() => _axisScale = value),
@@ -83,6 +87,9 @@ class _ViewerScreenState extends State<ViewerScreen> {
               _depthMin = values.start;
               _depthMax = values.end;
             }),
+            onLockView: () => _lockViewport(selectedFrame),
+            onUnlockView: _unlockViewport,
+            onResetView: () => _resetViewport(selectedFrame),
           ),
         ),
       ],
@@ -105,6 +112,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
         axisScale: _axisScale,
         minDepth: _effectiveDepthMin(selectedFrame),
         maxDepth: _effectiveDepthMax(selectedFrame),
+        viewport: _activeViewport(selectedFrame),
       );
     }
 
@@ -144,6 +152,11 @@ class _ViewerScreenState extends State<ViewerScreen> {
     _lastPointCloudKey = key;
     _depthMin = selectedFrame.pointCloud!.minZ;
     _depthMax = selectedFrame.pointCloud!.maxZ;
+    if (_lockedViewportStreamKey != key) {
+      _viewportLocked = false;
+      _lockedViewport = null;
+      _lockedViewportStreamKey = null;
+    }
   }
 
   double _effectiveDepthMin(ViewerStreamFrame? selectedFrame) {
@@ -152,6 +165,55 @@ class _ViewerScreenState extends State<ViewerScreen> {
 
   double _effectiveDepthMax(ViewerStreamFrame? selectedFrame) {
     return _depthMax ?? selectedFrame?.pointCloud?.maxZ ?? 1;
+  }
+
+  bool _isViewportLocked(ViewerStreamFrame? selectedFrame) {
+    return _viewportLocked &&
+        selectedFrame != null &&
+        _lockedViewportStreamKey == selectedFrame.key &&
+        _lockedViewport != null;
+  }
+
+  PointCloudViewport? _activeViewport(ViewerStreamFrame? selectedFrame) {
+    return _isViewportLocked(selectedFrame) ? _lockedViewport : null;
+  }
+
+  void _lockViewport(ViewerStreamFrame? selectedFrame) {
+    final viewport = _currentViewport(selectedFrame);
+    if (viewport == null || selectedFrame == null) return;
+    setState(() {
+      _viewportLocked = true;
+      _lockedViewport = viewport;
+      _lockedViewportStreamKey = selectedFrame.key;
+    });
+  }
+
+  void _unlockViewport() {
+    setState(() {
+      _viewportLocked = false;
+      _lockedViewport = null;
+      _lockedViewportStreamKey = null;
+    });
+  }
+
+  void _resetViewport(ViewerStreamFrame? selectedFrame) {
+    final viewport = _currentViewport(selectedFrame);
+    if (viewport == null || selectedFrame == null) return;
+    setState(() {
+      _lockedViewport = viewport;
+      _lockedViewportStreamKey = selectedFrame.key;
+      _viewportLocked = true;
+    });
+  }
+
+  PointCloudViewport? _currentViewport(ViewerStreamFrame? selectedFrame) {
+    final pointCloud = selectedFrame?.pointCloud;
+    if (pointCloud == null) return null;
+    return PointCloudViewport.fromData(
+      pointCloud,
+      minDepth: _effectiveDepthMin(selectedFrame),
+      maxDepth: _effectiveDepthMax(selectedFrame),
+    );
   }
 
   Widget _buildToolbar(
@@ -463,10 +525,14 @@ class _StreamSelector extends StatelessWidget {
   final double axisScale;
   final double depthMin;
   final double depthMax;
+  final bool viewportLocked;
   final ValueChanged<double> onPointSizeChanged;
   final ValueChanged<bool> onShowAxisChanged;
   final ValueChanged<double> onAxisScaleChanged;
   final ValueChanged<RangeValues> onDepthRangeChanged;
+  final VoidCallback onLockView;
+  final VoidCallback onUnlockView;
+  final VoidCallback onResetView;
 
   const _StreamSelector({
     required this.receiver,
@@ -475,10 +541,14 @@ class _StreamSelector extends StatelessWidget {
     required this.axisScale,
     required this.depthMin,
     required this.depthMax,
+    required this.viewportLocked,
     required this.onPointSizeChanged,
     required this.onShowAxisChanged,
     required this.onAxisScaleChanged,
     required this.onDepthRangeChanged,
+    required this.onLockView,
+    required this.onUnlockView,
+    required this.onResetView,
   });
 
   @override
@@ -533,10 +603,14 @@ class _StreamSelector extends StatelessWidget {
               depthMax: depthMax,
               dataMinDepth: pointCloud.minZ,
               dataMaxDepth: pointCloud.maxZ,
+              viewportLocked: viewportLocked,
               onPointSizeChanged: onPointSizeChanged,
               onShowAxisChanged: onShowAxisChanged,
               onAxisScaleChanged: onAxisScaleChanged,
               onDepthRangeChanged: onDepthRangeChanged,
+              onLockView: onLockView,
+              onUnlockView: onUnlockView,
+              onResetView: onResetView,
             ),
           ],
         ],
@@ -642,10 +716,14 @@ class _PointCloudOptions extends StatelessWidget {
   final double depthMax;
   final double dataMinDepth;
   final double dataMaxDepth;
+  final bool viewportLocked;
   final ValueChanged<double> onPointSizeChanged;
   final ValueChanged<bool> onShowAxisChanged;
   final ValueChanged<double> onAxisScaleChanged;
   final ValueChanged<RangeValues> onDepthRangeChanged;
+  final VoidCallback onLockView;
+  final VoidCallback onUnlockView;
+  final VoidCallback onResetView;
 
   const _PointCloudOptions({
     required this.pointSize,
@@ -655,10 +733,14 @@ class _PointCloudOptions extends StatelessWidget {
     required this.depthMax,
     required this.dataMinDepth,
     required this.dataMaxDepth,
+    required this.viewportLocked,
     required this.onPointSizeChanged,
     required this.onShowAxisChanged,
     required this.onAxisScaleChanged,
     required this.onDepthRangeChanged,
+    required this.onLockView,
+    required this.onUnlockView,
+    required this.onResetView,
   });
 
   @override
@@ -678,6 +760,23 @@ class _PointCloudOptions extends StatelessWidget {
         const Text(
           'PointCloud',
           style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: viewportLocked ? onUnlockView : onLockView,
+                child: Text(viewportLocked ? 'Unlock' : 'Lock View'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Reset View',
+              onPressed: onResetView,
+              icon: const Icon(Icons.center_focus_strong, size: 18),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         _OptionLabel(value: 'Point size ${pointSize.toStringAsFixed(1)}'),
