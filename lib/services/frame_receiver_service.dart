@@ -9,26 +9,132 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 enum StreamTransport { rtsp, websocket }
 
+enum ViewerStreamEncoding {
+  jpeg,
+  pointcloudXyzF32,
+  unknown;
+
+  static ViewerStreamEncoding parse(String value) {
+    return switch (value) {
+      'jpeg' => ViewerStreamEncoding.jpeg,
+      'pointcloud_xyz_f32' => ViewerStreamEncoding.pointcloudXyzF32,
+      _ => ViewerStreamEncoding.unknown,
+    };
+  }
+}
+
+class PointCloudPoint {
+  final double x;
+  final double y;
+  final double z;
+
+  const PointCloudPoint({required this.x, required this.y, required this.z});
+}
+
+class PointCloudData {
+  final List<PointCloudPoint> points;
+  final double minZ;
+  final double maxZ;
+
+  const PointCloudData({
+    required this.points,
+    required this.minZ,
+    required this.maxZ,
+  });
+
+  factory PointCloudData.parse(Uint8List bytes, int pointCount) {
+    const bytesPerPoint = 12;
+    final expectedBytes = pointCount * bytesPerPoint;
+    if (pointCount <= 0 || bytes.length != expectedBytes) {
+      throw FormatException(
+        'Invalid pointcloud payload size: expected $expectedBytes, got ${bytes.length}',
+      );
+    }
+
+    final data = ByteData.sublistView(bytes);
+    final points = <PointCloudPoint>[];
+    double? minZ;
+    double? maxZ;
+    for (var i = 0; i < pointCount; i++) {
+      final offset = i * bytesPerPoint;
+      final x = data.getFloat32(offset, Endian.little);
+      final y = data.getFloat32(offset + 4, Endian.little);
+      final z = data.getFloat32(offset + 8, Endian.little);
+      if (!x.isFinite || !y.isFinite || !z.isFinite) {
+        continue;
+      }
+      points.add(PointCloudPoint(x: x, y: y, z: z));
+      minZ = minZ == null ? z : (z < minZ ? z : minZ);
+      maxZ = maxZ == null ? z : (z > maxZ ? z : maxZ);
+    }
+
+    return PointCloudData(points: points, minZ: minZ ?? 0, maxZ: maxZ ?? 1);
+  }
+}
+
 class ViewerStreamFrame {
   final String name;
   final String kind;
+  final ViewerStreamEncoding encoding;
   final int payloadIndex;
   final int? width;
   final int? height;
+  final int pointCount;
+  final int stride;
   final double? sourceTimestampMs;
-  final Uint8List jpegBytes;
+  final Uint8List payloadBytes;
+  final PointCloudData? pointCloud;
 
   const ViewerStreamFrame({
     required this.name,
     required this.kind,
+    required this.encoding,
     required this.payloadIndex,
-    required this.jpegBytes,
+    required this.payloadBytes,
+    this.pointCount = 0,
+    this.stride = 1,
     this.width,
     this.height,
     this.sourceTimestampMs,
+    this.pointCloud,
   });
 
+  factory ViewerStreamFrame.fromPayload({
+    required String name,
+    required String kind,
+    required ViewerStreamEncoding encoding,
+    required int payloadIndex,
+    required Uint8List payloadBytes,
+    required int pointCount,
+    required int stride,
+    int? width,
+    int? height,
+    double? sourceTimestampMs,
+  }) {
+    return ViewerStreamFrame(
+      name: name,
+      kind: kind,
+      encoding: encoding,
+      payloadIndex: payloadIndex,
+      width: width,
+      height: height,
+      pointCount: pointCount,
+      stride: stride,
+      sourceTimestampMs: sourceTimestampMs,
+      payloadBytes: payloadBytes,
+      pointCloud: encoding == ViewerStreamEncoding.pointcloudXyzF32
+          ? PointCloudData.parse(payloadBytes, pointCount)
+          : null,
+    );
+  }
+
   String get key => kind.isEmpty ? name : kind;
+
+  Uint8List get jpegBytes => payloadBytes;
+
+  bool get isJpeg => encoding == ViewerStreamEncoding.jpeg;
+
+  bool get isPointCloud => encoding == ViewerStreamEncoding.pointcloudXyzF32;
 
   String get label {
     if (kind.isNotEmpty) return kind;
@@ -47,17 +153,25 @@ class ViewerStreamFrame {
 class _PendingStreamInfo {
   final String name;
   final String kind;
+  final ViewerStreamEncoding encoding;
   final int payloadIndex;
   final int? width;
   final int? height;
+  final int? payloadSize;
+  final int pointCount;
+  final int stride;
   final double? sourceTimestampMs;
 
   const _PendingStreamInfo({
     required this.name,
     required this.kind,
+    required this.encoding,
     required this.payloadIndex,
     this.width,
     this.height,
+    this.payloadSize,
+    this.pointCount = 0,
+    this.stride = 1,
     this.sourceTimestampMs,
   });
 
@@ -327,11 +441,25 @@ class FrameReceiverService extends ChangeNotifier {
 
     final streamInfo = pendingStreams.firstWhere(
       (stream) => !_pendingPayloads.containsKey(stream.payloadIndex),
-      orElse: () =>
-          const _PendingStreamInfo(name: '', kind: '', payloadIndex: -1),
+      orElse: () => const _PendingStreamInfo(
+        name: '',
+        kind: '',
+        encoding: ViewerStreamEncoding.unknown,
+        payloadIndex: -1,
+      ),
     );
     if (streamInfo.payloadIndex < 0) {
       _errorMessage = 'Unexpected WebSocket payload';
+      notifyListeners();
+      return;
+    }
+
+    final expectedPayloadSize = streamInfo.payloadSize;
+    if (expectedPayloadSize != null && payload.length != expectedPayloadSize) {
+      _errorMessage =
+          'Invalid ${streamInfo.label} payload size: expected $expectedPayloadSize, got ${payload.length}';
+      _pendingStreams = null;
+      _pendingPayloads.clear();
       notifyListeners();
       return;
     }
@@ -351,16 +479,27 @@ class FrameReceiverService extends ChangeNotifier {
         notifyListeners();
         return;
       }
-      final frame = ViewerStreamFrame(
-        name: stream.name,
-        kind: stream.kind,
-        payloadIndex: stream.payloadIndex,
-        width: stream.width,
-        height: stream.height,
-        sourceTimestampMs: stream.sourceTimestampMs,
-        jpegBytes: jpegBytes,
-      );
-      nextStreams[frame.key] = frame;
+      try {
+        final frame = ViewerStreamFrame.fromPayload(
+          name: stream.name,
+          kind: stream.kind,
+          encoding: stream.encoding,
+          payloadIndex: stream.payloadIndex,
+          width: stream.width,
+          height: stream.height,
+          pointCount: stream.pointCount,
+          stride: stream.stride,
+          sourceTimestampMs: stream.sourceTimestampMs,
+          payloadBytes: jpegBytes,
+        );
+        nextStreams[frame.key] = frame;
+      } catch (e) {
+        _errorMessage = 'Invalid ${stream.label} payload: $e';
+        _pendingStreams = null;
+        _pendingPayloads.clear();
+        notifyListeners();
+        return;
+      }
     }
 
     _streams
@@ -383,10 +522,11 @@ class FrameReceiverService extends ChangeNotifier {
     final frame = ViewerStreamFrame(
       name: 'camera',
       kind: 'camera',
+      encoding: ViewerStreamEncoding.jpeg,
       payloadIndex: 0,
       width: detectedSize?.width.toInt(),
       height: detectedSize?.height.toInt(),
-      jpegBytes: payload,
+      payloadBytes: payload,
     );
     _streams
       ..clear()
@@ -420,9 +560,15 @@ class FrameReceiverService extends ChangeNotifier {
         _PendingStreamInfo(
           name: _metadataString(rawStream['name']),
           kind: _metadataString(rawStream['kind']),
+          encoding: ViewerStreamEncoding.parse(
+            _metadataString(rawStream['encoding'], defaultValue: 'jpeg'),
+          ),
           payloadIndex: payloadIndex,
           width: _metadataInt(rawStream['width']),
           height: _metadataInt(rawStream['height']),
+          payloadSize: _metadataInt(rawStream['payload_size']),
+          pointCount: _metadataInt(rawStream['point_count']) ?? 0,
+          stride: _metadataInt(rawStream['stride']) ?? 1,
           sourceTimestampMs: _metadataDouble(rawStream['source_timestamp_ms']),
         ),
       );
@@ -458,7 +604,8 @@ class FrameReceiverService extends ChangeNotifier {
     notifyListeners();
   }
 
-  static String _metadataString(Object? value) => value is String ? value : '';
+  static String _metadataString(Object? value, {String defaultValue = ''}) =>
+      value is String ? value : defaultValue;
 
   static int? _metadataInt(Object? value) =>
       value is num ? value.toInt() : null;
