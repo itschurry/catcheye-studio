@@ -16,11 +16,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   final packageInfo = await PackageInfo.fromPlatform();
-  final appTitle = 'CatchEye Guard v${packageInfo.version}';
+  final appTitle = 'CatchEye Studio v${packageInfo.version}';
   await _configureDesktopWindow(appTitle);
   final settingsProvider = await SettingsProvider.load();
   runApp(
-    CatchEyeGuardApp(settingsProvider: settingsProvider, appTitle: appTitle),
+    CatchEyeStudioApp(settingsProvider: settingsProvider, appTitle: appTitle),
   );
 }
 
@@ -36,8 +36,8 @@ Future<void> _configureDesktopWindow(String appTitle) async {
   await windowManager.setTitle(appTitle);
 }
 
-class CatchEyeGuardApp extends StatelessWidget {
-  const CatchEyeGuardApp({
+class CatchEyeStudioApp extends StatelessWidget {
+  const CatchEyeStudioApp({
     super.key,
     required this.settingsProvider,
     required this.appTitle,

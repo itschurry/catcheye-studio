@@ -1,8 +1,8 @@
-# CatchEye Guard App
+# CatchEye Studio
 
-원격 장치에서 실행 중인 `catcheye-guard` 검출기의 영상을 확인하고, ROI를 편집하기 위한 Flutter 데스크톱 앱입니다.
+원격 장치에서 실행 중인 CatchEye 장비의 영상을 확인하고, ROI를 편집하기 위한 Flutter 데스크톱 앱입니다.
 
-주 사용 환경은 Windows 데스크톱이며, 검출 앱은 별도 장치(라즈베리파이5 등)에서 영상 스트림과 REST API를 제공한다고 가정합니다.
+주 사용 환경은 Windows 데스크톱이며, Guard 또는 Pick 앱은 별도 장치(라즈베리파이5 등)에서 영상 스트림과 REST API를 제공한다고 가정합니다.
 
 ## 주요 기능
 
