@@ -8,6 +8,7 @@
 
 - `Viewer`
   - 원격 RTSP 또는 WebSocket 스트림 재생
+  - Pick viewer-only 다중 WebSocket 스트림(camera/depth/amplitude/rgb) 표시
   - Stream URL과 API Base URL 설정
   - 연결 상태, FPS, 프레임 수 확인
 

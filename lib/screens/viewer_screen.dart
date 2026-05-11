@@ -27,20 +27,41 @@ class ViewerScreen extends StatelessWidget {
             const Divider(height: 1),
 
             // Frame viewer
-            Expanded(
-              child: LiveViewer(
-                controller: receiver.videoController,
-                connected: receiver.connected,
-                isRtsp: receiver.isRtsp,
-                frameData: receiver.currentFrame,
-              ),
-            ),
+            Expanded(child: _buildViewerArea(receiver)),
 
             // Status bar
             _buildStatusBar(context, receiver, settings.streamUri.toString()),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildViewerArea(FrameReceiverService receiver) {
+    final selectedFrame = receiver.selectedFrame;
+    final viewer = LiveViewer(
+      controller: receiver.videoController,
+      connected: receiver.connected,
+      isRtsp: receiver.isRtsp,
+      frameData: selectedFrame?.jpegBytes ?? receiver.currentFrame,
+    );
+
+    if (!receiver.connected || receiver.isRtsp || !receiver.hasMultiStream) {
+      return viewer;
+    }
+
+    return Row(
+      children: [
+        Expanded(child: viewer),
+        Container(
+          width: 220,
+          decoration: const BoxDecoration(
+            color: Color(0xFF0B1416),
+            border: Border(left: BorderSide(color: Color(0xFF30474B))),
+          ),
+          child: _StreamSelector(receiver: receiver),
+        ),
+      ],
     );
   }
 
@@ -162,6 +183,11 @@ class ViewerScreen extends StatelessWidget {
     final connected = receiver.connected;
     final inferenceMs = receiver.isWebSocket ? receiver.inferenceMs : null;
     final wallClockText = receiver.isWebSocket ? receiver.wallClockText : null;
+    final selectedFrame = receiver.selectedFrame;
+    final selectedSize = selectedFrame?.size;
+    final resolutionText = selectedSize == null
+        ? 'N/A'
+        : '${selectedSize.width.toInt()} x ${selectedSize.height.toInt()}';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -250,6 +276,24 @@ class ViewerScreen extends StatelessWidget {
                 : 'Idle',
             color: receiver.connected ? Colors.blueAccent : Colors.grey,
           ),
+          const SizedBox(width: 16),
+          _StatusChip(
+            label: 'Stream',
+            value: !connected ? '-' : selectedFrame?.label ?? 'N/A',
+            valueWidth: 74,
+            color: connected && selectedFrame != null
+                ? Colors.lightBlueAccent
+                : Colors.grey,
+          ),
+          const SizedBox(width: 16),
+          _StatusChip(
+            label: 'Resolution',
+            value: !connected ? '-' : resolutionText,
+            valueWidth: 82,
+            color: connected && selectedSize != null
+                ? Colors.cyan
+                : Colors.grey,
+          ),
           const Spacer(),
           Text(
             receiver.connectedUri?.toString() ?? defaultStreamUrl,
@@ -318,6 +362,135 @@ class ViewerScreen extends StatelessWidget {
             child: const Text('Connect'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _StreamSelector extends StatelessWidget {
+  final FrameReceiverService receiver;
+
+  const _StreamSelector({required this.receiver});
+
+  @override
+  Widget build(BuildContext context) {
+    final streams = receiver.streams.values.toList()
+      ..sort((a, b) => a.payloadIndex.compareTo(b.payloadIndex));
+
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.view_sidebar_outlined,
+                size: 18,
+                color: Theme.of(context).colorScheme.secondary,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Streams',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: ListView.separated(
+              itemCount: streams.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final stream = streams[index];
+                final selected = stream.key == receiver.selectedStreamKey;
+                return _StreamTile(
+                  stream: stream,
+                  selected: selected,
+                  onTap: () => receiver.selectStream(stream.key),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StreamTile extends StatelessWidget {
+  final ViewerStreamFrame stream;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _StreamTile({
+    required this.stream,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final size = stream.size;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF183C42) : const Color(0xFF101B1D),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: selected ? colorScheme.primary : const Color(0xFF30474B),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(5),
+                ),
+                child: Container(
+                  color: Colors.black,
+                  child: Image.memory(
+                    stream.jpegBytes,
+                    fit: BoxFit.contain,
+                    gaplessPlayback: true,
+                    filterQuality: FilterQuality.low,
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      stream.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: selected ? colorScheme.primary : Colors.white,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    size == null
+                        ? '-'
+                        : '${size.width.toInt()} x ${size.height.toInt()}',
+                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
