@@ -93,6 +93,7 @@ class PointCloudViewer extends StatefulWidget {
   final double zoom;
   final Offset panOffset;
   final PointCloudPalette palette;
+  final List<DetectionPosition> detectionPositions;
   final void Function(double yaw, double pitch)? onViewChanged;
   final ValueChanged<double>? onZoomChanged;
   final ValueChanged<Offset>? onPanChanged;
@@ -111,6 +112,7 @@ class PointCloudViewer extends StatefulWidget {
     required this.zoom,
     required this.panOffset,
     required this.palette,
+    this.detectionPositions = const [],
     this.onViewChanged,
     this.onZoomChanged,
     this.onPanChanged,
@@ -174,6 +176,7 @@ class _PointCloudViewerState extends State<PointCloudViewer> {
                 zoom: widget.zoom,
                 panOffset: widget.panOffset,
                 palette: widget.palette,
+                detectionPositions: widget.detectionPositions,
               ),
               child: const SizedBox.expand(),
             ),
@@ -218,6 +221,7 @@ class _PointCloudPainter extends CustomPainter {
   final double zoom;
   final Offset panOffset;
   final PointCloudPalette palette;
+  final List<DetectionPosition> detectionPositions;
 
   const _PointCloudPainter({
     required this.data,
@@ -232,6 +236,7 @@ class _PointCloudPainter extends CustomPainter {
     required this.zoom,
     required this.panOffset,
     required this.palette,
+    required this.detectionPositions,
   });
 
   @override
@@ -312,7 +317,71 @@ class _PointCloudPainter extends CustomPainter {
       canvas.drawCircle(point.offset, radius, paint);
     }
 
+    _drawDetectionPositions(canvas, project, depthLow, depthHigh);
     _drawColorbar(canvas, size, colorRange, palette);
+  }
+
+  void _drawDetectionPositions(
+    Canvas canvas,
+    ({Offset offset, double cameraZ}) Function(double x, double y, double z)
+    project,
+    double depthLow,
+    double depthHigh,
+  ) {
+    if (detectionPositions.isEmpty) return;
+
+    final markerPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..color = const Color(0xFFFFEA00);
+    final fillPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = const Color(0x55FFEA00);
+
+    for (final detection in detectionPositions) {
+      if (detection.z < depthLow || detection.z > depthHigh) continue;
+
+      final projected = project(detection.x, detection.y, detection.z).offset;
+      const markerSize = 9.0;
+      canvas.drawCircle(projected, markerSize, fillPaint);
+      canvas.drawCircle(projected, markerSize, markerPaint);
+      canvas.drawLine(
+        Offset(projected.dx - markerSize - 4, projected.dy),
+        Offset(projected.dx + markerSize + 4, projected.dy),
+        markerPaint,
+      );
+      canvas.drawLine(
+        Offset(projected.dx, projected.dy - markerSize - 4),
+        Offset(projected.dx, projected.dy + markerSize + 4),
+        markerPaint,
+      );
+      _drawDetectionLabel(canvas, projected, detection);
+    }
+  }
+
+  void _drawDetectionLabel(
+    Canvas canvas,
+    Offset marker,
+    DetectionPosition detection,
+  ) {
+    final text =
+        '${detection.className} '
+        'x:${detection.x.toStringAsFixed(1)} '
+        'y:${detection.y.toStringAsFixed(1)} '
+        'z:${detection.z.toStringAsFixed(1)}';
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: const TextStyle(
+          color: Color(0xFFFFEA00),
+          fontSize: 11,
+          fontFamily: 'monospace',
+          shadows: [Shadow(color: Colors.black, blurRadius: 3)],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: 260);
+    painter.paint(canvas, marker + const Offset(12, -18));
   }
 
   _ColorRange _colorRange(
@@ -487,6 +556,7 @@ class _PointCloudPainter extends CustomPainter {
         pitch != oldDelegate.pitch ||
         zoom != oldDelegate.zoom ||
         panOffset != oldDelegate.panOffset ||
-        palette != oldDelegate.palette;
+        palette != oldDelegate.palette ||
+        detectionPositions != oldDelegate.detectionPositions;
   }
 }

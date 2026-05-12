@@ -176,6 +176,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
         pitch: _viewPitch,
         zoom: _viewZoom,
         panOffset: _viewPanOffset,
+        detectionPositions: receiver.detectionPositions,
         onViewChanged: (yaw, pitch) => setState(() {
           _viewYaw = yaw;
           _viewPitch = pitch;

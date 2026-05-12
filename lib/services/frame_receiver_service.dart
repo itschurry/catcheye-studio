@@ -160,6 +160,28 @@ class ViewerStreamFrame {
   }
 }
 
+class DetectionPosition {
+  final String className;
+  final double score;
+  final double x;
+  final double y;
+  final double z;
+  final int sampleCount;
+  final int pointcloudX;
+  final int pointcloudY;
+
+  const DetectionPosition({
+    required this.className,
+    required this.score,
+    required this.x,
+    required this.y,
+    required this.z,
+    required this.sampleCount,
+    required this.pointcloudX,
+    required this.pointcloudY,
+  });
+}
+
 class _PendingStreamInfo {
   final String name;
   final String kind;
@@ -233,6 +255,8 @@ class FrameReceiverService extends ChangeNotifier {
 
   bool get hasMultiStream => _streams.length > 1;
   Map<String, dynamic>? get latestMetadata => _latestMetadata;
+  List<DetectionPosition> get detectionPositions =>
+      _parseDetectionPositions(_latestMetadata);
   double? get inferenceMs {
     final metadata = _latestMetadata?['metadata'];
     if (metadata is! Map<String, dynamic>) return null;
@@ -240,6 +264,39 @@ class FrameReceiverService extends ChangeNotifier {
     final value = metadata['inference_ms'];
     if (value is num) return value.toDouble();
     return null;
+  }
+
+  List<DetectionPosition> _parseDetectionPositions(
+    Map<String, dynamic>? metadata,
+  ) {
+    final rawDetections = metadata?['detections'];
+    if (rawDetections is! List) return const [];
+
+    final positions = <DetectionPosition>[];
+    for (final rawDetection in rawDetections) {
+      if (rawDetection is! Map<String, dynamic>) continue;
+      final rawPosition = rawDetection['position'];
+      if (rawPosition is! Map<String, dynamic>) continue;
+
+      final x = _metadataDouble(rawPosition['x']);
+      final y = _metadataDouble(rawPosition['y']);
+      final z = _metadataDouble(rawPosition['z']);
+      if (x == null || y == null || z == null) continue;
+
+      positions.add(
+        DetectionPosition(
+          className: _metadataString(rawDetection['class_name']),
+          score: _metadataDouble(rawDetection['score']) ?? 0,
+          x: x,
+          y: y,
+          z: z,
+          sampleCount: _metadataInt(rawPosition['sample_count']) ?? 0,
+          pointcloudX: _metadataInt(rawPosition['pointcloud_x']) ?? 0,
+          pointcloudY: _metadataInt(rawPosition['pointcloud_y']) ?? 0,
+        ),
+      );
+    }
+    return positions;
   }
 
   String? get wallClockText {
