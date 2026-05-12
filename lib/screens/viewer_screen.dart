@@ -907,7 +907,7 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
       'flying_pixel_remove_threshold',
       'Flying pixel threshold',
     ),
-    _CubeEyePropertySpec('integraion_time', 'Integration time'),
+    _CubeEyePropertySpec('integration_time', 'Integration time'),
     _CubeEyePropertySpec('motion_blur_frequency', 'Motion blur frequency'),
     _CubeEyePropertySpec('motion_blur_threshold', 'Motion blur threshold'),
     _CubeEyePropertySpec('motion_blur_threshold2', 'Motion blur threshold 2'),
@@ -1065,34 +1065,41 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
         const Divider(height: 18),
         const Text('Image quality', style: TextStyle(fontSize: 12)),
         const SizedBox(height: 6),
-        ..._boolProperties.map(
-          (spec) => SwitchListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: Text(spec.label, style: const TextStyle(fontSize: 12)),
-            value: (properties?.values[spec.key] as bool?) ?? false,
-            onChanged: controlsEnabled
-                ? (value) => _setProperty(spec.key, value)
-                : null,
-          ),
-        ),
-        ..._numericProperties.map(
-          (spec) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: TextField(
-              controller: _controllerFor(spec.key),
-              enabled: controlsEnabled,
-              keyboardType: TextInputType.numberWithOptions(
-                signed: true,
-                decimal: spec.isFloat,
+        ..._boolProperties
+            .where((spec) => properties?.values.containsKey(spec.key) ?? false)
+            .map(
+              (spec) => SwitchListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(spec.label, style: const TextStyle(fontSize: 12)),
+                value: (properties?.values[spec.key] as bool?) ?? false,
+                onChanged: controlsEnabled
+                    ? (value) => _setProperty(spec.key, value)
+                    : null,
               ),
-              decoration: InputDecoration(labelText: spec.label, isDense: true),
-              onSubmitted: (value) => spec.isFloat
-                  ? _setDoubleProperty(spec.key, value)
-                  : _setIntProperty(spec.key, value),
             ),
-          ),
-        ),
+        ..._numericProperties
+            .where((spec) => properties?.values.containsKey(spec.key) ?? false)
+            .map(
+              (spec) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: TextField(
+                  controller: _controllerFor(spec.key),
+                  enabled: controlsEnabled,
+                  keyboardType: TextInputType.numberWithOptions(
+                    signed: true,
+                    decimal: spec.isFloat,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: spec.label,
+                    isDense: true,
+                  ),
+                  onSubmitted: (value) => spec.isFloat
+                      ? _setDoubleProperty(spec.key, value)
+                      : _setIntProperty(spec.key, value),
+                ),
+              ),
+            ),
       ],
     );
   }
@@ -1155,7 +1162,10 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
       _depthMinController.text = properties.depthRangeMin.toString();
       _depthMaxController.text = properties.depthRangeMax.toString();
       for (final spec in _numericProperties) {
-        _controllerFor(spec.key).text = properties.values[spec.key].toString();
+        if (properties.values.containsKey(spec.key)) {
+          _controllerFor(spec.key).text = properties.values[spec.key]
+              .toString();
+        }
       }
     });
     if (!persist) {
