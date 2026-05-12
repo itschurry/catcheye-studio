@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/settings_provider.dart';
 import '../services/frame_receiver_service.dart';
+import '../services/remote_cubeeye_api_service.dart';
 import '../widgets/live_viewer.dart';
 import '../widgets/point_cloud_viewer.dart';
 
@@ -57,9 +58,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
     final selectedFrame = receiver.selectedFrame;
     final viewer = _buildMainViewer(receiver, selectedFrame);
 
-    if (!receiver.connected ||
-        receiver.isRtsp ||
-        (!receiver.hasMultiStream && selectedFrame?.isPointCloud != true)) {
+    if (!receiver.connected || receiver.isRtsp) {
       return viewer;
     }
 
@@ -487,7 +486,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
               controller: apiController,
               decoration: const InputDecoration(
                 labelText: 'API Base URL',
-                hintText: 'http://192.168.0.10:8080',
+                hintText: 'http://192.168.0.10:8090',
                 border: OutlineInputBorder(),
               ),
               style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
@@ -593,6 +592,8 @@ class _StreamSelector extends StatelessWidget {
               },
             ),
           ),
+          const Divider(height: 24),
+          const _CubeEyeControls(),
           if (selected?.isPointCloud == true && pointCloud != null) ...[
             const Divider(height: 24),
             _PointCloudOptions(
@@ -704,6 +705,226 @@ class _StreamTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CubeEyeControls extends StatefulWidget {
+  const _CubeEyeControls();
+
+  @override
+  State<_CubeEyeControls> createState() => _CubeEyeControlsState();
+}
+
+class _CubeEyeControlsState extends State<_CubeEyeControls> {
+  final RemoteCubeEyeApiService _api = RemoteCubeEyeApiService();
+  final TextEditingController _depthMinController = TextEditingController();
+  final TextEditingController _depthMaxController = TextEditingController();
+  CubeEyeProperties? _properties;
+  String? _error;
+  bool _loading = false;
+  bool _loadedOnce = false;
+  bool _initializedFromSettings = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_loadedOnce) {
+        _load();
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initializedFromSettings) {
+      return;
+    }
+    _initializedFromSettings = true;
+    final settings = context.read<SettingsProvider>().settings;
+    _apply(
+      CubeEyeProperties(
+        framerate: settings.cubeEyeFramerate,
+        autoExposure: settings.cubeEyeAutoExposure,
+        illumination: settings.cubeEyeIllumination,
+        depthRangeMin: settings.cubeEyeDepthRangeMin,
+        depthRangeMax: settings.cubeEyeDepthRangeMax,
+      ),
+      persist: false,
+    );
+  }
+
+  @override
+  void dispose() {
+    _depthMinController.dispose();
+    _depthMaxController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final properties = _properties;
+    final controlsEnabled = properties != null && !_loading;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'CubeEye',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+            ),
+            OutlinedButton.icon(
+              onPressed: _loading ? null : _load,
+              icon: _loading
+                  ? const SizedBox.square(
+                      dimension: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh, size: 16),
+              label: const Text('Load'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_error != null)
+          Text(
+            _error!,
+            style: const TextStyle(fontSize: 11, color: Colors.redAccent),
+          ),
+        const SizedBox(height: 8),
+        const Text('Framerate', style: TextStyle(fontSize: 12)),
+        const SizedBox(height: 6),
+        SegmentedButton<int>(
+          showSelectedIcon: false,
+          style: const ButtonStyle(visualDensity: VisualDensity.compact),
+          segments: const [
+            ButtonSegment(value: 7, label: Text('7')),
+            ButtonSegment(value: 15, label: Text('15')),
+            ButtonSegment(value: 30, label: Text('30')),
+          ],
+          selected: {properties?.framerate ?? 15},
+          onSelectionChanged: controlsEnabled
+              ? (selection) => _setProperty('framerate', selection.first)
+              : null,
+        ),
+        SwitchListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Auto exposure', style: TextStyle(fontSize: 12)),
+          value: properties?.autoExposure ?? false,
+          onChanged: controlsEnabled
+              ? (value) => _setProperty('auto_exposure', value)
+              : null,
+        ),
+        SwitchListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Illumination', style: TextStyle(fontSize: 12)),
+          value: properties?.illumination ?? false,
+          onChanged: controlsEnabled
+              ? (value) => _setProperty('illumination', value)
+              : null,
+        ),
+        const Text('Depth range', style: TextStyle(fontSize: 12)),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _depthMinController,
+                enabled: controlsEnabled,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Min',
+                  isDense: true,
+                ),
+                onSubmitted: (value) =>
+                    _setIntProperty('depth_range_min', value),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _depthMaxController,
+                enabled: controlsEnabled,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Max',
+                  isDense: true,
+                ),
+                onSubmitted: (value) =>
+                    _setIntProperty('depth_range_max', value),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _load() async {
+    _loadedOnce = true;
+    await _run(() async {
+      final settings = context.read<SettingsProvider>().settings;
+      await _apply(await _api.fetchProperties(settings));
+    });
+  }
+
+  Future<void> _setProperty(String key, Object value) async {
+    await _run(() async {
+      final settings = context.read<SettingsProvider>().settings;
+      await _apply(await _api.setProperty(settings, key, value));
+    });
+  }
+
+  Future<void> _setIntProperty(String key, String value) async {
+    final parsed = int.tryParse(value.trim());
+    if (parsed == null) {
+      setState(() => _error = 'Invalid integer');
+      return;
+    }
+    await _setProperty(key, parsed);
+  }
+
+  Future<void> _run(Future<void> Function() action) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await action();
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  Future<void> _apply(
+    CubeEyeProperties properties, {
+    bool persist = true,
+  }) async {
+    setState(() {
+      _properties = properties;
+      _depthMinController.text = properties.depthRangeMin.toString();
+      _depthMaxController.text = properties.depthRangeMax.toString();
+    });
+    if (!persist) {
+      return;
+    }
+    await context.read<SettingsProvider>().updateCubeEyeSettings(
+      framerate: properties.framerate,
+      autoExposure: properties.autoExposure,
+      illumination: properties.illumination,
+      depthRangeMin: properties.depthRangeMin,
+      depthRangeMax: properties.depthRangeMax,
     );
   }
 }

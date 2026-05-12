@@ -11,6 +11,7 @@
   - Pick viewer-only 다중 WebSocket 스트림(camera/depth/amplitude/rgb/pointcloud) 표시
   - Pick stream별 독립 갱신 수신
   - Pick pointcloud 스트림 2.5D 표시와 point size/axis/depth range/view lock 조절
+  - Pick CubeEye property 제어
   - Stream URL과 API Base URL 설정
   - 연결 상태, FPS, 프레임 수 확인
 

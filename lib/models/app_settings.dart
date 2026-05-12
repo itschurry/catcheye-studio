@@ -3,15 +3,30 @@ class AppSettings {
   static const String defaultDetectorBaseUrl = 'http://127.0.0.1:8090';
   static const String defaultStreamPath = 'ws://127.0.0.1:8080';
   static const String defaultApiBasePath = '/api';
+  static const int defaultCubeEyeFramerate = 15;
+  static const bool defaultCubeEyeAutoExposure = false;
+  static const bool defaultCubeEyeIllumination = false;
+  static const int defaultCubeEyeDepthRangeMin = 0;
+  static const int defaultCubeEyeDepthRangeMax = 8192;
 
   String detectorBaseUrl;
   String streamPath;
   String apiBasePath;
+  int cubeEyeFramerate;
+  bool cubeEyeAutoExposure;
+  bool cubeEyeIllumination;
+  int cubeEyeDepthRangeMin;
+  int cubeEyeDepthRangeMax;
 
   AppSettings({
     this.detectorBaseUrl = defaultDetectorBaseUrl,
     this.streamPath = defaultStreamPath,
     this.apiBasePath = defaultApiBasePath,
+    this.cubeEyeFramerate = defaultCubeEyeFramerate,
+    this.cubeEyeAutoExposure = defaultCubeEyeAutoExposure,
+    this.cubeEyeIllumination = defaultCubeEyeIllumination,
+    this.cubeEyeDepthRangeMin = defaultCubeEyeDepthRangeMin,
+    this.cubeEyeDepthRangeMax = defaultCubeEyeDepthRangeMax,
   });
 
   Uri get streamUri => _resolveUri(streamPath);
