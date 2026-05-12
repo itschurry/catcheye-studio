@@ -10,7 +10,8 @@ class AppSettings {
   static const int defaultCubeEyeDepthRangeMax = 8192;
   static const double defaultPointCloudPointSize = 2.0;
   static const bool defaultPointCloudShowAxis = true;
-  static const double defaultPointCloudAxisScale = 100.0;
+  static const double defaultPointCloudAxisScale = 1.0;
+  static const String defaultPointCloudPalette = 'depth';
 
   String detectorBaseUrl;
   String streamPath;
@@ -23,6 +24,7 @@ class AppSettings {
   double pointCloudPointSize;
   bool pointCloudShowAxis;
   double pointCloudAxisScale;
+  String pointCloudPalette;
   double? pointCloudDepthMin;
   double? pointCloudDepthMax;
 
@@ -38,6 +40,7 @@ class AppSettings {
     this.pointCloudPointSize = defaultPointCloudPointSize,
     this.pointCloudShowAxis = defaultPointCloudShowAxis,
     this.pointCloudAxisScale = defaultPointCloudAxisScale,
+    this.pointCloudPalette = defaultPointCloudPalette,
     this.pointCloudDepthMin,
     this.pointCloudDepthMax,
   });

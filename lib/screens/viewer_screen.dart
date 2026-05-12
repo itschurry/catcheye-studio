@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/app_settings.dart';
 import '../providers/settings_provider.dart';
 import '../services/frame_receiver_service.dart';
 import '../services/remote_cubeeye_api_service.dart';
@@ -21,7 +22,8 @@ class ViewerScreen extends StatefulWidget {
 class _ViewerScreenState extends State<ViewerScreen> {
   double _pointSize = 2.0;
   bool _showAxis = true;
-  double _axisScale = 100.0;
+  double _axisScale = AppSettings.defaultPointCloudAxisScale;
+  PointCloudPalette _palette = PointCloudPalette.depth;
   double _viewYaw = -0.55;
   double _viewPitch = 0.35;
   double _viewZoom = 1.0;
@@ -45,7 +47,8 @@ class _ViewerScreenState extends State<ViewerScreen> {
     final settings = context.read<SettingsProvider>().settings;
     _pointSize = settings.pointCloudPointSize;
     _showAxis = settings.pointCloudShowAxis;
-    _axisScale = settings.pointCloudAxisScale;
+    _axisScale = settings.pointCloudAxisScale.clamp(0.0, 3.0).toDouble();
+    _palette = _paletteFromName(settings.pointCloudPalette);
     _depthMin = settings.pointCloudDepthMin;
     _depthMax = settings.pointCloudDepthMax;
     _hasManualDepthRange =
@@ -92,7 +95,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
       children: [
         Expanded(child: viewer),
         Container(
-          width: 220,
+          width: 260,
           decoration: const BoxDecoration(
             color: Color(0xFF0B1416),
             border: Border(left: BorderSide(color: Color(0xFF30474B))),
@@ -102,6 +105,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
             pointSize: _pointSize,
             showAxis: _showAxis,
             axisScale: _axisScale,
+            palette: _palette,
             yaw: _viewYaw,
             pitch: _viewPitch,
             zoom: _viewZoom,
@@ -118,6 +122,10 @@ class _ViewerScreenState extends State<ViewerScreen> {
             },
             onAxisScaleChanged: (value) {
               setState(() => _axisScale = value);
+              _persistPointCloudViewerSettings();
+            },
+            onPaletteChanged: (value) {
+              setState(() => _palette = value);
               _persistPointCloudViewerSettings();
             },
             onYawChanged: (value) => setState(() => _viewYaw = value),
@@ -160,6 +168,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
         pointSize: _pointSize,
         showAxis: _showAxis,
         axisScale: _axisScale,
+        palette: _palette,
         minDepth: _effectiveDepthMin(selectedFrame),
         maxDepth: _effectiveDepthMax(selectedFrame),
         viewport: _activeViewport(selectedFrame),
@@ -246,9 +255,17 @@ class _ViewerScreenState extends State<ViewerScreen> {
         pointSize: _pointSize,
         showAxis: _showAxis,
         axisScale: _axisScale,
+        palette: _palette.name,
         depthMin: _depthMin,
         depthMax: _depthMax,
       ),
+    );
+  }
+
+  PointCloudPalette _paletteFromName(String value) {
+    return PointCloudPalette.values.firstWhere(
+      (palette) => palette.name == value,
+      orElse: () => PointCloudPalette.depth,
     );
   }
 
@@ -426,6 +443,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
                 : receiver.connecting
                 ? 'Connecting'
                 : 'Disconnected',
+            valueWidth: 82,
             color: receiver.connected ? Colors.green : Colors.grey,
           ),
           const SizedBox(width: 16),
@@ -455,6 +473,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
                 : receiver.isWebSocket
                 ? '${receiver.frameCount}'
                 : 'N/A (RTSP)',
+            valueWidth: 72,
             color: connected && receiver.isWebSocket
                 ? Colors.cyan
                 : Colors.grey,
@@ -499,6 +518,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
                 : receiver.isRtsp
                 ? 'RTSP'
                 : 'Idle',
+            valueWidth: 72,
             color: receiver.connected ? Colors.blueAccent : Colors.grey,
           ),
           const SizedBox(width: 16),
@@ -520,9 +540,15 @@ class _ViewerScreenState extends State<ViewerScreen> {
                 : Colors.grey,
           ),
           const Spacer(),
-          Text(
-            receiver.connectedUri?.toString() ?? defaultStreamUrl,
-            style: const TextStyle(fontSize: 10, color: Colors.grey),
+          SizedBox(
+            width: 230,
+            child: Text(
+              receiver.connectedUri?.toString() ?? defaultStreamUrl,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: 10, color: Colors.grey),
+            ),
           ),
         ],
       ),
@@ -597,6 +623,7 @@ class _StreamSelector extends StatelessWidget {
   final double pointSize;
   final bool showAxis;
   final double axisScale;
+  final PointCloudPalette palette;
   final double yaw;
   final double pitch;
   final double zoom;
@@ -606,6 +633,7 @@ class _StreamSelector extends StatelessWidget {
   final ValueChanged<double> onPointSizeChanged;
   final ValueChanged<bool> onShowAxisChanged;
   final ValueChanged<double> onAxisScaleChanged;
+  final ValueChanged<PointCloudPalette> onPaletteChanged;
   final ValueChanged<double> onYawChanged;
   final ValueChanged<double> onPitchChanged;
   final ValueChanged<double> onZoomChanged;
@@ -620,6 +648,7 @@ class _StreamSelector extends StatelessWidget {
     required this.pointSize,
     required this.showAxis,
     required this.axisScale,
+    required this.palette,
     required this.yaw,
     required this.pitch,
     required this.zoom,
@@ -629,6 +658,7 @@ class _StreamSelector extends StatelessWidget {
     required this.onPointSizeChanged,
     required this.onShowAxisChanged,
     required this.onAxisScaleChanged,
+    required this.onPaletteChanged,
     required this.onYawChanged,
     required this.onPitchChanged,
     required this.onZoomChanged,
@@ -645,6 +675,7 @@ class _StreamSelector extends StatelessWidget {
       ..sort((a, b) => a.payloadIndex.compareTo(b.payloadIndex));
     final selected = receiver.selectedFrame;
     final pointCloud = selected?.pointCloud;
+    final hasCubeEyeStream = streams.any(_isCubeEyeStream);
 
     return Padding(
       padding: const EdgeInsets.all(12),
@@ -677,14 +708,17 @@ class _StreamSelector extends StatelessWidget {
                   ),
                   if (i != streams.length - 1) const SizedBox(height: 10),
                 ],
-                const Divider(height: 24),
-                const _CubeEyeControls(),
+                if (hasCubeEyeStream) ...[
+                  const Divider(height: 24),
+                  const _CubeEyeControls(),
+                ],
                 if (selected?.isPointCloud == true && pointCloud != null) ...[
                   const Divider(height: 24),
                   _PointCloudOptions(
                     pointSize: pointSize,
                     showAxis: showAxis,
                     axisScale: axisScale,
+                    palette: palette,
                     yaw: yaw,
                     pitch: pitch,
                     zoom: zoom,
@@ -696,6 +730,7 @@ class _StreamSelector extends StatelessWidget {
                     onPointSizeChanged: onPointSizeChanged,
                     onShowAxisChanged: onShowAxisChanged,
                     onAxisScaleChanged: onAxisScaleChanged,
+                    onPaletteChanged: onPaletteChanged,
                     onYawChanged: onYawChanged,
                     onPitchChanged: onPitchChanged,
                     onZoomChanged: onZoomChanged,
@@ -712,6 +747,16 @@ class _StreamSelector extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  bool _isCubeEyeStream(ViewerStreamFrame stream) {
+    final kind = stream.kind.toLowerCase();
+    final name = stream.name.toLowerCase();
+    return kind == 'depth' ||
+        kind == 'amplitude' ||
+        kind == 'rgb' ||
+        kind == 'pointcloud' ||
+        name.contains('cubeeye');
   }
 }
 
@@ -1028,6 +1073,7 @@ class _PointCloudOptions extends StatelessWidget {
   final double pointSize;
   final bool showAxis;
   final double axisScale;
+  final PointCloudPalette palette;
   final double yaw;
   final double pitch;
   final double zoom;
@@ -1039,6 +1085,7 @@ class _PointCloudOptions extends StatelessWidget {
   final ValueChanged<double> onPointSizeChanged;
   final ValueChanged<bool> onShowAxisChanged;
   final ValueChanged<double> onAxisScaleChanged;
+  final ValueChanged<PointCloudPalette> onPaletteChanged;
   final ValueChanged<double> onYawChanged;
   final ValueChanged<double> onPitchChanged;
   final ValueChanged<double> onZoomChanged;
@@ -1052,6 +1099,7 @@ class _PointCloudOptions extends StatelessWidget {
     required this.pointSize,
     required this.showAxis,
     required this.axisScale,
+    required this.palette,
     required this.yaw,
     required this.pitch,
     required this.zoom,
@@ -1063,6 +1111,7 @@ class _PointCloudOptions extends StatelessWidget {
     required this.onPointSizeChanged,
     required this.onShowAxisChanged,
     required this.onAxisScaleChanged,
+    required this.onPaletteChanged,
     required this.onYawChanged,
     required this.onPitchChanged,
     required this.onZoomChanged,
@@ -1121,6 +1170,34 @@ class _PointCloudOptions extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
+        SegmentedButton<PointCloudPalette>(
+          showSelectedIcon: false,
+          style: const ButtonStyle(
+            visualDensity: VisualDensity.compact,
+            textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12)),
+          ),
+          segments: const [
+            ButtonSegment(
+              value: PointCloudPalette.depth,
+              label: Text('Depth', maxLines: 1, softWrap: false),
+            ),
+            ButtonSegment(
+              value: PointCloudPalette.x,
+              label: Text('X', maxLines: 1, softWrap: false),
+            ),
+            ButtonSegment(
+              value: PointCloudPalette.y,
+              label: Text('Y', maxLines: 1, softWrap: false),
+            ),
+            ButtonSegment(
+              value: PointCloudPalette.grayscale,
+              label: Text('Gray', maxLines: 1, softWrap: false),
+            ),
+          ],
+          selected: {palette},
+          onSelectionChanged: (selection) => onPaletteChanged(selection.first),
+        ),
+        const SizedBox(height: 8),
         _OptionLabel(
           value:
               'Yaw ${(yaw * 180 / 3.141592653589793).toStringAsFixed(0)} deg',
@@ -1135,7 +1212,12 @@ class _PointCloudOptions extends StatelessWidget {
           value:
               'Pitch ${(pitch * 180 / 3.141592653589793).toStringAsFixed(0)} deg',
         ),
-        Slider(value: pitch, min: -1.45, max: 1.45, onChanged: onPitchChanged),
+        Slider(
+          value: pitch,
+          min: -3.141592653589793,
+          max: 3.141592653589793,
+          onChanged: onPitchChanged,
+        ),
         _OptionLabel(value: 'Zoom ${zoom.toStringAsFixed(1)}x'),
         Slider(value: zoom, min: 0.2, max: 8.0, onChanged: onZoomChanged),
         _OptionLabel(value: 'Point size ${pointSize.toStringAsFixed(1)}'),
@@ -1152,11 +1234,11 @@ class _PointCloudOptions extends StatelessWidget {
           value: showAxis,
           onChanged: onShowAxisChanged,
         ),
-        _OptionLabel(value: 'Axis scale ${axisScale.toStringAsFixed(0)}'),
+        _OptionLabel(value: 'Axis scale ${axisScale.toStringAsFixed(1)} m'),
         Slider(
-          value: axisScale,
-          min: 10,
-          max: 1000,
+          value: axisScale.clamp(0.0, 3.0).toDouble(),
+          min: 0,
+          max: 3,
           onChanged: onAxisScaleChanged,
         ),
         _OptionLabel(
@@ -1214,11 +1296,14 @@ class _StatusChip extends StatelessWidget {
           width: valueWidth,
           child: Text(
             value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             textAlign: valueWidth == null ? TextAlign.start : TextAlign.right,
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.bold,
               color: color,
+              fontFamily: 'monospace',
             ),
           ),
         ),

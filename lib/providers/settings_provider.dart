@@ -15,6 +15,7 @@ class SettingsProvider extends ChangeNotifier {
   static const _pointCloudPointSizeKey = 'settings.pointCloud.pointSize';
   static const _pointCloudShowAxisKey = 'settings.pointCloud.showAxis';
   static const _pointCloudAxisScaleKey = 'settings.pointCloud.axisScale';
+  static const _pointCloudPaletteKey = 'settings.pointCloud.palette';
   static const _pointCloudDepthMinKey = 'settings.pointCloud.depthMin';
   static const _pointCloudDepthMaxKey = 'settings.pointCloud.depthMax';
 
@@ -58,6 +59,9 @@ class SettingsProvider extends ChangeNotifier {
         pointCloudAxisScale:
             prefs.getDouble(_pointCloudAxisScaleKey) ??
             AppSettings.defaultPointCloudAxisScale,
+        pointCloudPalette:
+            prefs.getString(_pointCloudPaletteKey) ??
+            AppSettings.defaultPointCloudPalette,
         pointCloudDepthMin: prefs.getDouble(_pointCloudDepthMinKey),
         pointCloudDepthMax: prefs.getDouble(_pointCloudDepthMaxKey),
       ),
@@ -114,12 +118,14 @@ class SettingsProvider extends ChangeNotifier {
     required double pointSize,
     required bool showAxis,
     required double axisScale,
+    required String palette,
     required double? depthMin,
     required double? depthMax,
   }) async {
     _settings.pointCloudPointSize = pointSize;
     _settings.pointCloudShowAxis = showAxis;
     _settings.pointCloudAxisScale = axisScale;
+    _settings.pointCloudPalette = palette;
     _settings.pointCloudDepthMin = depthMin;
     _settings.pointCloudDepthMax = depthMax;
     await _save();
@@ -151,6 +157,7 @@ class SettingsProvider extends ChangeNotifier {
       _pointCloudAxisScaleKey,
       _settings.pointCloudAxisScale,
     );
+    await prefs.setString(_pointCloudPaletteKey, _settings.pointCloudPalette);
     if (_settings.pointCloudDepthMin == null) {
       await prefs.remove(_pointCloudDepthMinKey);
     } else {

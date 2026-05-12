@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 
 import '../services/frame_receiver_service.dart';
 
+enum PointCloudPalette { depth, x, y, grayscale }
+
 class PointCloudViewport {
   final double minX;
   final double maxX;
@@ -41,12 +43,12 @@ class PointCloudViewport {
       final z = data.zAt(i);
       if (z < depthLow || z > depthHigh) continue;
 
-      final x = -data.xAt(i);
-      final displayY = -data.yAt(i);
+      final x = data.xAt(i);
+      final y = data.yAt(i);
       minX = minX == null ? x : math.min(minX, x);
       maxX = maxX == null ? x : math.max(maxX, x);
-      minY = minY == null ? displayY : math.min(minY, displayY);
-      maxY = maxY == null ? displayY : math.max(maxY, displayY);
+      minY = minY == null ? y : math.min(minY, y);
+      maxY = maxY == null ? y : math.max(maxY, y);
       minZ = minZ == null ? z : math.min(minZ, z);
       maxZ = maxZ == null ? z : math.max(maxZ, z);
     }
@@ -90,6 +92,7 @@ class PointCloudViewer extends StatefulWidget {
   final double pitch;
   final double zoom;
   final Offset panOffset;
+  final PointCloudPalette palette;
   final void Function(double yaw, double pitch)? onViewChanged;
   final ValueChanged<double>? onZoomChanged;
   final ValueChanged<Offset>? onPanChanged;
@@ -107,6 +110,7 @@ class PointCloudViewer extends StatefulWidget {
     required this.pitch,
     required this.zoom,
     required this.panOffset,
+    required this.palette,
     this.onViewChanged,
     this.onZoomChanged,
     this.onPanChanged,
@@ -133,7 +137,7 @@ class _PointCloudViewerState extends State<PointCloudViewer> {
         if ((event.buttons & kPrimaryMouseButton) != 0) {
           widget.onViewChanged?.call(
             widget.yaw + event.delta.dx * 0.01,
-            (widget.pitch + event.delta.dy * 0.01).clamp(-1.45, 1.45),
+            widget.pitch + event.delta.dy * 0.01,
           );
           return;
         }
@@ -155,21 +159,24 @@ class _PointCloudViewerState extends State<PointCloudViewer> {
         },
         child: Container(
           color: Colors.black,
-          child: CustomPaint(
-            painter: _PointCloudPainter(
-              data: widget.data,
-              pointSize: widget.pointSize,
-              showAxis: widget.showAxis,
-              axisScale: widget.axisScale,
-              minDepth: widget.minDepth,
-              maxDepth: widget.maxDepth,
-              viewport: widget.viewport,
-              yaw: widget.yaw,
-              pitch: widget.pitch,
-              zoom: widget.zoom,
-              panOffset: widget.panOffset,
+          child: ClipRect(
+            child: CustomPaint(
+              painter: _PointCloudPainter(
+                data: widget.data,
+                pointSize: widget.pointSize,
+                showAxis: widget.showAxis,
+                axisScale: widget.axisScale,
+                minDepth: widget.minDepth,
+                maxDepth: widget.maxDepth,
+                viewport: widget.viewport,
+                yaw: widget.yaw,
+                pitch: widget.pitch,
+                zoom: widget.zoom,
+                panOffset: widget.panOffset,
+                palette: widget.palette,
+              ),
+              child: const SizedBox.expand(),
             ),
-            child: const SizedBox.expand(),
           ),
         ),
       ),
@@ -181,12 +188,21 @@ class _ProjectedPoint {
   final Offset offset;
   final double cameraZ;
   final double sourceZ;
+  final double colorValue;
 
   const _ProjectedPoint({
     required this.offset,
     required this.cameraZ,
     required this.sourceZ,
+    required this.colorValue,
   });
+}
+
+class _ColorRange {
+  final double min;
+  final double max;
+
+  const _ColorRange(this.min, this.max);
 }
 
 class _PointCloudPainter extends CustomPainter {
@@ -201,6 +217,7 @@ class _PointCloudPainter extends CustomPainter {
   final double pitch;
   final double zoom;
   final Offset panOffset;
+  final PointCloudPalette palette;
 
   const _PointCloudPainter({
     required this.data,
@@ -214,10 +231,13 @@ class _PointCloudPainter extends CustomPainter {
     required this.pitch,
     required this.zoom,
     required this.panOffset,
+    required this.palette,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
+    canvas.clipRect(Offset.zero & size);
+
     final depthLow = math.min(minDepth, maxDepth);
     final depthHigh = math.max(minDepth, maxDepth);
 
@@ -248,13 +268,9 @@ class _PointCloudPainter extends CustomPainter {
     final cosPitch = math.cos(pitch);
     final sinPitch = math.sin(pitch);
 
-    ({Offset offset, double cameraZ}) project(
-      double x,
-      double displayY,
-      double z,
-    ) {
+    ({Offset offset, double cameraZ}) project(double x, double y, double z) {
       final tx = x - centerX;
-      final ty = displayY - centerY;
+      final ty = y - centerY;
       final tz = z - centerZ;
 
       final yawX = tx * cosYaw + tz * sinYaw;
@@ -272,34 +288,152 @@ class _PointCloudPainter extends CustomPainter {
       _drawAxis(canvas, project);
     }
 
-    final depthRange = math.max(depthHigh - depthLow, 1.0);
+    final colorRange = _colorRange(data, depthLow, depthHigh, palette);
     final paint = Paint()..style = PaintingStyle.fill;
     final radius = math.max(pointSize, 0.5);
     final projectedPoints = <_ProjectedPoint>[];
     for (var i = 0; i < data.pointCount; i++) {
       final z = data.zAt(i);
       if (z < depthLow || z > depthHigh) continue;
-      final projected = project(-data.xAt(i), -data.yAt(i), z);
+      final projected = project(data.xAt(i), data.yAt(i), z);
       projectedPoints.add(
         _ProjectedPoint(
           offset: projected.offset,
           cameraZ: projected.cameraZ,
           sourceZ: z,
+          colorValue: _colorValue(data, i, palette),
         ),
       );
     }
 
     projectedPoints.sort((a, b) => a.cameraZ.compareTo(b.cameraZ));
     for (final point in projectedPoints) {
-      final t = ((point.sourceZ - depthLow) / depthRange).clamp(0.0, 1.0);
-
-      paint.color = Color.lerp(
-        const Color(0xFF4FC3F7),
-        const Color(0xFFFF7043),
-        t,
-      )!;
+      paint.color = _paletteColor(point.colorValue, colorRange, palette);
       canvas.drawCircle(point.offset, radius, paint);
     }
+
+    _drawColorbar(canvas, size, colorRange, palette);
+  }
+
+  _ColorRange _colorRange(
+    PointCloudData data,
+    double depthLow,
+    double depthHigh,
+    PointCloudPalette palette,
+  ) {
+    if (palette == PointCloudPalette.depth ||
+        palette == PointCloudPalette.grayscale) {
+      return _ColorRange(depthLow, depthHigh);
+    }
+
+    double? minValue;
+    double? maxValue;
+    for (var i = 0; i < data.pointCount; i++) {
+      final z = data.zAt(i);
+      if (z < depthLow || z > depthHigh) continue;
+      final value = _colorValue(data, i, palette);
+      minValue = minValue == null ? value : math.min(minValue, value);
+      maxValue = maxValue == null ? value : math.max(maxValue, value);
+    }
+    return _ColorRange(minValue ?? 0, maxValue ?? 1);
+  }
+
+  double _colorValue(
+    PointCloudData data,
+    int index,
+    PointCloudPalette palette,
+  ) {
+    return switch (palette) {
+      PointCloudPalette.x => data.xAt(index),
+      PointCloudPalette.y => data.yAt(index),
+      PointCloudPalette.depth || PointCloudPalette.grayscale => data.zAt(index),
+    };
+  }
+
+  Color _paletteColor(
+    double value,
+    _ColorRange range,
+    PointCloudPalette palette,
+  ) {
+    final span = math.max(range.max - range.min, 1e-6);
+    final t = ((value - range.min) / span).clamp(0.0, 1.0);
+    if (palette == PointCloudPalette.grayscale) {
+      final level = (t * 255).round().clamp(0, 255);
+      return Color.fromARGB(255, level, level, level);
+    }
+    return _depthColor(t);
+  }
+
+  Color _depthColor(double t) {
+    if (t < 0.5) {
+      return Color.lerp(
+        const Color(0xFF4FC3F7),
+        const Color(0xFF69F0AE),
+        t * 2.0,
+      )!;
+    }
+    return Color.lerp(
+      const Color(0xFF69F0AE),
+      const Color(0xFFFF7043),
+      (t - 0.5) * 2.0,
+    )!;
+  }
+
+  void _drawColorbar(
+    Canvas canvas,
+    Size size,
+    _ColorRange range,
+    PointCloudPalette palette,
+  ) {
+    const barWidth = 14.0;
+    const barHeight = 140.0;
+    const right = 16.0;
+    const top = 16.0;
+    final rect = Rect.fromLTWH(
+      size.width - right - barWidth,
+      top,
+      barWidth,
+      barHeight,
+    );
+    final gradient = LinearGradient(
+      begin: Alignment.bottomCenter,
+      end: Alignment.topCenter,
+      colors: palette == PointCloudPalette.grayscale
+          ? const [Colors.black, Colors.white]
+          : const [Color(0xFF4FC3F7), Color(0xFF69F0AE), Color(0xFFFF7043)],
+      stops: palette == PointCloudPalette.grayscale
+          ? null
+          : const [0.0, 0.5, 1.0],
+    );
+    canvas.drawRect(rect, Paint()..shader = gradient.createShader(rect));
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = Colors.white54,
+    );
+    _drawColorbarText(canvas, Offset(rect.left - 58, rect.top - 2), range.max);
+    _drawColorbarText(
+      canvas,
+      Offset(rect.left - 58, rect.bottom - 12),
+      range.min,
+    );
+  }
+
+  void _drawColorbarText(Canvas canvas, Offset offset, double value) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: value.toStringAsFixed(2),
+        style: const TextStyle(
+          color: Colors.white70,
+          fontSize: 10,
+          fontFamily: 'monospace',
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: 54);
+    painter.paint(canvas, offset);
   }
 
   void _drawAxis(
@@ -352,6 +486,7 @@ class _PointCloudPainter extends CustomPainter {
         yaw != oldDelegate.yaw ||
         pitch != oldDelegate.pitch ||
         zoom != oldDelegate.zoom ||
-        panOffset != oldDelegate.panOffset;
+        panOffset != oldDelegate.panOffset ||
+        palette != oldDelegate.palette;
   }
 }
