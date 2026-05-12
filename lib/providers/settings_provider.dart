@@ -12,6 +12,11 @@ class SettingsProvider extends ChangeNotifier {
   static const _cubeEyeIlluminationKey = 'settings.cubeEye.illumination';
   static const _cubeEyeDepthRangeMinKey = 'settings.cubeEye.depthRangeMin';
   static const _cubeEyeDepthRangeMaxKey = 'settings.cubeEye.depthRangeMax';
+  static const _pointCloudPointSizeKey = 'settings.pointCloud.pointSize';
+  static const _pointCloudShowAxisKey = 'settings.pointCloud.showAxis';
+  static const _pointCloudAxisScaleKey = 'settings.pointCloud.axisScale';
+  static const _pointCloudDepthMinKey = 'settings.pointCloud.depthMin';
+  static const _pointCloudDepthMaxKey = 'settings.pointCloud.depthMax';
 
   final AppSettings _settings;
 
@@ -44,6 +49,17 @@ class SettingsProvider extends ChangeNotifier {
         cubeEyeDepthRangeMax:
             prefs.getInt(_cubeEyeDepthRangeMaxKey) ??
             AppSettings.defaultCubeEyeDepthRangeMax,
+        pointCloudPointSize:
+            prefs.getDouble(_pointCloudPointSizeKey) ??
+            AppSettings.defaultPointCloudPointSize,
+        pointCloudShowAxis:
+            prefs.getBool(_pointCloudShowAxisKey) ??
+            AppSettings.defaultPointCloudShowAxis,
+        pointCloudAxisScale:
+            prefs.getDouble(_pointCloudAxisScaleKey) ??
+            AppSettings.defaultPointCloudAxisScale,
+        pointCloudDepthMin: prefs.getDouble(_pointCloudDepthMinKey),
+        pointCloudDepthMax: prefs.getDouble(_pointCloudDepthMaxKey),
       ),
     );
   }
@@ -94,6 +110,22 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updatePointCloudViewerSettings({
+    required double pointSize,
+    required bool showAxis,
+    required double axisScale,
+    required double? depthMin,
+    required double? depthMax,
+  }) async {
+    _settings.pointCloudPointSize = pointSize;
+    _settings.pointCloudShowAxis = showAxis;
+    _settings.pointCloudAxisScale = axisScale;
+    _settings.pointCloudDepthMin = depthMin;
+    _settings.pointCloudDepthMax = depthMax;
+    await _save();
+    notifyListeners();
+  }
+
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_detectorBaseUrlKey, _settings.detectorBaseUrl);
@@ -110,5 +142,30 @@ class SettingsProvider extends ChangeNotifier {
       _cubeEyeDepthRangeMaxKey,
       _settings.cubeEyeDepthRangeMax,
     );
+    await prefs.setDouble(
+      _pointCloudPointSizeKey,
+      _settings.pointCloudPointSize,
+    );
+    await prefs.setBool(_pointCloudShowAxisKey, _settings.pointCloudShowAxis);
+    await prefs.setDouble(
+      _pointCloudAxisScaleKey,
+      _settings.pointCloudAxisScale,
+    );
+    if (_settings.pointCloudDepthMin == null) {
+      await prefs.remove(_pointCloudDepthMinKey);
+    } else {
+      await prefs.setDouble(
+        _pointCloudDepthMinKey,
+        _settings.pointCloudDepthMin!,
+      );
+    }
+    if (_settings.pointCloudDepthMax == null) {
+      await prefs.remove(_pointCloudDepthMaxKey);
+    } else {
+      await prefs.setDouble(
+        _pointCloudDepthMaxKey,
+        _settings.pointCloudDepthMax!,
+      );
+    }
   }
 }

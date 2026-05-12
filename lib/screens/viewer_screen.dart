@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -20,12 +22,36 @@ class _ViewerScreenState extends State<ViewerScreen> {
   double _pointSize = 2.0;
   bool _showAxis = true;
   double _axisScale = 100.0;
+  double _viewYaw = -0.55;
+  double _viewPitch = 0.35;
+  double _viewZoom = 1.0;
+  Offset _viewPanOffset = Offset.zero;
   double? _depthMin;
   double? _depthMax;
+  bool _hasManualDepthRange = false;
   String? _lastPointCloudKey;
   bool _viewportLocked = false;
   PointCloudViewport? _lockedViewport;
   String? _lockedViewportStreamKey;
+  bool _pointCloudSettingsLoaded = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_pointCloudSettingsLoaded) {
+      return;
+    }
+    _pointCloudSettingsLoaded = true;
+    final settings = context.read<SettingsProvider>().settings;
+    _pointSize = settings.pointCloudPointSize;
+    _showAxis = settings.pointCloudShowAxis;
+    _axisScale = settings.pointCloudAxisScale;
+    _depthMin = settings.pointCloudDepthMin;
+    _depthMax = settings.pointCloudDepthMax;
+    _hasManualDepthRange =
+        settings.pointCloudDepthMin != null &&
+        settings.pointCloudDepthMax != null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,16 +102,41 @@ class _ViewerScreenState extends State<ViewerScreen> {
             pointSize: _pointSize,
             showAxis: _showAxis,
             axisScale: _axisScale,
+            yaw: _viewYaw,
+            pitch: _viewPitch,
+            zoom: _viewZoom,
             depthMin: _effectiveDepthMin(selectedFrame),
             depthMax: _effectiveDepthMax(selectedFrame),
             viewportLocked: _isViewportLocked(selectedFrame),
-            onPointSizeChanged: (value) => setState(() => _pointSize = value),
-            onShowAxisChanged: (value) => setState(() => _showAxis = value),
-            onAxisScaleChanged: (value) => setState(() => _axisScale = value),
-            onDepthRangeChanged: (values) => setState(() {
-              _depthMin = values.start;
-              _depthMax = values.end;
+            onPointSizeChanged: (value) {
+              setState(() => _pointSize = value);
+              _persistPointCloudViewerSettings();
+            },
+            onShowAxisChanged: (value) {
+              setState(() => _showAxis = value);
+              _persistPointCloudViewerSettings();
+            },
+            onAxisScaleChanged: (value) {
+              setState(() => _axisScale = value);
+              _persistPointCloudViewerSettings();
+            },
+            onYawChanged: (value) => setState(() => _viewYaw = value),
+            onPitchChanged: (value) => setState(() => _viewPitch = value),
+            onZoomChanged: (value) => setState(() => _viewZoom = value),
+            onResetCamera: () => setState(() {
+              _viewYaw = -0.55;
+              _viewPitch = 0.35;
+              _viewZoom = 1.0;
+              _viewPanOffset = Offset.zero;
             }),
+            onDepthRangeChanged: (values) {
+              setState(() {
+                _depthMin = values.start;
+                _depthMax = values.end;
+                _hasManualDepthRange = true;
+              });
+              _persistPointCloudViewerSettings();
+            },
             onLockView: () => _lockViewport(selectedFrame),
             onUnlockView: _unlockViewport,
             onResetView: () => _resetViewport(selectedFrame),
@@ -112,6 +163,16 @@ class _ViewerScreenState extends State<ViewerScreen> {
         minDepth: _effectiveDepthMin(selectedFrame),
         maxDepth: _effectiveDepthMax(selectedFrame),
         viewport: _activeViewport(selectedFrame),
+        yaw: _viewYaw,
+        pitch: _viewPitch,
+        zoom: _viewZoom,
+        panOffset: _viewPanOffset,
+        onViewChanged: (yaw, pitch) => setState(() {
+          _viewYaw = yaw;
+          _viewPitch = pitch;
+        }),
+        onZoomChanged: (zoom) => setState(() => _viewZoom = zoom),
+        onPanChanged: (offset) => setState(() => _viewPanOffset = offset),
       );
     }
 
@@ -149,8 +210,10 @@ class _ViewerScreenState extends State<ViewerScreen> {
     final key = selectedFrame!.key;
     if (_lastPointCloudKey == key) return;
     _lastPointCloudKey = key;
-    _depthMin = selectedFrame.pointCloud!.minZ;
-    _depthMax = selectedFrame.pointCloud!.maxZ;
+    if (!_hasManualDepthRange) {
+      _depthMin = selectedFrame.pointCloud!.minZ;
+      _depthMax = selectedFrame.pointCloud!.maxZ;
+    }
     if (_lockedViewportStreamKey != key) {
       _viewportLocked = false;
       _lockedViewport = null;
@@ -175,6 +238,18 @@ class _ViewerScreenState extends State<ViewerScreen> {
 
   PointCloudViewport? _activeViewport(ViewerStreamFrame? selectedFrame) {
     return _isViewportLocked(selectedFrame) ? _lockedViewport : null;
+  }
+
+  void _persistPointCloudViewerSettings() {
+    unawaited(
+      context.read<SettingsProvider>().updatePointCloudViewerSettings(
+        pointSize: _pointSize,
+        showAxis: _showAxis,
+        axisScale: _axisScale,
+        depthMin: _depthMin,
+        depthMax: _depthMax,
+      ),
+    );
   }
 
   void _lockViewport(ViewerStreamFrame? selectedFrame) {
@@ -522,12 +597,19 @@ class _StreamSelector extends StatelessWidget {
   final double pointSize;
   final bool showAxis;
   final double axisScale;
+  final double yaw;
+  final double pitch;
+  final double zoom;
   final double depthMin;
   final double depthMax;
   final bool viewportLocked;
   final ValueChanged<double> onPointSizeChanged;
   final ValueChanged<bool> onShowAxisChanged;
   final ValueChanged<double> onAxisScaleChanged;
+  final ValueChanged<double> onYawChanged;
+  final ValueChanged<double> onPitchChanged;
+  final ValueChanged<double> onZoomChanged;
+  final VoidCallback onResetCamera;
   final ValueChanged<RangeValues> onDepthRangeChanged;
   final VoidCallback onLockView;
   final VoidCallback onUnlockView;
@@ -538,12 +620,19 @@ class _StreamSelector extends StatelessWidget {
     required this.pointSize,
     required this.showAxis,
     required this.axisScale,
+    required this.yaw,
+    required this.pitch,
+    required this.zoom,
     required this.depthMin,
     required this.depthMax,
     required this.viewportLocked,
     required this.onPointSizeChanged,
     required this.onShowAxisChanged,
     required this.onAxisScaleChanged,
+    required this.onYawChanged,
+    required this.onPitchChanged,
+    required this.onZoomChanged,
+    required this.onResetCamera,
     required this.onDepthRangeChanged,
     required this.onLockView,
     required this.onUnlockView,
@@ -578,42 +667,48 @@ class _StreamSelector extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Expanded(
-            child: ListView.separated(
-              itemCount: streams.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                final stream = streams[index];
-                final selected = stream.key == receiver.selectedStreamKey;
-                return _StreamTile(
-                  stream: stream,
-                  selected: selected,
-                  onTap: () => receiver.selectStream(stream.key),
-                );
-              },
+            child: ListView(
+              children: [
+                for (var i = 0; i < streams.length; i++) ...[
+                  _StreamTile(
+                    stream: streams[i],
+                    selected: streams[i].key == receiver.selectedStreamKey,
+                    onTap: () => receiver.selectStream(streams[i].key),
+                  ),
+                  if (i != streams.length - 1) const SizedBox(height: 10),
+                ],
+                const Divider(height: 24),
+                const _CubeEyeControls(),
+                if (selected?.isPointCloud == true && pointCloud != null) ...[
+                  const Divider(height: 24),
+                  _PointCloudOptions(
+                    pointSize: pointSize,
+                    showAxis: showAxis,
+                    axisScale: axisScale,
+                    yaw: yaw,
+                    pitch: pitch,
+                    zoom: zoom,
+                    depthMin: depthMin,
+                    depthMax: depthMax,
+                    dataMinDepth: pointCloud.minZ,
+                    dataMaxDepth: pointCloud.maxZ,
+                    viewportLocked: viewportLocked,
+                    onPointSizeChanged: onPointSizeChanged,
+                    onShowAxisChanged: onShowAxisChanged,
+                    onAxisScaleChanged: onAxisScaleChanged,
+                    onYawChanged: onYawChanged,
+                    onPitchChanged: onPitchChanged,
+                    onZoomChanged: onZoomChanged,
+                    onResetCamera: onResetCamera,
+                    onDepthRangeChanged: onDepthRangeChanged,
+                    onLockView: onLockView,
+                    onUnlockView: onUnlockView,
+                    onResetView: onResetView,
+                  ),
+                ],
+              ],
             ),
           ),
-          const Divider(height: 24),
-          const _CubeEyeControls(),
-          if (selected?.isPointCloud == true && pointCloud != null) ...[
-            const Divider(height: 24),
-            _PointCloudOptions(
-              pointSize: pointSize,
-              showAxis: showAxis,
-              axisScale: axisScale,
-              depthMin: depthMin,
-              depthMax: depthMax,
-              dataMinDepth: pointCloud.minZ,
-              dataMaxDepth: pointCloud.maxZ,
-              viewportLocked: viewportLocked,
-              onPointSizeChanged: onPointSizeChanged,
-              onShowAxisChanged: onShowAxisChanged,
-              onAxisScaleChanged: onAxisScaleChanged,
-              onDepthRangeChanged: onDepthRangeChanged,
-              onLockView: onLockView,
-              onUnlockView: onUnlockView,
-              onResetView: onResetView,
-            ),
-          ],
         ],
       ),
     );
@@ -933,6 +1028,9 @@ class _PointCloudOptions extends StatelessWidget {
   final double pointSize;
   final bool showAxis;
   final double axisScale;
+  final double yaw;
+  final double pitch;
+  final double zoom;
   final double depthMin;
   final double depthMax;
   final double dataMinDepth;
@@ -941,6 +1039,10 @@ class _PointCloudOptions extends StatelessWidget {
   final ValueChanged<double> onPointSizeChanged;
   final ValueChanged<bool> onShowAxisChanged;
   final ValueChanged<double> onAxisScaleChanged;
+  final ValueChanged<double> onYawChanged;
+  final ValueChanged<double> onPitchChanged;
+  final ValueChanged<double> onZoomChanged;
+  final VoidCallback onResetCamera;
   final ValueChanged<RangeValues> onDepthRangeChanged;
   final VoidCallback onLockView;
   final VoidCallback onUnlockView;
@@ -950,6 +1052,9 @@ class _PointCloudOptions extends StatelessWidget {
     required this.pointSize,
     required this.showAxis,
     required this.axisScale,
+    required this.yaw,
+    required this.pitch,
+    required this.zoom,
     required this.depthMin,
     required this.depthMax,
     required this.dataMinDepth,
@@ -958,6 +1063,10 @@ class _PointCloudOptions extends StatelessWidget {
     required this.onPointSizeChanged,
     required this.onShowAxisChanged,
     required this.onAxisScaleChanged,
+    required this.onYawChanged,
+    required this.onPitchChanged,
+    required this.onZoomChanged,
+    required this.onResetCamera,
     required this.onDepthRangeChanged,
     required this.onLockView,
     required this.onUnlockView,
@@ -979,7 +1088,7 @@ class _PointCloudOptions extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Text(
-          'PointCloud',
+          'PointCloud 3D',
           style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
@@ -988,7 +1097,14 @@ class _PointCloudOptions extends StatelessWidget {
             Expanded(
               child: OutlinedButton(
                 onPressed: viewportLocked ? onUnlockView : onLockView,
-                child: Text(viewportLocked ? 'Unlock' : 'Lock View'),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    viewportLocked ? 'Unlock' : 'Lock View',
+                    maxLines: 1,
+                    softWrap: false,
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -997,9 +1113,31 @@ class _PointCloudOptions extends StatelessWidget {
               onPressed: onResetView,
               icon: const Icon(Icons.center_focus_strong, size: 18),
             ),
+            IconButton(
+              tooltip: 'Reset Camera',
+              onPressed: onResetCamera,
+              icon: const Icon(Icons.threed_rotation, size: 18),
+            ),
           ],
         ),
         const SizedBox(height: 8),
+        _OptionLabel(
+          value:
+              'Yaw ${(yaw * 180 / 3.141592653589793).toStringAsFixed(0)} deg',
+        ),
+        Slider(
+          value: yaw,
+          min: -3.141592653589793,
+          max: 3.141592653589793,
+          onChanged: onYawChanged,
+        ),
+        _OptionLabel(
+          value:
+              'Pitch ${(pitch * 180 / 3.141592653589793).toStringAsFixed(0)} deg',
+        ),
+        Slider(value: pitch, min: -1.45, max: 1.45, onChanged: onPitchChanged),
+        _OptionLabel(value: 'Zoom ${zoom.toStringAsFixed(1)}x'),
+        Slider(value: zoom, min: 0.2, max: 8.0, onChanged: onZoomChanged),
         _OptionLabel(value: 'Point size ${pointSize.toStringAsFixed(1)}'),
         Slider(
           value: pointSize,

@@ -8,6 +8,9 @@ class AppSettings {
   static const bool defaultCubeEyeIllumination = false;
   static const int defaultCubeEyeDepthRangeMin = 0;
   static const int defaultCubeEyeDepthRangeMax = 8192;
+  static const double defaultPointCloudPointSize = 2.0;
+  static const bool defaultPointCloudShowAxis = true;
+  static const double defaultPointCloudAxisScale = 100.0;
 
   String detectorBaseUrl;
   String streamPath;
@@ -17,6 +20,11 @@ class AppSettings {
   bool cubeEyeIllumination;
   int cubeEyeDepthRangeMin;
   int cubeEyeDepthRangeMax;
+  double pointCloudPointSize;
+  bool pointCloudShowAxis;
+  double pointCloudAxisScale;
+  double? pointCloudDepthMin;
+  double? pointCloudDepthMax;
 
   AppSettings({
     this.detectorBaseUrl = defaultDetectorBaseUrl,
@@ -27,6 +35,11 @@ class AppSettings {
     this.cubeEyeIllumination = defaultCubeEyeIllumination,
     this.cubeEyeDepthRangeMin = defaultCubeEyeDepthRangeMin,
     this.cubeEyeDepthRangeMax = defaultCubeEyeDepthRangeMax,
+    this.pointCloudPointSize = defaultPointCloudPointSize,
+    this.pointCloudShowAxis = defaultPointCloudShowAxis,
+    this.pointCloudAxisScale = defaultPointCloudAxisScale,
+    this.pointCloudDepthMin,
+    this.pointCloudDepthMax,
   });
 
   Uri get streamUri => _resolveUri(streamPath);
