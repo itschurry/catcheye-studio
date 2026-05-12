@@ -861,11 +861,58 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
   final RemoteCubeEyeApiService _api = RemoteCubeEyeApiService();
   final TextEditingController _depthMinController = TextEditingController();
   final TextEditingController _depthMaxController = TextEditingController();
+  final Map<String, TextEditingController> _propertyControllers = {};
   CubeEyeProperties? _properties;
   String? _error;
   bool _loading = false;
   bool _loadedOnce = false;
   bool _initializedFromSettings = false;
+
+  static const _boolProperties = <_CubeEyePropertySpec>[
+    _CubeEyePropertySpec('amplitude_time_filter', 'Amplitude time filter'),
+    _CubeEyePropertySpec('depth_average_median_filter', 'Depth median filter'),
+    _CubeEyePropertySpec('depth_time_filter', 'Depth time filter'),
+    _CubeEyePropertySpec('flying_pixel_remove_filter', 'Flying pixel filter'),
+    _CubeEyePropertySpec('noise_filter1', 'Noise filter 1'),
+    _CubeEyePropertySpec('noise_filter2', 'Noise filter 2'),
+    _CubeEyePropertySpec('noise_filter3', 'Noise filter 3'),
+  ];
+
+  static const _numericProperties = <_CubeEyePropertySpec>[
+    _CubeEyePropertySpec('amplitude_threshold_min', 'Amplitude threshold min'),
+    _CubeEyePropertySpec('amplitude_threshold_max', 'Amplitude threshold max'),
+    _CubeEyePropertySpec(
+      'amplitude_time_spatial_threshold',
+      'Amplitude spatial threshold',
+      isFloat: true,
+    ),
+    _CubeEyePropertySpec(
+      'amplitude_time_temporal_threshold',
+      'Amplitude temporal threshold',
+      isFloat: true,
+    ),
+    _CubeEyePropertySpec('depth_average_median_max_n', 'Depth median frames'),
+    _CubeEyePropertySpec('depth_offset', 'Depth offset'),
+    _CubeEyePropertySpec(
+      'depth_time_spatial_threshold',
+      'Depth spatial threshold',
+      isFloat: true,
+    ),
+    _CubeEyePropertySpec(
+      'depth_time_temporal_threshold',
+      'Depth temporal threshold',
+      isFloat: true,
+    ),
+    _CubeEyePropertySpec(
+      'flying_pixel_remove_threshold',
+      'Flying pixel threshold',
+    ),
+    _CubeEyePropertySpec('integraion_time', 'Integration time'),
+    _CubeEyePropertySpec('motion_blur_frequency', 'Motion blur frequency'),
+    _CubeEyePropertySpec('motion_blur_threshold', 'Motion blur threshold'),
+    _CubeEyePropertySpec('motion_blur_threshold2', 'Motion blur threshold 2'),
+    _CubeEyePropertySpec('scattering_threshold', 'Scattering threshold'),
+  ];
 
   @override
   void initState() {
@@ -892,6 +939,13 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
         illumination: settings.cubeEyeIllumination,
         depthRangeMin: settings.cubeEyeDepthRangeMin,
         depthRangeMax: settings.cubeEyeDepthRangeMax,
+        values: {
+          'framerate': settings.cubeEyeFramerate,
+          'auto_exposure': settings.cubeEyeAutoExposure,
+          'illumination': settings.cubeEyeIllumination,
+          'depth_range_min': settings.cubeEyeDepthRangeMin,
+          'depth_range_max': settings.cubeEyeDepthRangeMax,
+        },
       ),
       persist: false,
     );
@@ -901,6 +955,9 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
   void dispose() {
     _depthMinController.dispose();
     _depthMaxController.dispose();
+    for (final controller in _propertyControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -1004,6 +1061,38 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
             ),
           ],
         ),
+        const SizedBox(height: 10),
+        const Divider(height: 18),
+        const Text('Image quality', style: TextStyle(fontSize: 12)),
+        const SizedBox(height: 6),
+        ..._boolProperties.map(
+          (spec) => SwitchListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text(spec.label, style: const TextStyle(fontSize: 12)),
+            value: (properties?.values[spec.key] as bool?) ?? false,
+            onChanged: controlsEnabled
+                ? (value) => _setProperty(spec.key, value)
+                : null,
+          ),
+        ),
+        ..._numericProperties.map(
+          (spec) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: TextField(
+              controller: _controllerFor(spec.key),
+              enabled: controlsEnabled,
+              keyboardType: TextInputType.numberWithOptions(
+                signed: true,
+                decimal: spec.isFloat,
+              ),
+              decoration: InputDecoration(labelText: spec.label, isDense: true),
+              onSubmitted: (value) => spec.isFloat
+                  ? _setDoubleProperty(spec.key, value)
+                  : _setIntProperty(spec.key, value),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -1027,6 +1116,15 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
     final parsed = int.tryParse(value.trim());
     if (parsed == null) {
       setState(() => _error = 'Invalid integer');
+      return;
+    }
+    await _setProperty(key, parsed);
+  }
+
+  Future<void> _setDoubleProperty(String key, String value) async {
+    final parsed = double.tryParse(value.trim());
+    if (parsed == null) {
+      setState(() => _error = 'Invalid number');
       return;
     }
     await _setProperty(key, parsed);
@@ -1056,6 +1154,9 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
       _properties = properties;
       _depthMinController.text = properties.depthRangeMin.toString();
       _depthMaxController.text = properties.depthRangeMax.toString();
+      for (final spec in _numericProperties) {
+        _controllerFor(spec.key).text = properties.values[spec.key].toString();
+      }
     });
     if (!persist) {
       return;
@@ -1068,6 +1169,18 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
       depthRangeMax: properties.depthRangeMax,
     );
   }
+
+  TextEditingController _controllerFor(String key) {
+    return _propertyControllers.putIfAbsent(key, () => TextEditingController());
+  }
+}
+
+class _CubeEyePropertySpec {
+  final String key;
+  final String label;
+  final bool isFloat;
+
+  const _CubeEyePropertySpec(this.key, this.label, {this.isFloat = false});
 }
 
 class _PointCloudOptions extends StatelessWidget {

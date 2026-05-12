@@ -9,6 +9,7 @@ class CubeEyeProperties {
   final bool illumination;
   final int depthRangeMin;
   final int depthRangeMax;
+  final Map<String, dynamic> values;
 
   const CubeEyeProperties({
     required this.framerate,
@@ -16,6 +17,7 @@ class CubeEyeProperties {
     required this.illumination,
     required this.depthRangeMin,
     required this.depthRangeMax,
+    required this.values,
   });
 
   factory CubeEyeProperties.fromJson(Map<String, dynamic> json) {
@@ -25,6 +27,7 @@ class CubeEyeProperties {
       illumination: json['illumination'] as bool,
       depthRangeMin: (json['depth_range_min'] as num).toInt(),
       depthRangeMax: (json['depth_range_max'] as num).toInt(),
+      values: Map.unmodifiable(json),
     );
   }
 }
