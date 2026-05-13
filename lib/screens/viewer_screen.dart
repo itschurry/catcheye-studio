@@ -36,6 +36,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
   PointCloudViewport? _lockedViewport;
   String? _lockedViewportStreamKey;
   bool _pointCloudSettingsLoaded = false;
+  bool _splitView = false;
 
   @override
   void didChangeDependencies() {
@@ -85,7 +86,9 @@ class _ViewerScreenState extends State<ViewerScreen> {
 
   Widget _buildViewerArea(FrameReceiverService receiver) {
     final selectedFrame = receiver.selectedFrame;
-    final viewer = _buildMainViewer(receiver, selectedFrame);
+    final viewer = _splitView && receiver.connected && receiver.isWebSocket
+        ? _buildSplitViewer(receiver)
+        : _buildMainViewer(receiver, selectedFrame);
 
     if (!receiver.connected || receiver.isRtsp) {
       return viewer;
@@ -154,6 +157,49 @@ class _ViewerScreenState extends State<ViewerScreen> {
     );
   }
 
+  Widget _buildSplitViewer(FrameReceiverService receiver) {
+    final streams = receiver.streams.values.toList()
+      ..sort((a, b) => a.payloadIndex.compareTo(b.payloadIndex));
+    ViewerStreamFrame? cameraStream;
+    ViewerStreamFrame? pointCloudStream;
+    for (final stream in streams) {
+      if (cameraStream == null &&
+          stream.isJpeg &&
+          stream.name.toLowerCase() == 'camera') {
+        cameraStream = stream;
+      }
+      if (pointCloudStream == null &&
+          stream.isPointCloud &&
+          stream.pointCloud != null) {
+        pointCloudStream = stream;
+      }
+    }
+    final splitStreams = <ViewerStreamFrame>[?cameraStream, ?pointCloudStream];
+
+    if (splitStreams.isEmpty) {
+      return _buildMainViewer(receiver, receiver.selectedFrame);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: Row(
+        children: [
+          for (var i = 0; i < splitStreams.length; i++) ...[
+            Expanded(
+              child: _SplitStreamPanel(
+                stream: splitStreams[i],
+                selected: splitStreams[i].key == receiver.selectedStreamKey,
+                onTap: () => receiver.selectStream(splitStreams[i].key),
+                child: _buildStreamContent(receiver, splitStreams[i]),
+              ),
+            ),
+            if (i != splitStreams.length - 1) const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildMainViewer(
     FrameReceiverService receiver,
     ViewerStreamFrame? selectedFrame,
@@ -208,6 +254,61 @@ class _ViewerScreenState extends State<ViewerScreen> {
       frameData: selectedFrame?.isJpeg == true
           ? selectedFrame!.jpegBytes
           : receiver.currentFrame,
+    );
+  }
+
+  Widget _buildStreamContent(
+    FrameReceiverService receiver,
+    ViewerStreamFrame stream,
+  ) {
+    if (stream.isPointCloud && stream.pointCloud != null) {
+      final minDepth = _hasManualDepthRange
+          ? _effectiveDepthMin(stream)
+          : stream.pointCloud!.minZ;
+      final maxDepth = _hasManualDepthRange
+          ? _effectiveDepthMax(stream)
+          : stream.pointCloud!.maxZ;
+      return PointCloudViewer(
+        data: stream.pointCloud!,
+        pointSize: _pointSize,
+        showAxis: _showAxis,
+        axisScale: _axisScale,
+        palette: _palette,
+        minDepth: minDepth,
+        maxDepth: maxDepth,
+        viewport: _activeViewport(stream),
+        yaw: _viewYaw,
+        pitch: _viewPitch,
+        zoom: _viewZoom,
+        panOffset: _viewPanOffset,
+        detectionPositions: receiver.detectionPositions,
+        onViewChanged: (yaw, pitch) => setState(() {
+          _viewYaw = yaw;
+          _viewPitch = pitch;
+        }),
+        onZoomChanged: (zoom) => setState(() => _viewZoom = zoom),
+        onPanChanged: (offset) => setState(() => _viewPanOffset = offset),
+      );
+    }
+    if (stream.isJpeg) {
+      return Container(
+        color: Colors.black,
+        alignment: Alignment.center,
+        child: Image.memory(
+          stream.jpegBytes,
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+          filterQuality: FilterQuality.low,
+        ),
+      );
+    }
+    return Container(
+      color: Colors.black,
+      alignment: Alignment.center,
+      child: Text(
+        'Unsupported stream encoding: ${stream.encoding.name}',
+        style: const TextStyle(color: Colors.grey),
+      ),
     );
   }
 
@@ -402,6 +503,20 @@ class _ViewerScreenState extends State<ViewerScreen> {
               ),
             ),
           const Spacer(),
+          if (receiver.connected && receiver.isWebSocket) ...[
+            Tooltip(
+              message: _splitView ? 'Single view' : 'Split view',
+              child: IconButton(
+                icon: Icon(
+                  _splitView
+                      ? Icons.fullscreen_outlined
+                      : Icons.splitscreen_outlined,
+                ),
+                onPressed: () => setState(() => _splitView = !_splitView),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
           Container(
             height: 38,
             width: 226,
@@ -614,6 +729,74 @@ class _ViewerScreenState extends State<ViewerScreen> {
             child: const Text('Connect'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SplitStreamPanel extends StatelessWidget {
+  final ViewerStreamFrame stream;
+  final bool selected;
+  final VoidCallback onTap;
+  final Widget child;
+
+  const _SplitStreamPanel({
+    required this.stream,
+    required this.selected,
+    required this.onTap,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final size = stream.size;
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.black,
+          border: Border.all(
+            color: selected ? colorScheme.primary : const Color(0xFF30474B),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              height: 30,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              color: selected
+                  ? const Color(0xFF183C42)
+                  : const Color(0xFF101B1D),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      stream.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: selected ? colorScheme.primary : Colors.white,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    stream.isPointCloud
+                        ? '${stream.pointCount} pts'
+                        : size == null
+                        ? '-'
+                        : '${size.width.toInt()} x ${size.height.toInt()}',
+                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(child: child),
+          ],
+        ),
       ),
     );
   }
