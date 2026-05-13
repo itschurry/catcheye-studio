@@ -1039,6 +1039,8 @@ class _StreamTile extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(6),
       child: Container(
+        height: 42,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: selected ? const Color(0xFF183C42) : const Color(0xFF101B1D),
           borderRadius: BorderRadius.circular(6),
@@ -1046,60 +1048,34 @@ class _StreamTile extends StatelessWidget {
             color: selected ? colorScheme.primary : const Color(0xFF30474B),
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: Row(
           children: [
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(5),
-                ),
-                child: Container(
-                  color: Colors.black,
-                  child: isPointCloud
-                      ? const Center(
-                          child: Icon(
-                            Icons.scatter_plot,
-                            color: Color(0xFF73D4DC),
-                            size: 34,
-                          ),
-                        )
-                      : Image.memory(
-                          stream.jpegBytes,
-                          fit: BoxFit.contain,
-                          gaplessPlayback: true,
-                          filterQuality: FilterQuality.low,
-                        ),
+            Icon(
+              isPointCloud ? Icons.scatter_plot : Icons.videocam_outlined,
+              size: 17,
+              color: selected ? colorScheme.primary : Colors.grey,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                stream.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? colorScheme.primary : Colors.white,
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      stream.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: selected ? colorScheme.primary : Colors.white,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    isPointCloud
-                        ? '${stream.pointCount} pts'
-                        : size == null
-                        ? '-'
-                        : '${size.width.toInt()} x ${size.height.toInt()}',
-                    style: const TextStyle(fontSize: 10, color: Colors.grey),
-                  ),
-                ],
-              ),
+            const SizedBox(width: 8),
+            Text(
+              isPointCloud
+                  ? '${stream.pointCount} pts'
+                  : size == null
+                  ? '-'
+                  : '${size.width.toInt()} x ${size.height.toInt()}',
+              style: const TextStyle(fontSize: 10, color: Colors.grey),
             ),
           ],
         ),
