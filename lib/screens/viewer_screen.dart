@@ -160,44 +160,74 @@ class _ViewerScreenState extends State<ViewerScreen> {
   Widget _buildSplitViewer(FrameReceiverService receiver) {
     final streams = receiver.streams.values.toList()
       ..sort((a, b) => a.payloadIndex.compareTo(b.payloadIndex));
-    ViewerStreamFrame? cameraStream;
-    ViewerStreamFrame? pointCloudStream;
-    for (final stream in streams) {
-      if (cameraStream == null &&
-          stream.isJpeg &&
-          stream.name.toLowerCase() == 'camera') {
-        cameraStream = stream;
-      }
-      if (pointCloudStream == null &&
-          stream.isPointCloud &&
-          stream.pointCloud != null) {
-        pointCloudStream = stream;
-      }
-    }
-    final splitStreams = <ViewerStreamFrame>[?cameraStream, ?pointCloudStream];
-
-    if (splitStreams.isEmpty) {
-      return _buildMainViewer(receiver, receiver.selectedFrame);
-    }
+    final cameraStream = _firstStreamWhere(streams, _isCameraStream);
+    final fallbackCameraStream = _firstStreamWhere(
+      streams,
+      (stream) => stream.isJpeg,
+    );
+    final pointCloudStream = _firstStreamWhere(
+      streams,
+      (stream) => stream.isPointCloud && stream.pointCloud != null,
+    );
 
     return Padding(
       padding: const EdgeInsets.all(8),
       child: Row(
         children: [
-          for (var i = 0; i < splitStreams.length; i++) ...[
-            Expanded(
-              child: _SplitStreamPanel(
-                stream: splitStreams[i],
-                selected: splitStreams[i].key == receiver.selectedStreamKey,
-                onTap: () => receiver.selectStream(splitStreams[i].key),
-                child: _buildStreamContent(receiver, splitStreams[i]),
-              ),
+          Expanded(
+            child: _buildSplitPanel(
+              receiver: receiver,
+              stream: cameraStream ?? fallbackCameraStream,
+              missingLabel: 'camera',
             ),
-            if (i != splitStreams.length - 1) const SizedBox(width: 8),
-          ],
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _buildSplitPanel(
+              receiver: receiver,
+              stream: pointCloudStream,
+              missingLabel: 'pointcloud',
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  Widget _buildSplitPanel({
+    required FrameReceiverService receiver,
+    required ViewerStreamFrame? stream,
+    required String missingLabel,
+  }) {
+    if (stream == null) {
+      return _MissingSplitPanel(label: missingLabel);
+    }
+    return _SplitStreamPanel(
+      stream: stream,
+      selected: stream.key == receiver.selectedStreamKey,
+      onTap: () => receiver.selectStream(stream.key),
+      child: _buildStreamContent(receiver, stream),
+    );
+  }
+
+  bool _isCameraStream(ViewerStreamFrame stream) {
+    if (!stream.isJpeg) return false;
+    final values = [
+      stream.name.toLowerCase(),
+      stream.kind.toLowerCase(),
+      stream.label.toLowerCase(),
+    ];
+    return values.any((value) => value == 'camera' || value.contains('camera'));
+  }
+
+  ViewerStreamFrame? _firstStreamWhere(
+    List<ViewerStreamFrame> streams,
+    bool Function(ViewerStreamFrame stream) test,
+  ) {
+    for (final stream in streams) {
+      if (test(stream)) return stream;
+    }
+    return null;
   }
 
   Widget _buildMainViewer(
@@ -797,6 +827,51 @@ class _SplitStreamPanel extends StatelessWidget {
             Expanded(child: child),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _MissingSplitPanel extends StatelessWidget {
+  final String label;
+
+  const _MissingSplitPanel({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.black,
+        border: Border.all(color: const Color(0xFF30474B)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            height: 30,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            color: const Color(0xFF101B1D),
+            alignment: Alignment.centerLeft,
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+          const Expanded(
+            child: Center(
+              child: Text(
+                'No stream',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
