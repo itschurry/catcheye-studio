@@ -339,8 +339,15 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
   final RemoteCubeEyeApiService _api = RemoteCubeEyeApiService();
   final TextEditingController _depthMinController = TextEditingController();
   final TextEditingController _depthMaxController = TextEditingController();
+  final TextEditingController _offsetUController = TextEditingController(
+    text: '0.00',
+  );
+  final TextEditingController _offsetVController = TextEditingController(
+    text: '0.40',
+  );
   final Map<String, TextEditingController> _propertyControllers = {};
   CubeEyeProperties? _properties;
+  RgbCubeEyeOffset? _rgbCubeEyeOffset;
   String? _error;
   bool _loading = false;
   bool _loadedOnce = false;
@@ -433,6 +440,8 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
   void dispose() {
     _depthMinController.dispose();
     _depthMaxController.dispose();
+    _offsetUController.dispose();
+    _offsetVController.dispose();
     for (final controller in _propertyControllers.values) {
       controller.dispose();
     }
@@ -541,6 +550,58 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
         ),
         const SizedBox(height: 10),
         const Divider(height: 18),
+        const Text('RGB CubeEye offset', style: TextStyle(fontSize: 12)),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _offsetUController,
+                enabled: !_loading,
+                keyboardType: const TextInputType.numberWithOptions(
+                  signed: true,
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'U',
+                  isDense: true,
+                ),
+                onSubmitted: (_) => _setRgbCubeEyeOffset(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: _offsetVController,
+                enabled: !_loading,
+                keyboardType: const TextInputType.numberWithOptions(
+                  signed: true,
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'V',
+                  isDense: true,
+                ),
+                onSubmitted: (_) => _setRgbCubeEyeOffset(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              onPressed: _loading ? null : _setRgbCubeEyeOffset,
+              child: const Text('Apply'),
+            ),
+          ],
+        ),
+        if (_rgbCubeEyeOffset != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Current ${_rgbCubeEyeOffset!.u.toStringAsFixed(3)}, ${_rgbCubeEyeOffset!.v.toStringAsFixed(3)}',
+              style: const TextStyle(fontSize: 10, color: Colors.grey),
+            ),
+          ),
+        const SizedBox(height: 10),
+        const Divider(height: 18),
         const Text('Image quality', style: TextStyle(fontSize: 12)),
         const SizedBox(height: 6),
         ..._boolProperties
@@ -586,6 +647,7 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
     _loadedOnce = true;
     await _run(() async {
       final settings = context.read<SettingsProvider>().settings;
+      await _applyOffset(await _api.fetchRgbCubeEyeOffset(settings));
       await _apply(await _api.fetchProperties(settings));
     });
   }
@@ -613,6 +675,24 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
       return;
     }
     await _setProperty(key, parsed);
+  }
+
+  Future<void> _setRgbCubeEyeOffset() async {
+    final u = double.tryParse(_offsetUController.text.trim());
+    final v = double.tryParse(_offsetVController.text.trim());
+    if (u == null || v == null) {
+      setState(() => _error = 'Invalid offset');
+      return;
+    }
+    await _run(() async {
+      final settings = context.read<SettingsProvider>().settings;
+      await _applyOffset(
+        await _api.setRgbCubeEyeOffset(
+          settings,
+          RgbCubeEyeOffset(u: u, v: v),
+        ),
+      );
+    });
   }
 
   Future<void> _run(Future<void> Function() action) async {
@@ -656,6 +736,14 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
       depthRangeMin: properties.depthRangeMin,
       depthRangeMax: properties.depthRangeMax,
     );
+  }
+
+  Future<void> _applyOffset(RgbCubeEyeOffset offset) async {
+    setState(() {
+      _rgbCubeEyeOffset = offset;
+      _offsetUController.text = offset.u.toString();
+      _offsetVController.text = offset.v.toString();
+    });
   }
 
   TextEditingController _controllerFor(String key) {

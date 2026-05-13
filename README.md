@@ -47,6 +47,8 @@ ROI Editor는 아래 두 엔드포인트를 사용합니다.
 
 - `GET  {apiBaseUrl}/api/roi` — ROI 불러오기
 - `PUT  {apiBaseUrl}/api/roi` — ROI 전송
+- `GET  {apiBaseUrl}/api/rgb-cubeeye-offset` — RGB↔CubeEye 오프셋 불러오기
+- `PUT  {apiBaseUrl}/api/rgb-cubeeye-offset` — RGB↔CubeEye 오프셋 전송
 
 ## ROI JSON 형식
 

@@ -32,6 +32,20 @@ class CubeEyeProperties {
   }
 }
 
+class RgbCubeEyeOffset {
+  final double u;
+  final double v;
+
+  const RgbCubeEyeOffset({required this.u, required this.v});
+
+  factory RgbCubeEyeOffset.fromJson(Map<String, dynamic> json) {
+    return RgbCubeEyeOffset(
+      u: (json['u'] as num).toDouble(),
+      v: (json['v'] as num).toDouble(),
+    );
+  }
+}
+
 class RemoteCubeEyeApiService {
   final HttpClient _client = HttpClient();
 
@@ -54,6 +68,26 @@ class RemoteCubeEyeApiService {
       body: {'value': value},
     );
     return CubeEyeProperties.fromJson(json);
+  }
+
+  Future<RgbCubeEyeOffset> fetchRgbCubeEyeOffset(AppSettings settings) async {
+    final json = await _requestJson(
+      'GET',
+      settings.buildApiUri('rgb-cubeeye-offset'),
+    );
+    return RgbCubeEyeOffset.fromJson(json);
+  }
+
+  Future<RgbCubeEyeOffset> setRgbCubeEyeOffset(
+    AppSettings settings,
+    RgbCubeEyeOffset offset,
+  ) async {
+    final json = await _requestJson(
+      'PUT',
+      settings.buildApiUri('rgb-cubeeye-offset'),
+      body: {'u': offset.u, 'v': offset.v},
+    );
+    return RgbCubeEyeOffset.fromJson(json);
   }
 
   Future<Map<String, dynamic>> _requestJson(
