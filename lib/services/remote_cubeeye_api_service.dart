@@ -46,6 +46,110 @@ class RgbCubeEyeOffset {
   }
 }
 
+class PalletCandidateConfig {
+  final bool enabled;
+  final double minHeightM;
+  final double maxHeightM;
+  final int minPoints;
+  final int maxImageGapPx;
+
+  const PalletCandidateConfig({
+    required this.enabled,
+    required this.minHeightM,
+    required this.maxHeightM,
+    required this.minPoints,
+    required this.maxImageGapPx,
+  });
+
+  factory PalletCandidateConfig.fromJson(Map<String, dynamic> json) {
+    return PalletCandidateConfig(
+      enabled: json['enabled'] as bool,
+      minHeightM: (json['min_height_m'] as num).toDouble(),
+      maxHeightM: (json['max_height_m'] as num).toDouble(),
+      minPoints: (json['min_points'] as num).toInt(),
+      maxImageGapPx: (json['max_image_gap_px'] as num).toInt(),
+    );
+  }
+
+  Map<String, Object> toJson() => {
+    'enabled': enabled,
+    'min_height_m': minHeightM,
+    'max_height_m': maxHeightM,
+    'min_points': minPoints,
+    'max_image_gap_px': maxImageGapPx,
+  };
+}
+
+class PointCloudRoiConfig {
+  final bool enabled;
+  final bool applyToViewer;
+  final double minXM;
+  final double maxXM;
+  final double minYM;
+  final double maxYM;
+  final double minZM;
+  final double maxZM;
+
+  const PointCloudRoiConfig({
+    required this.enabled,
+    required this.applyToViewer,
+    required this.minXM,
+    required this.maxXM,
+    required this.minYM,
+    required this.maxYM,
+    required this.minZM,
+    required this.maxZM,
+  });
+
+  factory PointCloudRoiConfig.fromJson(Map<String, dynamic> json) {
+    return PointCloudRoiConfig(
+      enabled: json['enabled'] as bool,
+      applyToViewer: json['apply_to_viewer'] as bool,
+      minXM: (json['min_x_m'] as num).toDouble(),
+      maxXM: (json['max_x_m'] as num).toDouble(),
+      minYM: (json['min_y_m'] as num).toDouble(),
+      maxYM: (json['max_y_m'] as num).toDouble(),
+      minZM: (json['min_z_m'] as num).toDouble(),
+      maxZM: (json['max_z_m'] as num).toDouble(),
+    );
+  }
+
+  Map<String, Object> toJson() => {
+    'enabled': enabled,
+    'apply_to_viewer': applyToViewer,
+    'min_x_m': minXM,
+    'max_x_m': maxXM,
+    'min_y_m': minYM,
+    'max_y_m': maxYM,
+    'min_z_m': minZM,
+    'max_z_m': maxZM,
+  };
+}
+
+class RobotCalibration {
+  final bool enabled;
+  final Map<String, double> values;
+
+  const RobotCalibration({required this.enabled, required this.values});
+
+  factory RobotCalibration.fromJson(Map<String, dynamic> json) {
+    final values = <String, double>{};
+    for (final entry in json.entries) {
+      if (entry.key == 'enabled') continue;
+      final value = entry.value;
+      if (value is num) {
+        values[entry.key] = value.toDouble();
+      }
+    }
+    return RobotCalibration(
+      enabled: json['enabled'] as bool,
+      values: Map.unmodifiable(values),
+    );
+  }
+
+  Map<String, Object> toJson() => {'enabled': enabled, ...values};
+}
+
 class RemoteCubeEyeApiService {
   final HttpClient _client = HttpClient();
 
@@ -88,6 +192,68 @@ class RemoteCubeEyeApiService {
       body: {'u': offset.u, 'v': offset.v},
     );
     return RgbCubeEyeOffset.fromJson(json);
+  }
+
+  Future<PalletCandidateConfig> fetchPalletCandidateConfig(
+    AppSettings settings,
+  ) async {
+    final json = await _requestJson(
+      'GET',
+      settings.buildApiUri('pallet-candidates/config'),
+    );
+    return PalletCandidateConfig.fromJson(json);
+  }
+
+  Future<PalletCandidateConfig> setPalletCandidateConfig(
+    AppSettings settings,
+    PalletCandidateConfig config,
+  ) async {
+    final json = await _requestJson(
+      'PUT',
+      settings.buildApiUri('pallet-candidates/config'),
+      body: config.toJson(),
+    );
+    return PalletCandidateConfig.fromJson(json);
+  }
+
+  Future<PointCloudRoiConfig> fetchPointCloudRoi(AppSettings settings) async {
+    final json = await _requestJson(
+      'GET',
+      settings.buildApiUri('pointcloud-roi'),
+    );
+    return PointCloudRoiConfig.fromJson(json);
+  }
+
+  Future<PointCloudRoiConfig> setPointCloudRoi(
+    AppSettings settings,
+    PointCloudRoiConfig config,
+  ) async {
+    final json = await _requestJson(
+      'PUT',
+      settings.buildApiUri('pointcloud-roi'),
+      body: config.toJson(),
+    );
+    return PointCloudRoiConfig.fromJson(json);
+  }
+
+  Future<RobotCalibration> fetchRobotCalibration(AppSettings settings) async {
+    final json = await _requestJson(
+      'GET',
+      settings.buildApiUri('robot-calibration'),
+    );
+    return RobotCalibration.fromJson(json);
+  }
+
+  Future<RobotCalibration> setRobotCalibration(
+    AppSettings settings,
+    RobotCalibration calibration,
+  ) async {
+    final json = await _requestJson(
+      'PUT',
+      settings.buildApiUri('robot-calibration'),
+      body: calibration.toJson(),
+    );
+    return RobotCalibration.fromJson(json);
   }
 
   Future<Map<String, dynamic>> _requestJson(

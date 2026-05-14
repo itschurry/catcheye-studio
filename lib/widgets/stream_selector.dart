@@ -592,11 +592,32 @@ class _CubeEyeControls extends StatefulWidget {
 
 class _CubeEyeControlsState extends State<_CubeEyeControls> {
   final RemoteCubeEyeApiService _api = RemoteCubeEyeApiService();
-  final TextEditingController _depthMinController = TextEditingController();
-  final TextEditingController _depthMaxController = TextEditingController();
+  final TextEditingController _pointCloudMinXController =
+      TextEditingController();
+  final TextEditingController _pointCloudMaxXController =
+      TextEditingController();
+  final TextEditingController _pointCloudMinYController =
+      TextEditingController();
+  final TextEditingController _pointCloudMaxYController =
+      TextEditingController();
+  final TextEditingController _pointCloudMinZController =
+      TextEditingController();
+  final TextEditingController _pointCloudMaxZController =
+      TextEditingController();
+  final TextEditingController _candidateMinHeightController =
+      TextEditingController();
+  final TextEditingController _candidateMaxHeightController =
+      TextEditingController();
+  final TextEditingController _candidateMinPointsController =
+      TextEditingController();
+  final TextEditingController _candidateGapController = TextEditingController();
+  final Map<String, TextEditingController> _robotControllers = {};
   final Map<String, TextEditingController> _propertyControllers = {};
   CubeEyeProperties? _properties;
   RgbCubeEyeOffset? _rgbCubeEyeOffset;
+  PalletCandidateConfig? _candidateConfig;
+  PointCloudRoiConfig? _pointCloudRoi;
+  RobotCalibration? _robotCalibration;
   double _offsetU = 0.0;
   double _offsetV = 0.4;
   String? _error;
@@ -693,8 +714,19 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
 
   @override
   void dispose() {
-    _depthMinController.dispose();
-    _depthMaxController.dispose();
+    _pointCloudMinXController.dispose();
+    _pointCloudMaxXController.dispose();
+    _pointCloudMinYController.dispose();
+    _pointCloudMaxYController.dispose();
+    _pointCloudMinZController.dispose();
+    _pointCloudMaxZController.dispose();
+    _candidateMinHeightController.dispose();
+    _candidateMaxHeightController.dispose();
+    _candidateMinPointsController.dispose();
+    _candidateGapController.dispose();
+    for (final controller in _robotControllers.values) {
+      controller.dispose();
+    }
     for (final controller in _propertyControllers.values) {
       controller.dispose();
     }
@@ -775,38 +807,61 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
               ? (value) => _setProperty('illumination', value)
               : null,
         ),
-        const Text('Device depth range', style: TextStyle(fontSize: 12)),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _depthMinController,
-                enabled: controlsEnabled,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Min',
-                  isDense: true,
-                ),
-                onSubmitted: (value) =>
-                    _setIntProperty('depth_range_min', value),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: _depthMaxController,
-                enabled: controlsEnabled,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Max',
-                  isDense: true,
-                ),
-                onSubmitted: (value) =>
-                    _setIntProperty('depth_range_max', value),
-              ),
-            ),
-          ],
+        const Divider(height: 18),
+        const _PanelHeader(
+          icon: Icons.crop_free,
+          title: 'PointCloud ROI',
+          subtitle: 'X/Y/Z crop before candidate detection',
+        ),
+        SwitchListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Enable ROI', style: TextStyle(fontSize: 12)),
+          value: _pointCloudRoi?.enabled ?? false,
+          onChanged: !_loading
+              ? (value) => _setPointCloudRoi(enabled: value)
+              : null,
+        ),
+        SwitchListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text(
+            'Apply ROI to viewer',
+            style: TextStyle(fontSize: 12),
+          ),
+          value: _pointCloudRoi?.applyToViewer ?? true,
+          onChanged: !_loading
+              ? (value) => _setPointCloudRoi(applyToViewer: value)
+              : null,
+        ),
+        _roiRangeControl(
+          label: 'X',
+          minController: _pointCloudMinXController,
+          maxController: _pointCloudMaxXController,
+          sliderMin: -2.0,
+          sliderMax: 2.0,
+        ),
+        const SizedBox(height: 8),
+        _roiRangeControl(
+          label: 'Y',
+          minController: _pointCloudMinYController,
+          maxController: _pointCloudMaxYController,
+          sliderMin: -2.0,
+          sliderMax: 2.0,
+        ),
+        const SizedBox(height: 8),
+        _roiRangeControl(
+          label: 'Z',
+          minController: _pointCloudMinZController,
+          maxController: _pointCloudMaxZController,
+          sliderMin: 0.0,
+          sliderMax: 4.0,
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _loading ? null : () => _setPointCloudRoi(),
+          icon: const Icon(Icons.check, size: 16),
+          label: const Text('Apply ROI'),
         ),
         const SizedBox(height: 10),
         const Divider(height: 18),
@@ -882,6 +937,108 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
               style: const TextStyle(fontSize: 10, color: Colors.grey),
             ),
           ),
+        const Divider(height: 24),
+        const _PanelHeader(
+          icon: Icons.grid_on,
+          title: 'Pallet Candidate',
+          subtitle: '1st pass height-map detection',
+        ),
+        SwitchListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text(
+            'Enable candidate detection',
+            style: TextStyle(fontSize: 12),
+          ),
+          value: _candidateConfig?.enabled ?? false,
+          onChanged: !_loading
+              ? (value) => _setPalletCandidateConfig(enabled: value)
+              : null,
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: _SmallNumberField(
+                label: 'Min height m',
+                controller: _candidateMinHeightController,
+                enabled: !_loading,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _SmallNumberField(
+                label: 'Max height m',
+                controller: _candidateMaxHeightController,
+                enabled: !_loading,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _SmallNumberField(
+                label: 'Min points',
+                controller: _candidateMinPointsController,
+                enabled: !_loading,
+                integer: true,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _SmallNumberField(
+                label: 'Gap px',
+                controller: _candidateGapController,
+                enabled: !_loading,
+                integer: true,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _loading ? null : () => _setPalletCandidateConfig(),
+          icon: const Icon(Icons.check, size: 16),
+          label: const Text('Apply Candidate'),
+        ),
+        const Divider(height: 24),
+        const _PanelHeader(
+          icon: Icons.precision_manufacturing,
+          title: 'Robot Calibration',
+          subtitle: 'Camera to R1/R2 transform',
+        ),
+        SwitchListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text(
+            'Enable robot coordinates',
+            style: TextStyle(fontSize: 12),
+          ),
+          value: _robotCalibration?.enabled ?? false,
+          onChanged: !_loading
+              ? (value) => _setRobotCalibration(enabled: value)
+              : null,
+        ),
+        _RobotTransformFields(
+          label: 'R1',
+          controllers: _robotControllers,
+          prefix: 'r1',
+          enabled: !_loading,
+        ),
+        const SizedBox(height: 8),
+        _RobotTransformFields(
+          label: 'R2',
+          controllers: _robotControllers,
+          prefix: 'r2',
+          enabled: !_loading,
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _loading ? null : () => _setRobotCalibration(),
+          icon: const Icon(Icons.check, size: 16),
+          label: const Text('Apply Robot'),
+        ),
       ],
     );
   }
@@ -891,6 +1048,11 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
     await _run(() async {
       final settings = context.read<SettingsProvider>().settings;
       await _applyOffset(await _api.fetchRgbCubeEyeOffset(settings));
+      await _applyPalletCandidateConfig(
+        await _api.fetchPalletCandidateConfig(settings),
+      );
+      await _applyPointCloudRoi(await _api.fetchPointCloudRoi(settings));
+      await _applyRobotCalibration(await _api.fetchRobotCalibration(settings));
       await _apply(await _api.fetchProperties(settings));
     });
   }
@@ -932,6 +1094,176 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
     });
   }
 
+  Widget _roiRangeControl({
+    required String label,
+    required TextEditingController minController,
+    required TextEditingController maxController,
+    required double sliderMin,
+    required double sliderMax,
+  }) {
+    final parsedMin = double.tryParse(minController.text.trim()) ?? sliderMin;
+    final parsedMax = double.tryParse(maxController.text.trim()) ?? sliderMax;
+    final lower = parsedMin.clamp(sliderMin, sliderMax).toDouble();
+    final upper = parsedMax.clamp(sliderMin, sliderMax).toDouble();
+    final values = lower <= upper
+        ? RangeValues(lower, upper)
+        : RangeValues(upper, lower);
+    return Row(
+      children: [
+        SizedBox(
+          width: 18,
+          child: Text(label, style: const TextStyle(fontSize: 12)),
+        ),
+        SizedBox(
+          width: 68,
+          child: TextField(
+            controller: minController,
+            enabled: !_loading,
+            keyboardType: const TextInputType.numberWithOptions(
+              signed: true,
+              decimal: true,
+            ),
+            decoration: const InputDecoration(labelText: 'Min', isDense: true),
+            onSubmitted: (_) => _setPointCloudRoi(),
+          ),
+        ),
+        Expanded(
+          child: RangeSlider(
+            min: sliderMin,
+            max: sliderMax,
+            divisions: ((sliderMax - sliderMin) * 100).round(),
+            values: values,
+            labels: RangeLabels(
+              values.start.toStringAsFixed(2),
+              values.end.toStringAsFixed(2),
+            ),
+            onChanged: _loading
+                ? null
+                : (next) {
+                    setState(() {
+                      minController.text = next.start.toStringAsFixed(3);
+                      maxController.text = next.end.toStringAsFixed(3);
+                    });
+                  },
+            onChangeEnd: _loading ? null : (_) => _setPointCloudRoi(),
+          ),
+        ),
+        SizedBox(
+          width: 68,
+          child: TextField(
+            controller: maxController,
+            enabled: !_loading,
+            keyboardType: const TextInputType.numberWithOptions(
+              signed: true,
+              decimal: true,
+            ),
+            decoration: const InputDecoration(labelText: 'Max', isDense: true),
+            onSubmitted: (_) => _setPointCloudRoi(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _setPalletCandidateConfig({bool? enabled}) async {
+    final current = _candidateConfig;
+    final minHeight = double.tryParse(
+      _candidateMinHeightController.text.trim(),
+    );
+    final maxHeight = double.tryParse(
+      _candidateMaxHeightController.text.trim(),
+    );
+    final minPoints = int.tryParse(_candidateMinPointsController.text.trim());
+    final gap = int.tryParse(_candidateGapController.text.trim());
+    if (current == null ||
+        minHeight == null ||
+        maxHeight == null ||
+        minPoints == null ||
+        gap == null) {
+      setState(() => _error = 'Invalid candidate config');
+      return;
+    }
+    await _run(() async {
+      final settings = context.read<SettingsProvider>().settings;
+      await _applyPalletCandidateConfig(
+        await _api.setPalletCandidateConfig(
+          settings,
+          PalletCandidateConfig(
+            enabled: enabled ?? current.enabled,
+            minHeightM: minHeight,
+            maxHeightM: maxHeight,
+            minPoints: minPoints,
+            maxImageGapPx: gap,
+          ),
+        ),
+      );
+    });
+  }
+
+  Future<void> _setPointCloudRoi({bool? enabled, bool? applyToViewer}) async {
+    final current = _pointCloudRoi;
+    final minX = double.tryParse(_pointCloudMinXController.text.trim());
+    final maxX = double.tryParse(_pointCloudMaxXController.text.trim());
+    final minY = double.tryParse(_pointCloudMinYController.text.trim());
+    final maxY = double.tryParse(_pointCloudMaxYController.text.trim());
+    final minZ = double.tryParse(_pointCloudMinZController.text.trim());
+    final maxZ = double.tryParse(_pointCloudMaxZController.text.trim());
+    if (current == null ||
+        minX == null ||
+        maxX == null ||
+        minY == null ||
+        maxY == null ||
+        minZ == null ||
+        maxZ == null) {
+      setState(() => _error = 'Invalid pointcloud ROI');
+      return;
+    }
+    await _run(() async {
+      final settings = context.read<SettingsProvider>().settings;
+      await _applyPointCloudRoi(
+        await _api.setPointCloudRoi(
+          settings,
+          PointCloudRoiConfig(
+            enabled: enabled ?? current.enabled,
+            applyToViewer: applyToViewer ?? current.applyToViewer,
+            minXM: minX,
+            maxXM: maxX,
+            minYM: minY,
+            maxYM: maxY,
+            minZM: minZ,
+            maxZM: maxZ,
+          ),
+        ),
+      );
+    });
+  }
+
+  Future<void> _setRobotCalibration({bool? enabled}) async {
+    final current = _robotCalibration;
+    if (current == null) {
+      setState(() => _error = 'Invalid robot calibration');
+      return;
+    }
+    final values = <String, double>{};
+    for (final key in _robotKeys) {
+      final parsed = double.tryParse(_robotController(key).text.trim());
+      if (parsed == null) {
+        setState(() => _error = 'Invalid robot calibration');
+        return;
+      }
+      values[key] = parsed;
+    }
+    await _run(() async {
+      final settings = context.read<SettingsProvider>().settings;
+      await _applyRobotCalibration(
+        await _api.setRobotCalibration(
+          settings,
+          RobotCalibration(enabled: enabled ?? current.enabled, values: values),
+        ),
+      );
+    });
+  }
+
   Future<void> _run(Future<void> Function() action) async {
     setState(() {
       _loading = true;
@@ -954,8 +1286,6 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
   }) async {
     setState(() {
       _properties = properties;
-      _depthMinController.text = properties.depthRangeMin.toString();
-      _depthMaxController.text = properties.depthRangeMax.toString();
       for (final spec in _numericProperties) {
         if (properties.values.containsKey(spec.key)) {
           _controllerFor(spec.key).text = properties.values[spec.key]
@@ -983,8 +1313,171 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
     });
   }
 
+  Future<void> _applyPalletCandidateConfig(PalletCandidateConfig config) async {
+    setState(() {
+      _candidateConfig = config;
+      _candidateMinHeightController.text = config.minHeightM.toString();
+      _candidateMaxHeightController.text = config.maxHeightM.toString();
+      _candidateMinPointsController.text = config.minPoints.toString();
+      _candidateGapController.text = config.maxImageGapPx.toString();
+    });
+  }
+
+  Future<void> _applyPointCloudRoi(PointCloudRoiConfig config) async {
+    setState(() {
+      _pointCloudRoi = config;
+      _pointCloudMinXController.text = config.minXM.toString();
+      _pointCloudMaxXController.text = config.maxXM.toString();
+      _pointCloudMinYController.text = config.minYM.toString();
+      _pointCloudMaxYController.text = config.maxYM.toString();
+      _pointCloudMinZController.text = config.minZM.toString();
+      _pointCloudMaxZController.text = config.maxZM.toString();
+    });
+  }
+
+  Future<void> _applyRobotCalibration(RobotCalibration calibration) async {
+    setState(() {
+      _robotCalibration = calibration;
+      for (final key in _robotKeys) {
+        _robotController(key).text = (calibration.values[key] ?? 0.0)
+            .toString();
+      }
+    });
+  }
+
   TextEditingController _controllerFor(String key) {
     return _propertyControllers.putIfAbsent(key, () => TextEditingController());
+  }
+
+  TextEditingController _robotController(String key) {
+    return _robotControllers.putIfAbsent(key, () => TextEditingController());
+  }
+}
+
+const _robotKeys = <String>[
+  'r1_tx_m',
+  'r1_ty_m',
+  'r1_tz_m',
+  'r1_roll_deg',
+  'r1_pitch_deg',
+  'r1_yaw_deg',
+  'r2_tx_m',
+  'r2_ty_m',
+  'r2_tz_m',
+  'r2_roll_deg',
+  'r2_pitch_deg',
+  'r2_yaw_deg',
+];
+
+class _SmallNumberField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final bool enabled;
+  final bool integer;
+
+  const _SmallNumberField({
+    required this.label,
+    required this.controller,
+    required this.enabled,
+    this.integer = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      enabled: enabled,
+      keyboardType: TextInputType.numberWithOptions(
+        signed: true,
+        decimal: !integer,
+      ),
+      decoration: InputDecoration(labelText: label, isDense: true),
+    );
+  }
+}
+
+class _RobotTransformFields extends StatelessWidget {
+  final String label;
+  final Map<String, TextEditingController> controllers;
+  final String prefix;
+  final bool enabled;
+
+  const _RobotTransformFields({
+    required this.label,
+    required this.controllers,
+    required this.prefix,
+    required this.enabled,
+  });
+
+  TextEditingController _controller(String suffix) {
+    final key = '${prefix}_$suffix';
+    return controllers.putIfAbsent(key, () => TextEditingController());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12)),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: _SmallNumberField(
+                label: 'X m',
+                controller: _controller('tx_m'),
+                enabled: enabled,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _SmallNumberField(
+                label: 'Y m',
+                controller: _controller('ty_m'),
+                enabled: enabled,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _SmallNumberField(
+                label: 'Z m',
+                controller: _controller('tz_m'),
+                enabled: enabled,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: _SmallNumberField(
+                label: 'Roll',
+                controller: _controller('roll_deg'),
+                enabled: enabled,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _SmallNumberField(
+                label: 'Pitch',
+                controller: _controller('pitch_deg'),
+                enabled: enabled,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _SmallNumberField(
+                label: 'Yaw',
+                controller: _controller('yaw_deg'),
+                enabled: enabled,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }
 

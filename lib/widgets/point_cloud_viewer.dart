@@ -192,12 +192,14 @@ class _ProjectedPoint {
   final double cameraZ;
   final double sourceZ;
   final double colorValue;
+  final Color? overlayColor;
 
   const _ProjectedPoint({
     required this.offset,
     required this.cameraZ,
     required this.sourceZ,
     required this.colorValue,
+    this.overlayColor,
   });
 }
 
@@ -294,12 +296,19 @@ class _PointCloudPainter extends CustomPainter {
     }
 
     final colorRange = _colorRange(data, depthLow, depthHigh, palette);
+    final candidatePositions = detectionPositions
+        .where(
+          (detection) => detection.isCandidate && detection.bboxCameraM != null,
+        )
+        .toList(growable: false);
     final paint = Paint()..style = PaintingStyle.fill;
     final radius = math.max(pointSize, 0.5);
     final projectedPoints = <_ProjectedPoint>[];
     for (var i = 0; i < data.pointCount; i++) {
       final z = data.zAt(i);
       if (z < depthLow || z > depthHigh) continue;
+      final x = data.xAt(i);
+      final y = data.yAt(i);
       final projected = project(data.xAt(i), data.yAt(i), z);
       projectedPoints.add(
         _ProjectedPoint(
@@ -307,18 +316,47 @@ class _PointCloudPainter extends CustomPainter {
           cameraZ: projected.cameraZ,
           sourceZ: z,
           colorValue: _colorValue(data, i, palette),
+          overlayColor: _candidateColorForPoint(candidatePositions, x, y, z),
         ),
       );
     }
 
     projectedPoints.sort((a, b) => a.cameraZ.compareTo(b.cameraZ));
     for (final point in projectedPoints) {
-      paint.color = _paletteColor(point.colorValue, colorRange, palette);
+      paint.color =
+          point.overlayColor ??
+          _paletteColor(point.colorValue, colorRange, palette);
       canvas.drawCircle(point.offset, radius, paint);
     }
 
     _drawDetectionPositions(canvas, project, depthLow, depthHigh);
     _drawColorbar(canvas, size, colorRange, palette);
+  }
+
+  Color? _candidateColorForPoint(
+    List<DetectionPosition> candidates,
+    double x,
+    double y,
+    double z,
+  ) {
+    for (final candidate in candidates) {
+      if (candidate.containsPoint(x, y, z)) {
+        return _candidateColor(candidate.candidateId);
+      }
+    }
+    return null;
+  }
+
+  Color _candidateColor(int id) {
+    const colors = [
+      Color(0xFFFFEA00),
+      Color(0xFF00E5FF),
+      Color(0xFFFF6D00),
+      Color(0xFF76FF03),
+      Color(0xFFE040FB),
+      Color(0xFFFF4081),
+    ];
+    return colors[id.abs() % colors.length];
   }
 
   void _drawDetectionPositions(
