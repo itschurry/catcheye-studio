@@ -120,8 +120,18 @@ class MissingSplitPanel extends StatelessWidget {
   }
 }
 
+class SplitStreamSelection {
+  final String? leftKey;
+  final String? rightKey;
+
+  const SplitStreamSelection({required this.leftKey, required this.rightKey});
+}
+
 class StreamSelector extends StatelessWidget {
   final FrameReceiverService receiver;
+  final bool splitView;
+  final String? splitLeftStreamKey;
+  final String? splitRightStreamKey;
   final double pointSize;
   final bool showAxis;
   final double axisScale;
@@ -140,6 +150,8 @@ class StreamSelector extends StatelessWidget {
   final ValueChanged<double> onPitchChanged;
   final ValueChanged<double> onZoomChanged;
   final VoidCallback onResetCamera;
+  final ValueChanged<bool> onSplitViewChanged;
+  final ValueChanged<SplitStreamSelection> onSplitSelectionChanged;
   final ValueChanged<RangeValues> onDepthRangeChanged;
   final VoidCallback onLockView;
   final VoidCallback onUnlockView;
@@ -148,6 +160,9 @@ class StreamSelector extends StatelessWidget {
   const StreamSelector({
     super.key,
     required this.receiver,
+    required this.splitView,
+    required this.splitLeftStreamKey,
+    required this.splitRightStreamKey,
     required this.pointSize,
     required this.showAxis,
     required this.axisScale,
@@ -166,6 +181,8 @@ class StreamSelector extends StatelessWidget {
     required this.onPitchChanged,
     required this.onZoomChanged,
     required this.onResetCamera,
+    required this.onSplitViewChanged,
+    required this.onSplitSelectionChanged,
     required this.onDepthRangeChanged,
     required this.onLockView,
     required this.onUnlockView,
@@ -179,6 +196,12 @@ class StreamSelector extends StatelessWidget {
     final selected = receiver.selectedFrame;
     final pointCloud = selected?.pointCloud;
     final hasCubeEyeStream = streams.any(_isCubeEyeStream);
+    final rgbCameraStreams = streams.where(_isRgbCameraStream).toList();
+    final cubeEyeStreams = streams.where(_isCubeEyeStream).toList();
+    final otherStreams = streams
+        .where((stream) => !rgbCameraStreams.contains(stream))
+        .where((stream) => !cubeEyeStreams.contains(stream))
+        .toList();
 
     return Padding(
       padding: const EdgeInsets.all(12),
@@ -203,17 +226,41 @@ class StreamSelector extends StatelessWidget {
           Expanded(
             child: ListView(
               children: [
-                for (var i = 0; i < streams.length; i++) ...[
-                  _StreamTile(
-                    stream: streams[i],
-                    selected: streams[i].key == receiver.selectedStreamKey,
-                    onTap: () => receiver.selectStream(streams[i].key),
+                _SplitViewControls(
+                  streams: streams,
+                  splitView: splitView,
+                  leftKey: splitLeftStreamKey,
+                  rightKey: splitRightStreamKey,
+                  onSplitViewChanged: onSplitViewChanged,
+                  onSplitSelectionChanged: onSplitSelectionChanged,
+                ),
+                const SizedBox(height: 14),
+                _StreamGroupCard(
+                  title: 'RGB Camera',
+                  icon: Icons.videocam_outlined,
+                  streams: rgbCameraStreams,
+                  selectedStreamKey: receiver.selectedStreamKey,
+                  onSelectStream: receiver.selectStream,
+                ),
+                if (cubeEyeStreams.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  _StreamGroupCard(
+                    title: 'CubeEye ToF',
+                    icon: Icons.sensors,
+                    streams: cubeEyeStreams,
+                    selectedStreamKey: receiver.selectedStreamKey,
+                    onSelectStream: receiver.selectStream,
                   ),
-                  if (i != streams.length - 1) const SizedBox(height: 10),
                 ],
-                if (hasCubeEyeStream) ...[
-                  const Divider(height: 24),
-                  const _CubeEyeControls(),
+                if (otherStreams.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  _StreamGroupCard(
+                    title: 'Other Streams',
+                    icon: Icons.account_tree_outlined,
+                    streams: otherStreams,
+                    selectedStreamKey: receiver.selectedStreamKey,
+                    onSelectStream: receiver.selectStream,
+                  ),
                 ],
                 if (selected?.isPointCloud == true && pointCloud != null) ...[
                   const Divider(height: 24),
@@ -244,6 +291,10 @@ class StreamSelector extends StatelessWidget {
                     onResetView: onResetView,
                   ),
                 ],
+                if (hasCubeEyeStream) ...[
+                  const Divider(height: 24),
+                  const _CubeEyeControls(),
+                ],
               ],
             ),
           ),
@@ -257,18 +308,184 @@ class StreamSelector extends StatelessWidget {
     final name = stream.name.toLowerCase();
     return kind == 'depth' ||
         kind == 'amplitude' ||
-        kind == 'rgb' ||
         kind == 'pointcloud' ||
         name.contains('cubeeye');
   }
+
+  bool _isRgbCameraStream(ViewerStreamFrame stream) {
+    final values = _streamIdentityValues(stream);
+    return values.any(
+      (value) =>
+          value == 'rgb' ||
+          value == 'color' ||
+          value == 'camera' ||
+          value.contains('rgb_camera'),
+    );
+  }
+
+  List<String> _streamIdentityValues(ViewerStreamFrame stream) {
+    return [
+      stream.name.toLowerCase(),
+      stream.kind.toLowerCase(),
+      stream.label.toLowerCase(),
+    ];
+  }
 }
 
-class _StreamTile extends StatelessWidget {
+class _SplitViewControls extends StatelessWidget {
+  final List<ViewerStreamFrame> streams;
+  final bool splitView;
+  final String? leftKey;
+  final String? rightKey;
+  final ValueChanged<bool> onSplitViewChanged;
+  final ValueChanged<SplitStreamSelection> onSplitSelectionChanged;
+
+  const _SplitViewControls({
+    required this.streams,
+    required this.splitView,
+    required this.leftKey,
+    required this.rightKey,
+    required this.onSplitViewChanged,
+    required this.onSplitSelectionChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF101B1D),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFF30474B)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: _PanelHeader(
+                  icon: Icons.splitscreen_outlined,
+                  title: 'Split View',
+                  subtitle: 'Choose panel streams',
+                ),
+              ),
+              Switch(value: splitView, onChanged: onSplitViewChanged),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _SplitStreamPicker(
+            label: 'Left',
+            streams: streams,
+            value: leftKey,
+            onChanged: splitView
+                ? (value) => onSplitSelectionChanged(
+                    SplitStreamSelection(leftKey: value, rightKey: rightKey),
+                  )
+                : null,
+          ),
+          const SizedBox(height: 8),
+          _SplitStreamPicker(
+            label: 'Right',
+            streams: streams,
+            value: rightKey,
+            onChanged: splitView
+                ? (value) => onSplitSelectionChanged(
+                    SplitStreamSelection(leftKey: leftKey, rightKey: value),
+                  )
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SplitStreamPicker extends StatelessWidget {
+  final String label;
+  final List<ViewerStreamFrame> streams;
+  final String? value;
+  final ValueChanged<String?>? onChanged;
+
+  const _SplitStreamPicker({
+    required this.label,
+    required this.streams,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final validValue = streams.any((stream) => stream.key == value)
+        ? value
+        : null;
+    return DropdownButtonFormField<String>(
+      initialValue: validValue,
+      isDense: true,
+      decoration: InputDecoration(labelText: label, isDense: true),
+      items: [
+        for (final stream in streams)
+          DropdownMenuItem(value: stream.key, child: Text(stream.label)),
+      ],
+      onChanged: onChanged,
+    );
+  }
+}
+
+class _StreamGroupCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final List<ViewerStreamFrame> streams;
+  final String? selectedStreamKey;
+  final ValueChanged<String> onSelectStream;
+
+  const _StreamGroupCard({
+    required this.title,
+    required this.icon,
+    required this.streams,
+    required this.selectedStreamKey,
+    required this.onSelectStream,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF101B1D),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFF30474B)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _PanelHeader(icon: icon, title: title),
+          const SizedBox(height: 10),
+          if (streams.isEmpty)
+            const Text(
+              'No stream',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          for (var i = 0; i < streams.length; i++) ...[
+            _StreamSlot(
+              stream: streams[i],
+              selected: streams[i].key == selectedStreamKey,
+              onTap: () => onSelectStream(streams[i].key),
+            ),
+            if (i != streams.length - 1) const SizedBox(height: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StreamSlot extends StatelessWidget {
   final ViewerStreamFrame stream;
   final bool selected;
   final VoidCallback onTap;
 
-  const _StreamTile({
+  const _StreamSlot({
     required this.stream,
     required this.selected,
     required this.onTap,
@@ -278,33 +495,32 @@ class _StreamTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final size = stream.size;
-    final isPointCloud = stream.isPointCloud;
+    final detail = stream.isPointCloud
+        ? '${stream.pointCount} pts'
+        : size == null
+        ? '-'
+        : '${size.width.toInt()} x ${size.height.toInt()}';
+
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(4),
       child: Container(
-        height: 42,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF183C42) : const Color(0xFF101B1D),
-          borderRadius: BorderRadius.circular(6),
+          color: selected ? const Color(0xFF183C42) : const Color(0xFF0B1416),
+          borderRadius: BorderRadius.circular(4),
           border: Border.all(
-            color: selected ? colorScheme.primary : const Color(0xFF30474B),
+            color: selected ? colorScheme.primary : const Color(0xFF26383B),
           ),
         ),
         child: Row(
           children: [
-            Icon(
-              isPointCloud ? Icons.scatter_plot : Icons.videocam_outlined,
-              size: 17,
-              color: selected ? colorScheme.primary : Colors.grey,
-            ),
+            Icon(Icons.circle, size: 8, color: Colors.green),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 stream.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
@@ -312,18 +528,55 @@ class _StreamTile extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 8),
             Text(
-              isPointCloud
-                  ? '${stream.pointCount} pts'
-                  : size == null
-                  ? '-'
-                  : '${size.width.toInt()} x ${size.height.toInt()}',
+              detail,
               style: const TextStyle(fontSize: 10, color: Colors.grey),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _PanelHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+
+  const _PanelHeader({required this.icon, required this.title, this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 17, color: colorScheme.secondary),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              if (subtitle != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    subtitle!,
+                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -339,19 +592,19 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
   final RemoteCubeEyeApiService _api = RemoteCubeEyeApiService();
   final TextEditingController _depthMinController = TextEditingController();
   final TextEditingController _depthMaxController = TextEditingController();
-  final TextEditingController _offsetUController = TextEditingController(
-    text: '0.00',
-  );
-  final TextEditingController _offsetVController = TextEditingController(
-    text: '0.40',
-  );
   final Map<String, TextEditingController> _propertyControllers = {};
   CubeEyeProperties? _properties;
   RgbCubeEyeOffset? _rgbCubeEyeOffset;
+  double _offsetU = 0.0;
+  double _offsetV = 0.4;
   String? _error;
   bool _loading = false;
   bool _loadedOnce = false;
   bool _initializedFromSettings = false;
+
+  static const double _offsetMin = -1.0;
+  static const double _offsetMax = 1.0;
+  static const int _offsetDivisions = 2000;
 
   static const _boolProperties = <_CubeEyePropertySpec>[
     _CubeEyePropertySpec('amplitude_time_filter', 'Amplitude time filter'),
@@ -440,8 +693,6 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
   void dispose() {
     _depthMinController.dispose();
     _depthMaxController.dispose();
-    _offsetUController.dispose();
-    _offsetVController.dispose();
     for (final controller in _propertyControllers.values) {
       controller.dispose();
     }
@@ -458,9 +709,10 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
         Row(
           children: [
             const Expanded(
-              child: Text(
-                'CubeEye',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              child: _PanelHeader(
+                icon: Icons.api,
+                title: 'CubeEye Properties API',
+                subtitle: 'Remote device settings',
               ),
             ),
             OutlinedButton.icon(
@@ -475,14 +727,14 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         if (_error != null)
           Text(
             _error!,
             style: const TextStyle(fontSize: 11, color: Colors.redAccent),
           ),
         const SizedBox(height: 8),
-        const Text('Framerate', style: TextStyle(fontSize: 12)),
+        const Text('Device framerate', style: TextStyle(fontSize: 12)),
         const SizedBox(height: 6),
         SegmentedButton<int>(
           showSelectedIcon: false,
@@ -500,7 +752,10 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
         SwitchListTile(
           dense: true,
           contentPadding: EdgeInsets.zero,
-          title: const Text('Auto exposure', style: TextStyle(fontSize: 12)),
+          title: const Text(
+            'Device auto exposure',
+            style: TextStyle(fontSize: 12),
+          ),
           value: properties?.autoExposure ?? false,
           onChanged: controlsEnabled
               ? (value) => _setProperty('auto_exposure', value)
@@ -509,13 +764,16 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
         SwitchListTile(
           dense: true,
           contentPadding: EdgeInsets.zero,
-          title: const Text('Illumination', style: TextStyle(fontSize: 12)),
+          title: const Text(
+            'Device illumination',
+            style: TextStyle(fontSize: 12),
+          ),
           value: properties?.illumination ?? false,
           onChanged: controlsEnabled
               ? (value) => _setProperty('illumination', value)
               : null,
         ),
-        const Text('Depth range', style: TextStyle(fontSize: 12)),
+        const Text('Device depth range', style: TextStyle(fontSize: 12)),
         const SizedBox(height: 6),
         Row(
           children: [
@@ -550,59 +808,7 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
         ),
         const SizedBox(height: 10),
         const Divider(height: 18),
-        const Text('RGB CubeEye offset', style: TextStyle(fontSize: 12)),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _offsetUController,
-                enabled: !_loading,
-                keyboardType: const TextInputType.numberWithOptions(
-                  signed: true,
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'U',
-                  isDense: true,
-                ),
-                onSubmitted: (_) => _setRgbCubeEyeOffset(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: _offsetVController,
-                enabled: !_loading,
-                keyboardType: const TextInputType.numberWithOptions(
-                  signed: true,
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'V',
-                  isDense: true,
-                ),
-                onSubmitted: (_) => _setRgbCubeEyeOffset(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton(
-              onPressed: _loading ? null : _setRgbCubeEyeOffset,
-              child: const Text('Apply'),
-            ),
-          ],
-        ),
-        if (_rgbCubeEyeOffset != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              'Current ${_rgbCubeEyeOffset!.u.toStringAsFixed(3)}, ${_rgbCubeEyeOffset!.v.toStringAsFixed(3)}',
-              style: const TextStyle(fontSize: 10, color: Colors.grey),
-            ),
-          ),
-        const SizedBox(height: 10),
-        const Divider(height: 18),
-        const Text('Image quality', style: TextStyle(fontSize: 12)),
+        const Text('CubeEye filters', style: TextStyle(fontSize: 12)),
         const SizedBox(height: 6),
         ..._boolProperties
             .where((spec) => properties?.values.containsKey(spec.key) ?? false)
@@ -639,6 +845,41 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
                 ),
               ),
             ),
+        const Divider(height: 24),
+        const _PanelHeader(
+          icon: Icons.tune,
+          title: 'Calibration Offset',
+          subtitle: 'RGB to CubeEye alignment',
+        ),
+        const SizedBox(height: 8),
+        _OffsetSlider(
+          label: 'U',
+          value: _offsetU,
+          enabled: !_loading,
+          min: _offsetMin,
+          max: _offsetMax,
+          divisions: _offsetDivisions,
+          onChanged: (value) => setState(() => _offsetU = value),
+          onChangeEnd: (_) => _setRgbCubeEyeOffset(),
+        ),
+        _OffsetSlider(
+          label: 'V',
+          value: _offsetV,
+          enabled: !_loading,
+          min: _offsetMin,
+          max: _offsetMax,
+          divisions: _offsetDivisions,
+          onChanged: (value) => setState(() => _offsetV = value),
+          onChangeEnd: (_) => _setRgbCubeEyeOffset(),
+        ),
+        if (_rgbCubeEyeOffset != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Current ${_rgbCubeEyeOffset!.u.toStringAsFixed(3)}, ${_rgbCubeEyeOffset!.v.toStringAsFixed(3)}',
+              style: const TextStyle(fontSize: 10, color: Colors.grey),
+            ),
+          ),
       ],
     );
   }
@@ -678,18 +919,12 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
   }
 
   Future<void> _setRgbCubeEyeOffset() async {
-    final u = double.tryParse(_offsetUController.text.trim());
-    final v = double.tryParse(_offsetVController.text.trim());
-    if (u == null || v == null) {
-      setState(() => _error = 'Invalid offset');
-      return;
-    }
     await _run(() async {
       final settings = context.read<SettingsProvider>().settings;
       await _applyOffset(
         await _api.setRgbCubeEyeOffset(
           settings,
-          RgbCubeEyeOffset(u: u, v: v),
+          RgbCubeEyeOffset(u: _offsetU, v: _offsetV),
         ),
       );
     });
@@ -741,13 +976,66 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
   Future<void> _applyOffset(RgbCubeEyeOffset offset) async {
     setState(() {
       _rgbCubeEyeOffset = offset;
-      _offsetUController.text = offset.u.toString();
-      _offsetVController.text = offset.v.toString();
+      _offsetU = offset.u;
+      _offsetV = offset.v;
     });
   }
 
   TextEditingController _controllerFor(String key) {
     return _propertyControllers.putIfAbsent(key, () => TextEditingController());
+  }
+}
+
+class _OffsetSlider extends StatelessWidget {
+  final String label;
+  final double value;
+  final bool enabled;
+  final double min;
+  final double max;
+  final int divisions;
+  final ValueChanged<double> onChanged;
+  final ValueChanged<double> onChangeEnd;
+
+  const _OffsetSlider({
+    required this.label,
+    required this.value,
+    required this.enabled,
+    required this.min,
+    required this.max,
+    required this.divisions,
+    required this.onChanged,
+    required this.onChangeEnd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 18,
+          child: Text(label, style: const TextStyle(fontSize: 12)),
+        ),
+        Expanded(
+          child: Slider(
+            value: value,
+            min: min,
+            max: max,
+            divisions: divisions,
+            label: value.toStringAsFixed(3),
+            onChanged: enabled ? onChanged : null,
+            onChangeEnd: enabled ? onChangeEnd : null,
+          ),
+        ),
+        SizedBox(
+          width: 48,
+          child: Text(
+            value.toStringAsFixed(3),
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontSize: 11, color: Colors.grey),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -826,9 +1114,10 @@ class _PointCloudOptions extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text(
-          'PointCloud 3D',
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+        const _PanelHeader(
+          icon: Icons.visibility_outlined,
+          title: 'Viewer Properties',
+          subtitle: 'Local display controls',
         ),
         const SizedBox(height: 8),
         Row(
@@ -860,6 +1149,8 @@ class _PointCloudOptions extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
+        const Text('Color palette', style: TextStyle(fontSize: 12)),
+        const SizedBox(height: 6),
         SegmentedButton<PointCloudPalette>(
           showSelectedIcon: false,
           style: const ButtonStyle(
@@ -933,7 +1224,7 @@ class _PointCloudOptions extends StatelessWidget {
         ),
         _OptionLabel(
           value:
-              'Depth ${safeDepthMin.toStringAsFixed(1)} - ${safeDepthMax.toStringAsFixed(1)}',
+              'Visible depth filter ${safeDepthMin.toStringAsFixed(1)} - ${safeDepthMax.toStringAsFixed(1)}',
         ),
         RangeSlider(
           values: RangeValues(safeDepthMin, safeDepthMax),

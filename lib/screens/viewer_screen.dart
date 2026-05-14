@@ -37,6 +37,8 @@ class _ViewerScreenState extends State<ViewerScreen> {
   String? _lockedViewportStreamKey;
   bool _pointCloudSettingsLoaded = false;
   bool _splitView = false;
+  String? _splitLeftStreamKey;
+  String? _splitRightStreamKey;
 
   @override
   void didChangeDependencies() {
@@ -105,6 +107,9 @@ class _ViewerScreenState extends State<ViewerScreen> {
           ),
           child: StreamSelector(
             receiver: receiver,
+            splitView: _splitView,
+            splitLeftStreamKey: _splitLeftStreamKey,
+            splitRightStreamKey: _splitRightStreamKey,
             pointSize: _pointSize,
             showAxis: _showAxis,
             axisScale: _axisScale,
@@ -140,6 +145,20 @@ class _ViewerScreenState extends State<ViewerScreen> {
               _viewZoom = 1.0;
               _viewPanOffset = Offset.zero;
             }),
+            onSplitViewChanged: (enabled) {
+              setState(() {
+                _splitView = enabled;
+                if (enabled) {
+                  _assignInitialSplitStreams(receiver);
+                }
+              });
+            },
+            onSplitSelectionChanged: (selection) {
+              setState(() {
+                _splitLeftStreamKey = selection.leftKey;
+                _splitRightStreamKey = selection.rightKey;
+              });
+            },
             onDepthRangeChanged: (values) {
               setState(() {
                 _depthMin = values.start;
@@ -160,15 +179,8 @@ class _ViewerScreenState extends State<ViewerScreen> {
   Widget _buildSplitViewer(FrameReceiverService receiver) {
     final streams = receiver.streams.values.toList()
       ..sort((a, b) => a.payloadIndex.compareTo(b.payloadIndex));
-    final cameraStream = _firstStreamWhere(streams, _isCameraStream);
-    final fallbackCameraStream = _firstStreamWhere(
-      streams,
-      (stream) => stream.isJpeg,
-    );
-    final pointCloudStream = _firstStreamWhere(
-      streams,
-      (stream) => stream.isPointCloud && stream.pointCloud != null,
-    );
+    final leftStream = _streamByKey(streams, _splitLeftStreamKey);
+    final rightStream = _streamByKey(streams, _splitRightStreamKey);
 
     return Padding(
       padding: const EdgeInsets.all(8),
@@ -177,16 +189,16 @@ class _ViewerScreenState extends State<ViewerScreen> {
           Expanded(
             child: _buildSplitPanel(
               receiver: receiver,
-              stream: cameraStream ?? fallbackCameraStream,
-              missingLabel: 'camera',
+              stream: leftStream,
+              missingLabel: 'Left',
             ),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: _buildSplitPanel(
               receiver: receiver,
-              stream: pointCloudStream,
-              missingLabel: 'pointcloud',
+              stream: rightStream,
+              missingLabel: 'Right',
             ),
           ),
         ],
@@ -210,24 +222,30 @@ class _ViewerScreenState extends State<ViewerScreen> {
     );
   }
 
-  bool _isCameraStream(ViewerStreamFrame stream) {
-    if (!stream.isJpeg) return false;
-    final values = [
-      stream.name.toLowerCase(),
-      stream.kind.toLowerCase(),
-      stream.label.toLowerCase(),
-    ];
-    return values.any((value) => value == 'camera' || value.contains('camera'));
-  }
-
-  ViewerStreamFrame? _firstStreamWhere(
+  ViewerStreamFrame? _streamByKey(
     List<ViewerStreamFrame> streams,
-    bool Function(ViewerStreamFrame stream) test,
+    String? key,
   ) {
+    if (key == null) return null;
     for (final stream in streams) {
-      if (test(stream)) return stream;
+      if (stream.key == key) return stream;
     }
     return null;
+  }
+
+  void _assignInitialSplitStreams(FrameReceiverService receiver) {
+    final streams = receiver.streams.values.toList()
+      ..sort((a, b) => a.payloadIndex.compareTo(b.payloadIndex));
+    if (streams.isEmpty) return;
+    _splitLeftStreamKey ??= receiver.selectedStreamKey ?? streams.first.key;
+    _splitRightStreamKey ??= streams.length > 1
+        ? streams
+              .firstWhere(
+                (stream) => stream.key != _splitLeftStreamKey,
+                orElse: () => streams.first,
+              )
+              .key
+        : streams.first.key;
   }
 
   Widget _buildMainViewer(
@@ -260,6 +278,13 @@ class _ViewerScreenState extends State<ViewerScreen> {
         onZoomChanged: (zoom) => setState(() => _viewZoom = zoom),
         onPanChanged: (offset) => setState(() => _viewPanOffset = offset),
       );
+    }
+
+    if (receiver.connected &&
+        !receiver.isRtsp &&
+        selectedFrame != null &&
+        selectedFrame.isJpeg) {
+      return _buildStreamContent(receiver, selectedFrame);
     }
 
     if (receiver.connected &&
@@ -324,11 +349,24 @@ class _ViewerScreenState extends State<ViewerScreen> {
       return Container(
         color: Colors.black,
         alignment: Alignment.center,
-        child: Image.memory(
-          stream.jpegBytes,
-          fit: BoxFit.contain,
-          gaplessPlayback: true,
-          filterQuality: FilterQuality.low,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.memory(
+              stream.jpegBytes,
+              fit: BoxFit.contain,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.low,
+            ),
+            if (stream.kind != 'camera' &&
+                receiver.detectionPositions.isNotEmpty)
+              CustomPaint(
+                painter: _DepthDetectionPainter(
+                  imageSize: stream.size,
+                  detections: receiver.detectionPositions,
+                ),
+              ),
+          ],
         ),
       );
     }
@@ -542,7 +580,12 @@ class _ViewerScreenState extends State<ViewerScreen> {
                       ? Icons.fullscreen_outlined
                       : Icons.splitscreen_outlined,
                 ),
-                onPressed: () => setState(() => _splitView = !_splitView),
+                onPressed: () => setState(() {
+                  _splitView = !_splitView;
+                  if (_splitView) {
+                    _assignInitialSplitStreams(receiver);
+                  }
+                }),
               ),
             ),
             const SizedBox(width: 8),
@@ -761,6 +804,92 @@ class _ViewerScreenState extends State<ViewerScreen> {
         ],
       ),
     );
+  }
+}
+
+class _DepthDetectionPainter extends CustomPainter {
+  final Size? imageSize;
+  final List<DetectionPosition> detections;
+
+  const _DepthDetectionPainter({
+    required this.imageSize,
+    required this.detections,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final imageSize = this.imageSize;
+    if (imageSize == null || imageSize.width <= 0 || imageSize.height <= 0) {
+      return;
+    }
+
+    final scale =
+        (size.width / imageSize.width) < (size.height / imageSize.height)
+        ? size.width / imageSize.width
+        : size.height / imageSize.height;
+    final drawnSize = Size(imageSize.width * scale, imageSize.height * scale);
+    final origin = Offset(
+      (size.width - drawnSize.width) * 0.5,
+      (size.height - drawnSize.height) * 0.5,
+    );
+
+    final markerPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..color = const Color(0xFFFFEA00);
+    final fillPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = const Color(0x55FFEA00);
+
+    for (final detection in detections) {
+      final x = detection.pointcloudX.toDouble();
+      final y = detection.pointcloudY.toDouble();
+      if (x < 0 || y < 0 || x >= imageSize.width || y >= imageSize.height) {
+        continue;
+      }
+      final marker = origin + Offset(x * scale, y * scale);
+      const markerSize = 9.0;
+      canvas.drawCircle(marker, markerSize, fillPaint);
+      canvas.drawCircle(marker, markerSize, markerPaint);
+      canvas.drawLine(
+        Offset(marker.dx - markerSize - 4, marker.dy),
+        Offset(marker.dx + markerSize + 4, marker.dy),
+        markerPaint,
+      );
+      canvas.drawLine(
+        Offset(marker.dx, marker.dy - markerSize - 4),
+        Offset(marker.dx, marker.dy + markerSize + 4),
+        markerPaint,
+      );
+      _drawLabel(canvas, marker, detection);
+    }
+  }
+
+  void _drawLabel(Canvas canvas, Offset marker, DetectionPosition detection) {
+    final text =
+        '${detection.className} '
+        'x:${detection.x.toStringAsFixed(1)} '
+        'y:${detection.y.toStringAsFixed(1)} '
+        'z:${detection.z.toStringAsFixed(1)}';
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: const TextStyle(
+          color: Color(0xFFFFEA00),
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          shadows: [Shadow(color: Colors.black, blurRadius: 4)],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    painter.paint(canvas, marker + const Offset(12, -18));
+  }
+
+  @override
+  bool shouldRepaint(covariant _DepthDetectionPainter oldDelegate) {
+    return oldDelegate.imageSize != imageSize ||
+        oldDelegate.detections != detections;
   }
 }
 
