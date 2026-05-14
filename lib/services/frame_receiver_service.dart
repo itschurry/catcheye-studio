@@ -169,6 +169,9 @@ class DetectionPosition {
   final int sampleCount;
   final int pointcloudX;
   final int pointcloudY;
+  final bool isCandidate;
+  final int candidateId;
+  final List<double>? bboxCameraM;
 
   const DetectionPosition({
     required this.className,
@@ -179,7 +182,21 @@ class DetectionPosition {
     required this.sampleCount,
     required this.pointcloudX,
     required this.pointcloudY,
+    this.isCandidate = false,
+    this.candidateId = 0,
+    this.bboxCameraM,
   });
+
+  bool containsPoint(double px, double py, double pz) {
+    final bbox = bboxCameraM;
+    if (bbox == null || bbox.length < 6) return false;
+    return px >= bbox[0] &&
+        px <= bbox[3] &&
+        py >= bbox[1] &&
+        py <= bbox[4] &&
+        pz >= bbox[2] &&
+        pz <= bbox[5];
+  }
 }
 
 class _PendingStreamInfo {
@@ -269,10 +286,47 @@ class FrameReceiverService extends ChangeNotifier {
   List<DetectionPosition> _parseDetectionPositions(
     Map<String, dynamic>? metadata,
   ) {
-    final rawDetections = metadata?['detections'];
-    if (rawDetections is! List) return const [];
-
     final positions = <DetectionPosition>[];
+    final rawCandidates = metadata?['pallet_candidates'];
+    if (rawCandidates is List) {
+      for (final rawCandidate in rawCandidates) {
+        if (rawCandidate is! Map<String, dynamic>) continue;
+        final rawCenter = rawCandidate['center_camera_m'];
+        if (rawCenter is! List || rawCenter.length < 3) continue;
+        final x = _metadataDouble(rawCenter[0]);
+        final y = _metadataDouble(rawCenter[1]);
+        final z = _metadataDouble(rawCenter[2]);
+        if (x == null || y == null || z == null) continue;
+        final rawBbox = rawCandidate['bbox_camera_m'];
+        final bbox = rawBbox is List
+            ? rawBbox
+                  .map(_metadataDouble)
+                  .whereType<double>()
+                  .take(6)
+                  .toList(growable: false)
+            : null;
+        final candidateId = _metadataInt(rawCandidate['id']) ?? 0;
+        positions.add(
+          DetectionPosition(
+            className: 'candidate_$candidateId',
+            score: _metadataDouble(rawCandidate['confidence']) ?? 0,
+            x: x,
+            y: y,
+            z: z,
+            sampleCount: _metadataInt(rawCandidate['sample_count']) ?? 0,
+            pointcloudX: 0,
+            pointcloudY: 0,
+            isCandidate: true,
+            candidateId: candidateId,
+            bboxCameraM: bbox,
+          ),
+        );
+      }
+    }
+
+    final rawDetections = metadata?['detections'];
+    if (rawDetections is! List) return positions;
+
     for (final rawDetection in rawDetections) {
       if (rawDetection is! Map<String, dynamic>) continue;
       final rawPosition = rawDetection['position'];
