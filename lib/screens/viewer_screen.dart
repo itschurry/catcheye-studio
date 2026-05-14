@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -346,28 +347,70 @@ class _ViewerScreenState extends State<ViewerScreen> {
       );
     }
     if (stream.isJpeg) {
+      final isDepthStream = stream.kind == 'depth';
+      final settings = context.read<SettingsProvider>().settings;
+      final image = Image.memory(
+        stream.jpegBytes,
+        fit: BoxFit.contain,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.low,
+      );
+      final imageStack = Stack(
+        fit: StackFit.expand,
+        children: [
+          image,
+          if (isDepthStream)
+            CustomPaint(
+              painter: _DepthLegendPainter(
+                imageSize: stream.size,
+                minDepth: settings.cubeEyeDepthRangeMin.toDouble(),
+                maxDepth: settings.cubeEyeDepthRangeMax.toDouble(),
+                showColorbar: true,
+                showAxis: false,
+                axisScale: _axisScale,
+                yaw: _viewYaw,
+                pitch: _viewPitch,
+              ),
+            ),
+          if (stream.kind != 'camera' && receiver.detectionPositions.isNotEmpty)
+            CustomPaint(
+              painter: _DepthDetectionPainter(
+                imageSize: stream.size,
+                detections: receiver.detectionPositions,
+              ),
+            ),
+        ],
+      );
       return Container(
         color: Colors.black,
         alignment: Alignment.center,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Image.memory(
-              stream.jpegBytes,
-              fit: BoxFit.contain,
-              gaplessPlayback: true,
-              filterQuality: FilterQuality.low,
-            ),
-            if (stream.kind != 'camera' &&
-                receiver.detectionPositions.isNotEmpty)
-              CustomPaint(
-                painter: _DepthDetectionPainter(
-                  imageSize: stream.size,
-                  detections: receiver.detectionPositions,
-                ),
-              ),
-          ],
-        ),
+        child: isDepthStream && _showAxis
+            ? LayoutBuilder(
+                builder: (context, constraints) {
+                  final axisWidth = constraints.maxWidth >= 360 ? 84.0 : 58.0;
+                  return Row(
+                    children: [
+                      SizedBox(
+                        width: axisWidth,
+                        child: CustomPaint(
+                          painter: _DepthLegendPainter(
+                            imageSize: null,
+                            minDepth: settings.cubeEyeDepthRangeMin.toDouble(),
+                            maxDepth: settings.cubeEyeDepthRangeMax.toDouble(),
+                            showColorbar: false,
+                            showAxis: true,
+                            axisScale: _axisScale,
+                            yaw: _viewYaw,
+                            pitch: _viewPitch,
+                          ),
+                        ),
+                      ),
+                      Expanded(child: imageStack),
+                    ],
+                  );
+                },
+              )
+            : imageStack,
       );
     }
     return Container(
@@ -804,6 +847,199 @@ class _ViewerScreenState extends State<ViewerScreen> {
         ],
       ),
     );
+  }
+}
+
+class _DepthLegendPainter extends CustomPainter {
+  final Size? imageSize;
+  final double minDepth;
+  final double maxDepth;
+  final bool showColorbar;
+  final bool showAxis;
+  final double axisScale;
+  final double yaw;
+  final double pitch;
+
+  const _DepthLegendPainter({
+    required this.imageSize,
+    required this.minDepth,
+    required this.maxDepth,
+    required this.showColorbar,
+    required this.showAxis,
+    required this.axisScale,
+    required this.yaw,
+    required this.pitch,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final imageRect = _imageRect(size);
+    if (showColorbar) {
+      _drawColorbar(canvas, size, imageRect);
+    }
+    if (showAxis) {
+      _drawAxis(canvas, size, imageRect);
+    }
+  }
+
+  Rect? _imageRect(Size size) {
+    final imageSize = this.imageSize;
+    if (imageSize == null || imageSize.width <= 0 || imageSize.height <= 0) {
+      return null;
+    }
+    final scale =
+        (size.width / imageSize.width) < (size.height / imageSize.height)
+        ? size.width / imageSize.width
+        : size.height / imageSize.height;
+    final drawnSize = Size(imageSize.width * scale, imageSize.height * scale);
+    return Offset(
+          (size.width - drawnSize.width) * 0.5,
+          (size.height - drawnSize.height) * 0.5,
+        ) &
+        drawnSize;
+  }
+
+  void _drawColorbar(Canvas canvas, Size size, Rect? imageRect) {
+    const barWidth = 14.0;
+    const barHeight = 140.0;
+    const padding = 16.0;
+    final rightEdge = imageRect?.right ?? size.width;
+    final topEdge = imageRect?.top ?? 0.0;
+    final rect = Rect.fromLTWH(
+      math.min(rightEdge - padding - barWidth, size.width - padding - barWidth),
+      topEdge + padding,
+      barWidth,
+      math.min(barHeight, math.max(size.height - topEdge - padding * 2, 48.0)),
+    );
+    const gradient = LinearGradient(
+      begin: Alignment.bottomCenter,
+      end: Alignment.topCenter,
+      colors: [Color(0xFF4FC3F7), Color(0xFF69F0AE), Color(0xFFFF7043)],
+      stops: [0.0, 0.5, 1.0],
+    );
+    canvas.drawRect(rect, Paint()..shader = gradient.createShader(rect));
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = Colors.white54,
+    );
+    _drawColorbarText(canvas, Offset(rect.left - 58, rect.top - 2), maxDepth);
+    _drawColorbarText(
+      canvas,
+      Offset(rect.left - 58, rect.bottom - 12),
+      minDepth,
+    );
+  }
+
+  void _drawColorbarText(Canvas canvas, Offset offset, double value) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: value.toStringAsFixed(0),
+        style: const TextStyle(
+          color: Colors.white70,
+          fontSize: 10,
+          fontFamily: 'monospace',
+          shadows: [Shadow(color: Colors.black, blurRadius: 3)],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: 54);
+    painter.paint(canvas, offset);
+  }
+
+  void _drawAxis(Canvas canvas, Size size, Rect? imageRect) {
+    const boxSize = 76.0;
+    const padding = 16.0;
+    final rect = imageRect;
+    final origin = rect == null
+        ? Offset(padding + 18, size.height - padding - 18)
+        : Offset(
+            math.max(padding + 18, rect.left - boxSize + 30),
+            math.min(size.height - padding - 18, rect.bottom - 18),
+          );
+    final length = math.min(
+      (36.0 * axisScale.clamp(0.4, 2.0)).toDouble(),
+      math.max(size.width - origin.dx - 6.0, 18.0),
+    );
+
+    Offset project(double x, double y, double z) {
+      final cosYaw = math.cos(yaw);
+      final sinYaw = math.sin(yaw);
+      final cosPitch = math.cos(pitch);
+      final sinPitch = math.sin(pitch);
+      final yawX = x * cosYaw + z * sinYaw;
+      final yawZ = -x * sinYaw + z * cosYaw;
+      final pitchY = y * cosPitch - yawZ * sinPitch;
+      return origin + Offset(yawX * length, -pitchY * length);
+    }
+
+    final paint = Paint()
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    _drawAxisLine(
+      canvas,
+      paint,
+      origin,
+      project(1, 0, 0),
+      'X',
+      const Color(0xFFFF5252),
+    );
+    _drawAxisLine(
+      canvas,
+      paint,
+      origin,
+      project(0, 1, 0),
+      'Y',
+      const Color(0xFF69F0AE),
+    );
+    _drawAxisLine(
+      canvas,
+      paint,
+      origin,
+      project(0, 0, 1),
+      'Z',
+      const Color(0xFF40C4FF),
+    );
+  }
+
+  void _drawAxisLine(
+    Canvas canvas,
+    Paint paint,
+    Offset origin,
+    Offset end,
+    String label,
+    Color color,
+  ) {
+    paint.color = color;
+    canvas.drawLine(origin, end, paint);
+    final painter = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          shadows: const [Shadow(color: Colors.black, blurRadius: 3)],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    painter.paint(canvas, end + const Offset(4, -6));
+  }
+
+  @override
+  bool shouldRepaint(covariant _DepthLegendPainter oldDelegate) {
+    return oldDelegate.imageSize != imageSize ||
+        oldDelegate.minDepth != minDepth ||
+        oldDelegate.maxDepth != maxDepth ||
+        oldDelegate.showColorbar != showColorbar ||
+        oldDelegate.showAxis != showAxis ||
+        oldDelegate.axisScale != axisScale ||
+        oldDelegate.yaw != yaw ||
+        oldDelegate.pitch != pitch;
   }
 }
 

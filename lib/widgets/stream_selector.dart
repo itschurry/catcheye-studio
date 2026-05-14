@@ -304,12 +304,14 @@ class StreamSelector extends StatelessWidget {
   }
 
   bool _isCubeEyeStream(ViewerStreamFrame stream) {
-    final kind = stream.kind.toLowerCase();
-    final name = stream.name.toLowerCase();
-    return kind == 'depth' ||
-        kind == 'amplitude' ||
-        kind == 'pointcloud' ||
-        name.contains('cubeeye');
+    final values = _streamIdentityValues(stream);
+    return values.any(
+      (value) =>
+          value.contains('cubeeye') ||
+          value.contains('depth') ||
+          value.contains('amplitude') ||
+          value.contains('pointcloud'),
+    );
   }
 
   bool _isRgbCameraStream(ViewerStreamFrame stream) {
