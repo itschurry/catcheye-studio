@@ -616,6 +616,7 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
   bool _loading = false;
   bool _loadedOnce = false;
   bool _initializedFromSettings = false;
+  bool _pointCloudRoiExpanded = false;
 
   static const double _offsetMin = -1.0;
   static const double _offsetMax = 1.0;
@@ -728,13 +729,37 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _buildPointCloudRoiSection(),
+        const Divider(height: 24),
+        _buildCubeEyeDeviceSection(properties, controlsEnabled),
+        const SizedBox(height: 10),
+        if (_error != null)
+          Text(
+            _error!,
+            style: const TextStyle(fontSize: 11, color: Colors.redAccent),
+          ),
+        const Divider(height: 24),
+        _buildCalibrationSection(),
+        const Divider(height: 24),
+        _buildRobotCalibrationSection(),
+      ],
+    );
+  }
+
+  Widget _buildCubeEyeDeviceSection(
+    CubeEyeProperties? properties,
+    bool controlsEnabled,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         Row(
           children: [
             const Expanded(
               child: _PanelHeader(
                 icon: Icons.api,
-                title: 'CubeEye Properties API',
-                subtitle: 'Remote device settings',
+                title: 'CubeEye Device',
+                subtitle: 'Remote API controls',
               ),
             ),
             OutlinedButton.icon(
@@ -749,13 +774,7 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
             ),
           ],
         ),
-        const SizedBox(height: 10),
-        if (_error != null)
-          Text(
-            _error!,
-            style: const TextStyle(fontSize: 11, color: Colors.redAccent),
-          ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         const Text('Device framerate', style: TextStyle(fontSize: 12)),
         const SizedBox(height: 6),
         SegmentedButton<int>(
@@ -774,10 +793,7 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
         SwitchListTile(
           dense: true,
           contentPadding: EdgeInsets.zero,
-          title: const Text(
-            'Device auto exposure',
-            style: TextStyle(fontSize: 12),
-          ),
+          title: const Text('Auto exposure', style: TextStyle(fontSize: 12)),
           value: properties?.autoExposure ?? false,
           onChanged: controlsEnabled
               ? (value) => _setProperty('auto_exposure', value)
@@ -786,25 +802,52 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
         SwitchListTile(
           dense: true,
           contentPadding: EdgeInsets.zero,
-          title: const Text(
-            'Device illumination',
-            style: TextStyle(fontSize: 12),
-          ),
+          title: const Text('Illumination', style: TextStyle(fontSize: 12)),
           value: properties?.illumination ?? false,
           onChanged: controlsEnabled
               ? (value) => _setProperty('illumination', value)
               : null,
         ),
-        const Divider(height: 18),
-        const _PanelHeader(
-          icon: Icons.crop_free,
-          title: 'PointCloud ROI',
-          subtitle: 'X/Y/Z crop for pointcloud data',
+        const SizedBox(height: 8),
+        _FilterSettingsButton(
+          enabled: controlsEnabled,
+          count: _availableFilterCount(properties),
+          onPressed: controlsEnabled ? _showCubeEyeFiltersDialog : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPointCloudRoiSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: _PanelHeader(
+                icon: Icons.crop_free,
+                title: 'PointCloud ROI',
+                subtitle: 'X/Y/Z crop',
+              ),
+            ),
+            IconButton(
+              tooltip: _pointCloudRoiExpanded ? 'Collapse ROI' : 'Expand ROI',
+              onPressed: () => setState(
+                () => _pointCloudRoiExpanded = !_pointCloudRoiExpanded,
+              ),
+              icon: Icon(
+                _pointCloudRoiExpanded
+                    ? Icons.keyboard_arrow_up
+                    : Icons.keyboard_arrow_down,
+              ),
+            ),
+          ],
         ),
         SwitchListTile(
           dense: true,
           contentPadding: EdgeInsets.zero,
-          title: const Text('Enable ROI', style: TextStyle(fontSize: 12)),
+          title: const Text('Enable', style: TextStyle(fontSize: 12)),
           value: _pointCloudRoi?.enabled ?? false,
           onChanged: !_loading && _pointCloudRoi != null
               ? (value) => _setPointCloudRoi(enabled: value)
@@ -813,86 +856,45 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
         SwitchListTile(
           dense: true,
           contentPadding: EdgeInsets.zero,
-          title: const Text(
-            'Apply ROI to viewer',
-            style: TextStyle(fontSize: 12),
-          ),
+          title: const Text('Viewer ROI', style: TextStyle(fontSize: 12)),
           value: _pointCloudRoi?.applyToViewer ?? true,
           onChanged: !_loading && _pointCloudRoi != null
               ? (value) => _setPointCloudRoi(applyToViewer: value)
               : null,
         ),
-        _roiRangeControl(
-          label: 'X',
-          minController: _pointCloudMinXController,
-          maxController: _pointCloudMaxXController,
-          sliderMin: -2.0,
-          sliderMax: 2.0,
-        ),
-        const SizedBox(height: 8),
-        _roiRangeControl(
-          label: 'Y',
-          minController: _pointCloudMinYController,
-          maxController: _pointCloudMaxYController,
-          sliderMin: -2.0,
-          sliderMax: 2.0,
-        ),
-        const SizedBox(height: 8),
-        _roiRangeControl(
-          label: 'Z',
-          minController: _pointCloudMinZController,
-          maxController: _pointCloudMaxZController,
-          sliderMin: 0.0,
-          sliderMax: 4.0,
-        ),
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: _loading || _pointCloudRoi == null
-              ? null
-              : () => _setPointCloudRoi(),
-          icon: const Icon(Icons.check, size: 16),
-          label: const Text('Apply ROI'),
-        ),
-        const SizedBox(height: 10),
-        const Divider(height: 18),
-        const Text('CubeEye filters', style: TextStyle(fontSize: 12)),
-        const SizedBox(height: 6),
-        ..._boolProperties
-            .where((spec) => properties?.values.containsKey(spec.key) ?? false)
-            .map(
-              (spec) => SwitchListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: Text(spec.label, style: const TextStyle(fontSize: 12)),
-                value: (properties?.values[spec.key] as bool?) ?? false,
-                onChanged: controlsEnabled
-                    ? (value) => _setProperty(spec.key, value)
-                    : null,
-              ),
-            ),
-        ..._numericProperties
-            .where((spec) => properties?.values.containsKey(spec.key) ?? false)
-            .map(
-              (spec) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: TextField(
-                  controller: _controllerFor(spec.key),
-                  enabled: controlsEnabled,
-                  keyboardType: TextInputType.numberWithOptions(
-                    signed: true,
-                    decimal: spec.isFloat,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: spec.label,
-                    isDense: true,
-                  ),
-                  onSubmitted: (value) => spec.isFloat
-                      ? _setDoubleProperty(spec.key, value)
-                      : _setIntProperty(spec.key, value),
-                ),
-              ),
-            ),
-        const Divider(height: 24),
+        if (_pointCloudRoiExpanded) ...[
+          _roiRangeControl(
+            label: 'X',
+            minController: _pointCloudMinXController,
+            maxController: _pointCloudMaxXController,
+            sliderMin: -2.0,
+            sliderMax: 2.0,
+          ),
+          const SizedBox(height: 8),
+          _roiRangeControl(
+            label: 'Y',
+            minController: _pointCloudMinYController,
+            maxController: _pointCloudMaxYController,
+            sliderMin: -2.0,
+            sliderMax: 2.0,
+          ),
+          const SizedBox(height: 8),
+          _roiRangeControl(
+            label: 'Z',
+            minController: _pointCloudMinZController,
+            maxController: _pointCloudMaxZController,
+            sliderMin: 0.0,
+            sliderMax: 4.0,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCalibrationSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         const _PanelHeader(
           icon: Icons.tune,
           title: 'Calibration Offset',
@@ -927,7 +929,14 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
               style: const TextStyle(fontSize: 10, color: Colors.grey),
             ),
           ),
-        const Divider(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildRobotCalibrationSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         const _PanelHeader(
           icon: Icons.precision_manufacturing,
           title: 'Robot Calibration',
@@ -936,33 +945,18 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
         SwitchListTile(
           dense: true,
           contentPadding: EdgeInsets.zero,
-          title: const Text(
-            'Enable robot coordinates',
-            style: TextStyle(fontSize: 12),
-          ),
+          title: const Text('Robot coords', style: TextStyle(fontSize: 12)),
           value: _robotCalibration?.enabled ?? false,
-          onChanged: !_loading
+          onChanged: !_loading && _robotCalibration != null
               ? (value) => _setRobotCalibration(enabled: value)
               : null,
         ),
-        _RobotTransformFields(
-          label: 'R1',
-          controllers: _robotControllers,
-          prefix: 'r1',
-          enabled: !_loading,
-        ),
-        const SizedBox(height: 8),
-        _RobotTransformFields(
-          label: 'R2',
-          controllers: _robotControllers,
-          prefix: 'r2',
-          enabled: !_loading,
-        ),
-        const SizedBox(height: 8),
         OutlinedButton.icon(
-          onPressed: _loading ? null : () => _setRobotCalibration(),
-          icon: const Icon(Icons.check, size: 16),
-          label: const Text('Apply Robot'),
+          onPressed: !_loading && _robotCalibration != null
+              ? _showRobotCalibrationDialog
+              : null,
+          icon: const Icon(Icons.open_in_new, size: 16),
+          label: const Text('Edit Transform'),
         ),
       ],
     );
@@ -1002,6 +996,184 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
       return;
     }
     await _setProperty(key, parsed);
+  }
+
+  int _availableFilterCount(CubeEyeProperties? properties) {
+    if (properties == null) {
+      return 0;
+    }
+    return [
+      ..._boolProperties,
+      ..._numericProperties,
+    ].where((spec) => properties.values.containsKey(spec.key)).length;
+  }
+
+  Future<void> _showCubeEyeFiltersDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final properties = _properties;
+            final controlsEnabled = properties != null && !_loading;
+            return AlertDialog(
+              title: const Text('CubeEye filters'),
+              contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+              content: SizedBox(
+                width: 520,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 640),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ..._boolProperties
+                            .where(
+                              (spec) =>
+                                  properties?.values.containsKey(spec.key) ??
+                                  false,
+                            )
+                            .map(
+                              (spec) => SwitchListTile(
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(
+                                  spec.label,
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                                value:
+                                    (properties?.values[spec.key] as bool?) ??
+                                    false,
+                                onChanged: controlsEnabled
+                                    ? (value) async {
+                                        await _setProperty(spec.key, value);
+                                        setDialogState(() {});
+                                      }
+                                    : null,
+                              ),
+                            ),
+                        const Divider(height: 24),
+                        ..._numericProperties
+                            .where(
+                              (spec) =>
+                                  properties?.values.containsKey(spec.key) ??
+                                  false,
+                            )
+                            .map(
+                              (spec) => Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: TextField(
+                                  controller: _controllerFor(spec.key),
+                                  enabled: controlsEnabled,
+                                  style: const TextStyle(fontSize: 13),
+                                  keyboardType: TextInputType.numberWithOptions(
+                                    signed: true,
+                                    decimal: spec.isFloat,
+                                  ),
+                                  decoration: InputDecoration(
+                                    labelText: spec.label,
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                  onSubmitted: (value) async {
+                                    if (spec.isFloat) {
+                                      await _setDoubleProperty(spec.key, value);
+                                    } else {
+                                      await _setIntProperty(spec.key, value);
+                                    }
+                                    setDialogState(() {});
+                                  },
+                                ),
+                              ),
+                            ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Close'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showRobotCalibrationDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Robot Calibration'),
+              contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+              content: SizedBox(
+                width: 520,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SwitchListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text(
+                        'Robot coords',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      value: _robotCalibration?.enabled ?? false,
+                      onChanged: !_loading && _robotCalibration != null
+                          ? (value) async {
+                              await _setRobotCalibration(enabled: value);
+                              setDialogState(() {});
+                            }
+                          : null,
+                    ),
+                    const SizedBox(height: 8),
+                    _RobotTransformFields(
+                      label: 'R1',
+                      controllers: _robotControllers,
+                      prefix: 'r1',
+                      enabled: !_loading,
+                    ),
+                    const SizedBox(height: 12),
+                    _RobotTransformFields(
+                      label: 'R2',
+                      controllers: _robotControllers,
+                      prefix: 'r2',
+                      enabled: !_loading,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Close'),
+                ),
+                FilledButton.icon(
+                  onPressed: !_loading && _robotCalibration != null
+                      ? () async {
+                          await _setRobotCalibration();
+                          setDialogState(() {});
+                        }
+                      : null,
+                  icon: const Icon(Icons.check, size: 16),
+                  label: const Text('Apply'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _setRgbCubeEyeOffset() async {
@@ -1307,6 +1479,46 @@ class _SmallNumberField extends StatelessWidget {
         labelText: label,
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      ),
+    );
+  }
+}
+
+class _FilterSettingsButton extends StatelessWidget {
+  final bool enabled;
+  final int count;
+  final VoidCallback? onPressed;
+
+  const _FilterSettingsButton({
+    required this.enabled,
+    required this.count,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF101B1D),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFF30474B)),
+      ),
+      child: Row(
+        children: [
+          const Expanded(
+            child: _PanelHeader(
+              icon: Icons.filter_alt_outlined,
+              title: 'CubeEye Filters',
+              subtitle: 'Filter toggles and thresholds',
+            ),
+          ),
+          OutlinedButton.icon(
+            onPressed: onPressed,
+            icon: const Icon(Icons.tune, size: 16),
+            label: Text(enabled ? 'Edit $count' : 'Load'),
+          ),
+        ],
       ),
     );
   }
