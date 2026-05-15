@@ -204,7 +204,7 @@ class StreamSelector extends StatelessWidget {
         .toList();
 
     return Padding(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -354,7 +354,7 @@ class _SplitViewControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFF101B1D),
         borderRadius: BorderRadius.circular(6),
@@ -452,7 +452,7 @@ class _StreamGroupCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFF101B1D),
         borderRadius: BorderRadius.circular(6),
@@ -604,18 +604,10 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
       TextEditingController();
   final TextEditingController _pointCloudMaxZController =
       TextEditingController();
-  final TextEditingController _candidateMinHeightController =
-      TextEditingController();
-  final TextEditingController _candidateMaxHeightController =
-      TextEditingController();
-  final TextEditingController _candidateMinPointsController =
-      TextEditingController();
-  final TextEditingController _candidateGapController = TextEditingController();
   final Map<String, TextEditingController> _robotControllers = {};
   final Map<String, TextEditingController> _propertyControllers = {};
   CubeEyeProperties? _properties;
   RgbCubeEyeOffset? _rgbCubeEyeOffset;
-  PalletCandidateConfig? _candidateConfig;
   PointCloudRoiConfig? _pointCloudRoi;
   RobotCalibration? _robotCalibration;
   double _offsetU = 0.0;
@@ -720,10 +712,6 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
     _pointCloudMaxYController.dispose();
     _pointCloudMinZController.dispose();
     _pointCloudMaxZController.dispose();
-    _candidateMinHeightController.dispose();
-    _candidateMaxHeightController.dispose();
-    _candidateMinPointsController.dispose();
-    _candidateGapController.dispose();
     for (final controller in _robotControllers.values) {
       controller.dispose();
     }
@@ -811,14 +799,14 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
         const _PanelHeader(
           icon: Icons.crop_free,
           title: 'PointCloud ROI',
-          subtitle: 'X/Y/Z crop before candidate detection',
+          subtitle: 'X/Y/Z crop for pointcloud data',
         ),
         SwitchListTile(
           dense: true,
           contentPadding: EdgeInsets.zero,
           title: const Text('Enable ROI', style: TextStyle(fontSize: 12)),
           value: _pointCloudRoi?.enabled ?? false,
-          onChanged: !_loading
+          onChanged: !_loading && _pointCloudRoi != null
               ? (value) => _setPointCloudRoi(enabled: value)
               : null,
         ),
@@ -830,7 +818,7 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
             style: TextStyle(fontSize: 12),
           ),
           value: _pointCloudRoi?.applyToViewer ?? true,
-          onChanged: !_loading
+          onChanged: !_loading && _pointCloudRoi != null
               ? (value) => _setPointCloudRoi(applyToViewer: value)
               : null,
         ),
@@ -859,7 +847,9 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
         ),
         const SizedBox(height: 8),
         OutlinedButton.icon(
-          onPressed: _loading ? null : () => _setPointCloudRoi(),
+          onPressed: _loading || _pointCloudRoi == null
+              ? null
+              : () => _setPointCloudRoi(),
           icon: const Icon(Icons.check, size: 16),
           label: const Text('Apply ROI'),
         ),
@@ -939,71 +929,6 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
           ),
         const Divider(height: 24),
         const _PanelHeader(
-          icon: Icons.grid_on,
-          title: 'Pallet Candidate',
-          subtitle: '1st pass height-map detection',
-        ),
-        SwitchListTile(
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          title: const Text(
-            'Enable candidate detection',
-            style: TextStyle(fontSize: 12),
-          ),
-          value: _candidateConfig?.enabled ?? false,
-          onChanged: !_loading
-              ? (value) => _setPalletCandidateConfig(enabled: value)
-              : null,
-        ),
-        Row(
-          children: [
-            Expanded(
-              child: _SmallNumberField(
-                label: 'Min height m',
-                controller: _candidateMinHeightController,
-                enabled: !_loading,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _SmallNumberField(
-                label: 'Max height m',
-                controller: _candidateMaxHeightController,
-                enabled: !_loading,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _SmallNumberField(
-                label: 'Min points',
-                controller: _candidateMinPointsController,
-                enabled: !_loading,
-                integer: true,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _SmallNumberField(
-                label: 'Gap px',
-                controller: _candidateGapController,
-                enabled: !_loading,
-                integer: true,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: _loading ? null : () => _setPalletCandidateConfig(),
-          icon: const Icon(Icons.check, size: 16),
-          label: const Text('Apply Candidate'),
-        ),
-        const Divider(height: 24),
-        const _PanelHeader(
           icon: Icons.precision_manufacturing,
           title: 'Robot Calibration',
           subtitle: 'Camera to R1/R2 transform',
@@ -1048,9 +973,6 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
     await _run(() async {
       final settings = context.read<SettingsProvider>().settings;
       await _applyOffset(await _api.fetchRgbCubeEyeOffset(settings));
-      await _applyPalletCandidateConfig(
-        await _api.fetchPalletCandidateConfig(settings),
-      );
       await _applyPointCloudRoi(await _api.fetchPointCloudRoi(settings));
       await _applyRobotCalibration(await _api.fetchRobotCalibration(settings));
       await _apply(await _api.fetchProperties(settings));
@@ -1115,18 +1037,24 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
           child: Text(label, style: const TextStyle(fontSize: 12)),
         ),
         SizedBox(
-          width: 68,
+          width: 82,
           child: TextField(
             controller: minController,
             enabled: !_loading,
+            style: const TextStyle(fontSize: 12),
             keyboardType: const TextInputType.numberWithOptions(
               signed: true,
               decimal: true,
             ),
-            decoration: const InputDecoration(labelText: 'Min', isDense: true),
+            decoration: const InputDecoration(
+              labelText: 'Min',
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            ),
             onSubmitted: (_) => _setPointCloudRoi(),
           ),
         ),
+        const SizedBox(width: 8),
         Expanded(
           child: RangeSlider(
             min: sliderMin,
@@ -1148,16 +1076,22 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
             onChangeEnd: _loading ? null : (_) => _setPointCloudRoi(),
           ),
         ),
+        const SizedBox(width: 8),
         SizedBox(
-          width: 68,
+          width: 82,
           child: TextField(
             controller: maxController,
             enabled: !_loading,
+            style: const TextStyle(fontSize: 12),
             keyboardType: const TextInputType.numberWithOptions(
               signed: true,
               decimal: true,
             ),
-            decoration: const InputDecoration(labelText: 'Max', isDense: true),
+            decoration: const InputDecoration(
+              labelText: 'Max',
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            ),
             onSubmitted: (_) => _setPointCloudRoi(),
           ),
         ),
@@ -1165,51 +1099,33 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
     );
   }
 
-  Future<void> _setPalletCandidateConfig({bool? enabled}) async {
-    final current = _candidateConfig;
-    final minHeight = double.tryParse(
-      _candidateMinHeightController.text.trim(),
-    );
-    final maxHeight = double.tryParse(
-      _candidateMaxHeightController.text.trim(),
-    );
-    final minPoints = int.tryParse(_candidateMinPointsController.text.trim());
-    final gap = int.tryParse(_candidateGapController.text.trim());
-    if (current == null ||
-        minHeight == null ||
-        maxHeight == null ||
-        minPoints == null ||
-        gap == null) {
-      setState(() => _error = 'Invalid candidate config');
-      return;
+  double? _roiNumber(TextEditingController controller, double currentValue) {
+    final text = controller.text.trim();
+    if (text.isEmpty) {
+      return currentValue;
     }
-    await _run(() async {
-      final settings = context.read<SettingsProvider>().settings;
-      await _applyPalletCandidateConfig(
-        await _api.setPalletCandidateConfig(
-          settings,
-          PalletCandidateConfig(
-            enabled: enabled ?? current.enabled,
-            minHeightM: minHeight,
-            maxHeightM: maxHeight,
-            minPoints: minPoints,
-            maxImageGapPx: gap,
-          ),
-        ),
-      );
-    });
+    return double.tryParse(text);
+  }
+
+  RangeValues _orderedRange(double first, double second) {
+    return first <= second
+        ? RangeValues(first, second)
+        : RangeValues(second, first);
   }
 
   Future<void> _setPointCloudRoi({bool? enabled, bool? applyToViewer}) async {
     final current = _pointCloudRoi;
-    final minX = double.tryParse(_pointCloudMinXController.text.trim());
-    final maxX = double.tryParse(_pointCloudMaxXController.text.trim());
-    final minY = double.tryParse(_pointCloudMinYController.text.trim());
-    final maxY = double.tryParse(_pointCloudMaxYController.text.trim());
-    final minZ = double.tryParse(_pointCloudMinZController.text.trim());
-    final maxZ = double.tryParse(_pointCloudMaxZController.text.trim());
-    if (current == null ||
-        minX == null ||
+    if (current == null) {
+      setState(() => _error = 'Invalid pointcloud ROI');
+      return;
+    }
+    final minX = _roiNumber(_pointCloudMinXController, current.minXM);
+    final maxX = _roiNumber(_pointCloudMaxXController, current.maxXM);
+    final minY = _roiNumber(_pointCloudMinYController, current.minYM);
+    final maxY = _roiNumber(_pointCloudMaxYController, current.maxYM);
+    final minZ = _roiNumber(_pointCloudMinZController, current.minZM);
+    final maxZ = _roiNumber(_pointCloudMaxZController, current.maxZM);
+    if (minX == null ||
         maxX == null ||
         minY == null ||
         maxY == null ||
@@ -1218,6 +1134,13 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
       setState(() => _error = 'Invalid pointcloud ROI');
       return;
     }
+    if (minX == maxX || minY == maxY || minZ == maxZ) {
+      setState(() => _error = 'PointCloud ROI min/max must differ');
+      return;
+    }
+    final orderedX = _orderedRange(minX, maxX);
+    final orderedY = _orderedRange(minY, maxY);
+    final orderedZ = _orderedRange(minZ, maxZ);
     await _run(() async {
       final settings = context.read<SettingsProvider>().settings;
       await _applyPointCloudRoi(
@@ -1226,12 +1149,12 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
           PointCloudRoiConfig(
             enabled: enabled ?? current.enabled,
             applyToViewer: applyToViewer ?? current.applyToViewer,
-            minXM: minX,
-            maxXM: maxX,
-            minYM: minY,
-            maxYM: maxY,
-            minZM: minZ,
-            maxZM: maxZ,
+            minXM: orderedX.start,
+            maxXM: orderedX.end,
+            minYM: orderedY.start,
+            maxYM: orderedY.end,
+            minZM: orderedZ.start,
+            maxZM: orderedZ.end,
           ),
         ),
       );
@@ -1244,7 +1167,7 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
       setState(() => _error = 'Invalid robot calibration');
       return;
     }
-    final values = <String, double>{};
+    final values = Map<String, double>.from(current.values);
     for (final key in _robotKeys) {
       final parsed = double.tryParse(_robotController(key).text.trim());
       if (parsed == null) {
@@ -1313,16 +1236,6 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
     });
   }
 
-  Future<void> _applyPalletCandidateConfig(PalletCandidateConfig config) async {
-    setState(() {
-      _candidateConfig = config;
-      _candidateMinHeightController.text = config.minHeightM.toString();
-      _candidateMaxHeightController.text = config.maxHeightM.toString();
-      _candidateMinPointsController.text = config.minPoints.toString();
-      _candidateGapController.text = config.maxImageGapPx.toString();
-    });
-  }
-
   Future<void> _applyPointCloudRoi(PointCloudRoiConfig config) async {
     setState(() {
       _pointCloudRoi = config;
@@ -1373,13 +1286,11 @@ class _SmallNumberField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
   final bool enabled;
-  final bool integer;
 
   const _SmallNumberField({
     required this.label,
     required this.controller,
     required this.enabled,
-    this.integer = false,
   });
 
   @override
@@ -1387,11 +1298,16 @@ class _SmallNumberField extends StatelessWidget {
     return TextField(
       controller: controller,
       enabled: enabled,
-      keyboardType: TextInputType.numberWithOptions(
+      style: const TextStyle(fontSize: 12),
+      keyboardType: const TextInputType.numberWithOptions(
         signed: true,
-        decimal: !integer,
+        decimal: true,
       ),
-      decoration: InputDecoration(labelText: label, isDense: true),
+      decoration: InputDecoration(
+        labelText: label,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      ),
     );
   }
 }
@@ -1421,25 +1337,25 @@ class _RobotTransformFields extends StatelessWidget {
       children: [
         Text(label, style: const TextStyle(fontSize: 12)),
         const SizedBox(height: 6),
-        Row(
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
-            Expanded(
+            _TransformFieldBox(
               child: _SmallNumberField(
                 label: 'X m',
                 controller: _controller('tx_m'),
                 enabled: enabled,
               ),
             ),
-            const SizedBox(width: 6),
-            Expanded(
+            _TransformFieldBox(
               child: _SmallNumberField(
                 label: 'Y m',
                 controller: _controller('ty_m'),
                 enabled: enabled,
               ),
             ),
-            const SizedBox(width: 6),
-            Expanded(
+            _TransformFieldBox(
               child: _SmallNumberField(
                 label: 'Z m',
                 controller: _controller('tz_m'),
@@ -1448,26 +1364,26 @@ class _RobotTransformFields extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 6),
-        Row(
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
-            Expanded(
+            _TransformFieldBox(
               child: _SmallNumberField(
                 label: 'Roll',
                 controller: _controller('roll_deg'),
                 enabled: enabled,
               ),
             ),
-            const SizedBox(width: 6),
-            Expanded(
+            _TransformFieldBox(
               child: _SmallNumberField(
                 label: 'Pitch',
                 controller: _controller('pitch_deg'),
                 enabled: enabled,
               ),
             ),
-            const SizedBox(width: 6),
-            Expanded(
+            _TransformFieldBox(
               child: _SmallNumberField(
                 label: 'Yaw',
                 controller: _controller('yaw_deg'),
@@ -1478,6 +1394,17 @@ class _RobotTransformFields extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _TransformFieldBox extends StatelessWidget {
+  final Widget child;
+
+  const _TransformFieldBox({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(width: 110, child: child);
   }
 }
 

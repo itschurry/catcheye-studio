@@ -46,40 +46,6 @@ class RgbCubeEyeOffset {
   }
 }
 
-class PalletCandidateConfig {
-  final bool enabled;
-  final double minHeightM;
-  final double maxHeightM;
-  final int minPoints;
-  final int maxImageGapPx;
-
-  const PalletCandidateConfig({
-    required this.enabled,
-    required this.minHeightM,
-    required this.maxHeightM,
-    required this.minPoints,
-    required this.maxImageGapPx,
-  });
-
-  factory PalletCandidateConfig.fromJson(Map<String, dynamic> json) {
-    return PalletCandidateConfig(
-      enabled: json['enabled'] as bool,
-      minHeightM: (json['min_height_m'] as num).toDouble(),
-      maxHeightM: (json['max_height_m'] as num).toDouble(),
-      minPoints: (json['min_points'] as num).toInt(),
-      maxImageGapPx: (json['max_image_gap_px'] as num).toInt(),
-    );
-  }
-
-  Map<String, Object> toJson() => {
-    'enabled': enabled,
-    'min_height_m': minHeightM,
-    'max_height_m': maxHeightM,
-    'min_points': minPoints,
-    'max_image_gap_px': maxImageGapPx,
-  };
-}
-
 class PointCloudRoiConfig {
   final bool enabled;
   final bool applyToViewer;
@@ -192,28 +158,6 @@ class RemoteCubeEyeApiService {
       body: {'u': offset.u, 'v': offset.v},
     );
     return RgbCubeEyeOffset.fromJson(json);
-  }
-
-  Future<PalletCandidateConfig> fetchPalletCandidateConfig(
-    AppSettings settings,
-  ) async {
-    final json = await _requestJson(
-      'GET',
-      settings.buildApiUri('pallet-candidates/config'),
-    );
-    return PalletCandidateConfig.fromJson(json);
-  }
-
-  Future<PalletCandidateConfig> setPalletCandidateConfig(
-    AppSettings settings,
-    PalletCandidateConfig config,
-  ) async {
-    final json = await _requestJson(
-      'PUT',
-      settings.buildApiUri('pallet-candidates/config'),
-      body: config.toJson(),
-    );
-    return PalletCandidateConfig.fromJson(json);
   }
 
   Future<PointCloudRoiConfig> fetchPointCloudRoi(AppSettings settings) async {

@@ -13,6 +13,8 @@ import '../widgets/stream_selector.dart';
 
 /// Live preview viewer screen — connects to the remote detector RTSP or WebSocket stream.
 
+const double _streamSelectorPanelWidth = 380;
+
 class ViewerScreen extends StatefulWidget {
   const ViewerScreen({super.key});
 
@@ -101,7 +103,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
       children: [
         Expanded(child: viewer),
         Container(
-          width: 260,
+          width: _streamSelectorPanelWidth,
           decoration: const BoxDecoration(
             color: Color(0xFF0B1416),
             border: Border(left: BorderSide(color: Color(0xFF30474B))),

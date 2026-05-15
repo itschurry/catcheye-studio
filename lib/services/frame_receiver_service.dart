@@ -287,7 +287,7 @@ class FrameReceiverService extends ChangeNotifier {
     Map<String, dynamic>? metadata,
   ) {
     final positions = <DetectionPosition>[];
-    final rawCandidates = metadata?['pallet_candidates'];
+    final rawCandidates = metadata?['pick_candidates'];
     if (rawCandidates is List) {
       for (final rawCandidate in rawCandidates) {
         if (rawCandidate is! Map<String, dynamic>) continue;
@@ -308,7 +308,9 @@ class FrameReceiverService extends ChangeNotifier {
         final candidateId = _metadataInt(rawCandidate['id']) ?? 0;
         positions.add(
           DetectionPosition(
-            className: 'candidate_$candidateId',
+            className:
+                (rawCandidate['product_id'] as String?) ??
+                'candidate_$candidateId',
             score: _metadataDouble(rawCandidate['confidence']) ?? 0,
             x: x,
             y: y,
