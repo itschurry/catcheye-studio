@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/app_settings.dart';
 import '../providers/settings_provider.dart';
 import '../services/frame_receiver_service.dart';
 import '../services/remote_cubeeye_api_service.dart';
@@ -144,6 +145,7 @@ class StreamSelector extends StatelessWidget {
   final double depthMin;
   final double depthMax;
   final bool viewportLocked;
+  final RemoteDeviceKind? remoteDeviceKind;
   final ValueChanged<double> onPointSizeChanged;
   final ValueChanged<bool> onShowAxisChanged;
   final ValueChanged<double> onAxisScaleChanged;
@@ -175,6 +177,7 @@ class StreamSelector extends StatelessWidget {
     required this.depthMin,
     required this.depthMax,
     required this.viewportLocked,
+    required this.remoteDeviceKind,
     required this.onPointSizeChanged,
     required this.onShowAxisChanged,
     required this.onAxisScaleChanged,
@@ -197,6 +200,7 @@ class StreamSelector extends StatelessWidget {
       ..sort((a, b) => a.payloadIndex.compareTo(b.payloadIndex));
     final selected = receiver.selectedFrame;
     final pointCloud = selected?.pointCloud;
+    final pickControlsEnabled = remoteDeviceKind == RemoteDeviceKind.pick;
     final hasCubeEyeStream = streams.any(_isCubeEyeStream);
     final rgbCameraStreams = streams.where(_isRgbCameraStream).toList();
     final cubeEyeStreams = streams.where(_isCubeEyeStream).toList();
@@ -264,7 +268,9 @@ class StreamSelector extends StatelessWidget {
                     onSelectStream: receiver.selectStream,
                   ),
                 ],
-                if (selected?.isPointCloud == true && pointCloud != null) ...[
+                if (pickControlsEnabled &&
+                    selected?.isPointCloud == true &&
+                    pointCloud != null) ...[
                   const Divider(height: 24),
                   _PointCloudOptions(
                     pointSize: pointSize,
@@ -293,7 +299,7 @@ class StreamSelector extends StatelessWidget {
                     onResetView: onResetView,
                   ),
                 ],
-                if (hasCubeEyeStream) ...[
+                if (pickControlsEnabled && hasCubeEyeStream) ...[
                   const Divider(height: 24),
                   const _CubeEyeControls(),
                 ],

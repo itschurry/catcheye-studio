@@ -14,6 +14,7 @@ import 'screens/camera_depth_calibration_screen.dart';
 import 'screens/camera_properties_screen.dart';
 import 'screens/roi_editor_screen.dart';
 import 'screens/viewer_screen.dart';
+import 'models/app_settings.dart';
 import 'services/frame_receiver_service.dart';
 
 Future<void> main() async {
@@ -169,13 +170,26 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    final remoteDeviceKind = context
+        .watch<SettingsProvider>()
+        .settings
+        .remoteDeviceKind;
+    final enabledItems = _enabledItems(remoteDeviceKind);
+    final selectedIndex = enabledItems.contains(_selectedIndex)
+        ? _selectedIndex
+        : 0;
+
     return Scaffold(
       body: Row(
         children: [
           _AppSidebar(
-            selectedIndex: _selectedIndex,
+            selectedIndex: selectedIndex,
             items: _items,
+            enabledItems: enabledItems,
             onSelected: (index) {
+              if (!enabledItems.contains(index)) {
+                return;
+              }
               if (index >= 2) {
                 unawaited(context.read<FrameReceiverService>().disconnect());
               }
@@ -183,10 +197,18 @@ class _AppShellState extends State<AppShell> {
             },
           ),
           const VerticalDivider(thickness: 1, width: 1),
-          Expanded(child: _screens[_selectedIndex]),
+          Expanded(child: _screens[selectedIndex]),
         ],
       ),
     );
+  }
+
+  Set<int> _enabledItems(RemoteDeviceKind? kind) {
+    return switch (kind) {
+      RemoteDeviceKind.guard => {0, 1, 2},
+      RemoteDeviceKind.pick => {0, 1, 2, 3, 4},
+      null => {0},
+    };
   }
 }
 
@@ -206,11 +228,13 @@ class _AppSidebar extends StatelessWidget {
   const _AppSidebar({
     required this.selectedIndex,
     required this.items,
+    required this.enabledItems,
     required this.onSelected,
   });
 
   final int selectedIndex;
   final List<_NavItem> items;
+  final Set<int> enabledItems;
   final ValueChanged<int> onSelected;
 
   @override
@@ -229,6 +253,7 @@ class _AppSidebar extends StatelessWidget {
                 _SidebarButton(
                   item: items[i],
                   selected: i == selectedIndex,
+                  enabled: enabledItems.contains(i),
                   onTap: () => onSelected(i),
                 ),
                 const SizedBox(height: 6),
@@ -247,16 +272,20 @@ class _SidebarButton extends StatelessWidget {
   const _SidebarButton({
     required this.item,
     required this.selected,
+    required this.enabled,
     required this.onTap,
   });
 
   final _NavItem item;
   final bool selected;
+  final bool enabled;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final iconColor = selected
+    final iconColor = !enabled
+        ? const Color(0xFF5A5A5A)
+        : selected
         ? const Color(0xFFE5E7EB)
         : const Color(0xFFA3A3A3);
     return Material(
@@ -264,7 +293,7 @@ class _SidebarButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
+        onTap: enabled ? onTap : null,
         child: Container(
           height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -290,7 +319,11 @@ class _SidebarButton extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                    color: selected ? Colors.white : const Color(0xFFA8B9BC),
+                    color: !enabled
+                        ? const Color(0xFF5A5A5A)
+                        : selected
+                        ? Colors.white
+                        : const Color(0xFFA8B9BC),
                   ),
                 ),
               ),

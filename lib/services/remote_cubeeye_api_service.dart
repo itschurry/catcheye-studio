@@ -67,8 +67,12 @@ class RgbIntrinsic {
 
 class RgbCubeEyeExtrinsic {
   final Map<String, double> values;
+  final bool cubeEyeDistortionCorrectionEnabled;
 
-  const RgbCubeEyeExtrinsic({this.values = const {}});
+  const RgbCubeEyeExtrinsic({
+    this.values = const {},
+    this.cubeEyeDistortionCorrectionEnabled = false,
+  });
 
   factory RgbCubeEyeExtrinsic.fromJson(Map<String, dynamic> json) {
     final values = <String, double>{};
@@ -78,14 +82,29 @@ class RgbCubeEyeExtrinsic {
         values[entry.key] = value.toDouble();
       }
     }
-    return RgbCubeEyeExtrinsic(values: Map.unmodifiable(values));
+    return RgbCubeEyeExtrinsic(
+      values: Map.unmodifiable(values),
+      cubeEyeDistortionCorrectionEnabled:
+          json['cubeeye_distortion_correction_enabled'] == true,
+    );
   }
 
-  RgbCubeEyeExtrinsic copyWith({Map<String, double>? values}) {
-    return RgbCubeEyeExtrinsic(values: values ?? this.values);
+  RgbCubeEyeExtrinsic copyWith({
+    Map<String, double>? values,
+    bool? cubeEyeDistortionCorrectionEnabled,
+  }) {
+    return RgbCubeEyeExtrinsic(
+      values: values ?? this.values,
+      cubeEyeDistortionCorrectionEnabled:
+          cubeEyeDistortionCorrectionEnabled ??
+          this.cubeEyeDistortionCorrectionEnabled,
+    );
   }
 
-  Map<String, Object> toJson() => {...values};
+  Map<String, Object> toJson() => {
+    ...values,
+    'cubeeye_distortion_correction_enabled': cubeEyeDistortionCorrectionEnabled,
+  };
 }
 
 class RgbCameraProperties {

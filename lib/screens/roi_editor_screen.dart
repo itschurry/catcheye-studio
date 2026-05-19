@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/app_settings.dart';
 import '../models/roi_config.dart';
 import '../providers/roi_config_provider.dart';
 import '../providers/settings_provider.dart';
@@ -15,12 +16,22 @@ class RoiEditorScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<RoiConfigProvider>(
-      builder: (context, provider, _) {
+    return Consumer2<RoiConfigProvider, SettingsProvider>(
+      builder: (context, provider, settingsProvider, _) {
+        final allowedKinds = _allowedKinds(
+          settingsProvider.settings.remoteDeviceKind,
+        );
+        if (!allowedKinds.contains(provider.selectedKind)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (context.mounted) {
+              provider.selectKind(allowedKinds.first);
+            }
+          });
+        }
         return Column(
           children: [
             // Toolbar
-            _buildToolbar(context, provider),
+            _buildToolbar(context, provider, allowedKinds),
             const Divider(height: 1),
 
             // Main area
@@ -64,7 +75,11 @@ class RoiEditorScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildToolbar(BuildContext context, RoiConfigProvider provider) {
+  Widget _buildToolbar(
+    BuildContext context,
+    RoiConfigProvider provider,
+    List<RoiConfigKind> allowedKinds,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
@@ -80,19 +95,25 @@ class RoiEditorScreen extends StatelessWidget {
           ),
           const SizedBox(width: 16),
           SegmentedButton<RoiConfigKind>(
-            segments: const [
-              ButtonSegment(
-                value: RoiConfigKind.person,
-                label: Text('Person ROI'),
-                icon: Icon(Icons.person_outline),
-              ),
-              ButtonSegment(
-                value: RoiConfigKind.pallet,
-                label: Text('Pallet ROI'),
-                icon: Icon(Icons.inventory_2_outlined),
-              ),
+            segments: [
+              if (allowedKinds.contains(RoiConfigKind.person))
+                const ButtonSegment(
+                  value: RoiConfigKind.person,
+                  label: Text('Person ROI'),
+                  icon: Icon(Icons.person_outline),
+                ),
+              if (allowedKinds.contains(RoiConfigKind.pallet))
+                const ButtonSegment(
+                  value: RoiConfigKind.pallet,
+                  label: Text('Pallet ROI'),
+                  icon: Icon(Icons.inventory_2_outlined),
+                ),
             ],
-            selected: {provider.selectedKind},
+            selected: {
+              allowedKinds.contains(provider.selectedKind)
+                  ? provider.selectedKind
+                  : allowedKinds.first,
+            },
             onSelectionChanged: (selection) {
               provider.selectKind(selection.first);
             },
@@ -144,6 +165,14 @@ class RoiEditorScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  List<RoiConfigKind> _allowedKinds(RemoteDeviceKind? deviceKind) {
+    return switch (deviceKind) {
+      RemoteDeviceKind.guard => const [RoiConfigKind.person],
+      RemoteDeviceKind.pick => const [RoiConfigKind.pallet],
+      null => const [RoiConfigKind.person],
+    };
   }
 
   Widget _buildConfigInfoBar(RoiConfigProvider provider) {

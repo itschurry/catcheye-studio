@@ -1,3 +1,20 @@
+enum RemoteDeviceKind {
+  guard('guard', 'Guard'),
+  pick('pick', 'Pick');
+
+  const RemoteDeviceKind(this.apiValue, this.label);
+
+  final String apiValue;
+  final String label;
+
+  static RemoteDeviceKind fromApiValue(String value) {
+    return RemoteDeviceKind.values.firstWhere(
+      (kind) => kind.apiValue == value,
+      orElse: () => throw FormatException('unsupported device kind: $value'),
+    );
+  }
+}
+
 class AppSettings {
   static const int defaultRtspPort = 8554;
   static const String defaultDetectorBaseUrl = 'http://127.0.0.1:8090';
@@ -16,6 +33,7 @@ class AppSettings {
   String detectorBaseUrl;
   String streamPath;
   String apiBasePath;
+  RemoteDeviceKind? remoteDeviceKind;
   int cubeEyeFramerate;
   bool cubeEyeAutoExposure;
   bool cubeEyeIllumination;
@@ -32,6 +50,7 @@ class AppSettings {
     this.detectorBaseUrl = defaultDetectorBaseUrl,
     this.streamPath = defaultStreamPath,
     this.apiBasePath = defaultApiBasePath,
+    this.remoteDeviceKind,
     this.cubeEyeFramerate = defaultCubeEyeFramerate,
     this.cubeEyeAutoExposure = defaultCubeEyeAutoExposure,
     this.cubeEyeIllumination = defaultCubeEyeIllumination,

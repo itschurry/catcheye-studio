@@ -173,9 +173,26 @@ class _CameraDepthCalibrationScreenState
             ],
           ),
           const SizedBox(height: 20),
-          const _SectionTitle('RGB to CubeEye R/T'),
+          const _SectionTitle('CubeEye to RGB R/T'),
           const SizedBox(height: 8),
           for (final key in _rtKeys) _rtSlider(key),
+          const SizedBox(height: 16),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('CubeEye distortion correction'),
+            subtitle: const Text('SDK distortion coefficient로 depth pixel 보정'),
+            value: _extrinsic?.cubeEyeDistortionCorrectionEnabled ?? false,
+            onChanged: _busy || _extrinsic == null
+                ? null
+                : (value) {
+                    setState(() {
+                      _extrinsic = _extrinsic!.copyWith(
+                        cubeEyeDistortionCorrectionEnabled: value,
+                      );
+                    });
+                    unawaited(_save());
+                  },
+          ),
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: _busy ? null : _save,
@@ -401,7 +418,7 @@ class _DepthCalibrationToolbar extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           const Text(
-            'RGB-CubeEye extrinsic / A3 board',
+            'CubeEye-RGB extrinsic / A3 board',
             style: TextStyle(fontSize: 12, color: Colors.grey),
           ),
           const Spacer(),

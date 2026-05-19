@@ -3,6 +3,7 @@
 CatchEye 장비의 영상 스트림을 확인하고, 원격 설정을 조정하는 Flutter 데스크톱 앱.
 
 Guard 또는 Pick 앱은 별도 장치에서 영상 스트림과 REST API를 제공하고, Studio는 PC에서 붙어서 상태 확인과 설정 변경을 담당해.
+Studio는 연결 시 `GET /api/device-info`를 먼저 호출해서 Guard/Pick을 구분하고, 대상에 맞는 화면만 활성화해.
 
 ## 주요 기능
 
@@ -39,7 +40,8 @@ Guard 또는 Pick 앱은 별도 장치에서 영상 스트림과 REST API를 제
 
 - Camera-Depth Calibration
   - Viewer와 별도 receiver로 RGB/depth/projected depth stream 수신
-  - RGB-CubeEye R/T slider 조정
+  - CubeEye→RGB R/T slider 조정
+  - CubeEye SDK distortion coefficient 기반 depth pixel 보정 토글
   - projected depth overlay를 보면서 extrinsic 보정
 
 ## 화면 구성
@@ -49,8 +51,11 @@ Viewer                    스트림 연결, 다중 스트림 표시, CubeEye/poi
 ROI Editor                Person/Pallet ROI 편집과 원격 동기화
 Camera Properties         Camera Module 3 runtime property 조절
 Camera Calibration        RGB intrinsic 캘리브레이션
-Camera-Depth Calibration  RGB-CubeEye extrinsic 캘리브레이션
+Camera-Depth Calibration  CubeEye-RGB extrinsic 캘리브레이션
 ```
+
+Guard 연결 시에는 `Viewer`, `ROI Editor(Person ROI)`, `Camera Properties`만 활성화해.
+Pick 연결 시에는 `Viewer`, `ROI Editor(Pallet ROI)`, `Camera Properties`, `Camera Calibration`, `Depth Calibration`을 활성화해.
 
 좌측 NavigationRail로 화면을 전환해. `Camera Calibration` 또는 `Camera-Depth Calibration`로 들어가면 Viewer receiver는 끊고, 해당 화면의 receiver가 stream을 새로 수신해.
 
@@ -72,6 +77,7 @@ API Base URL http://192.168.1.3:8090
 ```
 
 RTSP를 쓸 때는 `rtsp://192.168.1.3:8554/live`처럼 전체 URL을 넣으면 돼.
+연결 버튼은 `API Base URL`의 `/api/device-info`가 `{"kind":"guard"}` 또는 `{"kind":"pick"}`을 반환해야 진행돼.
 
 ## REST API
 
@@ -79,6 +85,7 @@ Studio가 사용하는 주요 엔드포인트야. 실제 prefix는 `API Base Pat
 
 | Method | Path | 용도 |
 | --- | --- | --- |
+| GET | `/api/device-info` | 연결 대상 종류 조회 |
 | GET | `/api/roi` | Person ROI 불러오기 |
 | PUT | `/api/roi` | Person ROI 저장 |
 | GET | `/api/pallet-roi` | Pallet ROI 불러오기 |
@@ -93,8 +100,8 @@ Studio가 사용하는 주요 엔드포인트야. 실제 prefix는 `API Base Pat
 | DELETE | `/api/rgb-camera/intrinsic-calibration` | RGB intrinsic 캡처 초기화 |
 | POST | `/api/rgb-camera/intrinsic-calibration/capture` | 최신 RGB 프레임에서 A4 체커보드 캡처 |
 | POST | `/api/rgb-camera/intrinsic-calibration/solve` | 8장 이상 캡처한 RGB intrinsic 계산 후 장치 config 저장 |
-| GET | `/api/rgb-cubeeye/extrinsic` | RGB-CubeEye extrinsic 설정 조회 |
-| PUT | `/api/rgb-cubeeye/extrinsic` | RGB-CubeEye extrinsic 설정 저장 |
+| GET | `/api/rgb-cubeeye/extrinsic` | CubeEye→RGB extrinsic 설정 조회 |
+| PUT | `/api/rgb-cubeeye/extrinsic` | CubeEye→RGB extrinsic과 CubeEye depth distortion 보정 토글 저장 |
 | GET | `/api/pointcloud-roi` | pointcloud ROI 조회 |
 | PUT | `/api/pointcloud-roi` | pointcloud ROI 저장 |
 | GET | `/api/robot-calibration` | robot calibration 조회 |

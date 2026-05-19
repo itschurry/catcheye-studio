@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../models/app_settings.dart';
 import '../providers/settings_provider.dart';
 import '../services/frame_receiver_service.dart';
+import '../services/remote_device_info_service.dart';
 import '../widgets/live_viewer.dart';
 import '../widgets/point_cloud_viewer.dart';
 import '../widgets/stream_selector.dart';
@@ -123,6 +124,10 @@ class _ViewerScreenState extends State<ViewerScreen> {
             depthMin: _effectiveDepthMin(selectedFrame),
             depthMax: _effectiveDepthMax(selectedFrame),
             viewportLocked: _isViewportLocked(selectedFrame),
+            remoteDeviceKind: context
+                .read<SettingsProvider>()
+                .settings
+                .remoteDeviceKind,
             onPointSizeChanged: (value) {
               setState(() => _pointSize = value);
               _persistPointCloudViewerSettings();
@@ -566,7 +571,12 @@ class _ViewerScreenState extends State<ViewerScreen> {
             FilledButton.icon(
               icon: const Icon(Icons.power, size: 16),
               label: const Text('Connect'),
-              onPressed: () => receiver.connect(defaultStreamUrl),
+              onPressed: () => _connect(
+                context: context,
+                receiver: receiver,
+                streamPath: defaultStreamUrl,
+                apiBaseUrl: defaultApiBaseUrl,
+              ),
             ),
             const SizedBox(width: 8),
             OutlinedButton.icon(
@@ -846,19 +856,51 @@ class _ViewerScreenState extends State<ViewerScreen> {
           FilledButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              final sp = context.read<SettingsProvider>();
               final streamUrl = streamController.text.trim();
-              await sp.updateConnectionUrls(
+              await _connect(
+                context: context,
+                receiver: receiver,
                 streamPath: streamUrl,
-                detectorBaseUrl: apiController.text.trim(),
+                apiBaseUrl: apiController.text.trim(),
               );
-              receiver.connect(streamUrl);
             },
             child: const Text('Connect'),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _connect({
+    required BuildContext context,
+    required FrameReceiverService receiver,
+    required String streamPath,
+    required String apiBaseUrl,
+  }) async {
+    final settingsProvider = context.read<SettingsProvider>();
+    try {
+      final remoteDeviceKind = await RemoteDeviceInfoService().fetchKind(
+        AppSettings(
+          detectorBaseUrl: apiBaseUrl,
+          streamPath: streamPath,
+          apiBasePath: settingsProvider.settings.apiBasePath,
+        ),
+      );
+      await settingsProvider.updateConnectionUrls(
+        streamPath: streamPath,
+        detectorBaseUrl: apiBaseUrl,
+        remoteDeviceKind: remoteDeviceKind,
+      );
+      if (context.mounted) {
+        unawaited(receiver.connect(streamPath));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Device info load failed: $e')));
+      }
+    }
   }
 }
 

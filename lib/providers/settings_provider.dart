@@ -7,6 +7,7 @@ class SettingsProvider extends ChangeNotifier {
   static const _detectorBaseUrlKey = 'settings.detectorBaseUrl';
   static const _streamPathKey = 'settings.streamPath';
   static const _apiBasePathKey = 'settings.apiBasePath';
+  static const _remoteDeviceKindKey = 'settings.remoteDeviceKind';
   static const _cubeEyeFramerateKey = 'settings.cubeEye.framerate';
   static const _cubeEyeAutoExposureKey = 'settings.cubeEye.autoExposure';
   static const _cubeEyeIlluminationKey = 'settings.cubeEye.illumination';
@@ -35,6 +36,9 @@ class SettingsProvider extends ChangeNotifier {
             prefs.getString(_streamPathKey) ?? AppSettings.defaultStreamPath,
         apiBasePath:
             prefs.getString(_apiBasePathKey) ?? AppSettings.defaultApiBasePath,
+        remoteDeviceKind: _remoteDeviceKindFromPrefs(
+          prefs.getString(_remoteDeviceKindKey),
+        ),
         cubeEyeFramerate:
             prefs.getInt(_cubeEyeFramerateKey) ??
             AppSettings.defaultCubeEyeFramerate,
@@ -91,9 +95,17 @@ class SettingsProvider extends ChangeNotifier {
   Future<void> updateConnectionUrls({
     required String streamPath,
     required String detectorBaseUrl,
+    required RemoteDeviceKind remoteDeviceKind,
   }) async {
     _settings.streamPath = streamPath;
     _settings.detectorBaseUrl = detectorBaseUrl;
+    _settings.remoteDeviceKind = remoteDeviceKind;
+    await _save();
+    notifyListeners();
+  }
+
+  Future<void> updateRemoteDeviceKind(RemoteDeviceKind value) async {
+    _settings.remoteDeviceKind = value;
     await _save();
     notifyListeners();
   }
@@ -137,6 +149,12 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setString(_detectorBaseUrlKey, _settings.detectorBaseUrl);
     await prefs.setString(_streamPathKey, _settings.streamPath);
     await prefs.setString(_apiBasePathKey, _settings.apiBasePath);
+    final remoteDeviceKind = _settings.remoteDeviceKind;
+    if (remoteDeviceKind == null) {
+      await prefs.remove(_remoteDeviceKindKey);
+    } else {
+      await prefs.setString(_remoteDeviceKindKey, remoteDeviceKind.apiValue);
+    }
     await prefs.setInt(_cubeEyeFramerateKey, _settings.cubeEyeFramerate);
     await prefs.setBool(_cubeEyeAutoExposureKey, _settings.cubeEyeAutoExposure);
     await prefs.setBool(_cubeEyeIlluminationKey, _settings.cubeEyeIllumination);
@@ -174,5 +192,12 @@ class SettingsProvider extends ChangeNotifier {
         _settings.pointCloudDepthMax!,
       );
     }
+  }
+
+  static RemoteDeviceKind? _remoteDeviceKindFromPrefs(String? value) {
+    if (value == null) {
+      return null;
+    }
+    return RemoteDeviceKind.fromApiValue(value);
   }
 }
