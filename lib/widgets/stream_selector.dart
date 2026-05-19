@@ -323,7 +323,8 @@ class StreamSelector extends StatelessWidget {
           value == 'rgb' ||
           value == 'color' ||
           value == 'camera' ||
-          value.contains('rgb_camera'),
+          value.contains('rgb_camera') ||
+          value.contains('projected_depth'),
     );
   }
 
@@ -609,20 +610,13 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
   final Map<String, TextEditingController> _robotControllers = {};
   final Map<String, TextEditingController> _propertyControllers = {};
   CubeEyeProperties? _properties;
-  RgbCubeEyeOffset? _rgbCubeEyeOffset;
   PointCloudRoiConfig? _pointCloudRoi;
   RobotCalibration? _robotCalibration;
-  double _offsetU = 0.0;
-  double _offsetV = 0.4;
   String? _error;
   bool _loading = false;
   bool _loadedOnce = false;
   bool _initializedFromSettings = false;
   bool _pointCloudRoiExpanded = false;
-
-  static const double _offsetMin = -1.0;
-  static const double _offsetMax = 1.0;
-  static const int _offsetDivisions = 2000;
 
   static const _boolProperties = <_CubeEyePropertySpec>[
     _CubeEyePropertySpec('amplitude_time_filter', 'Amplitude time filter'),
@@ -740,8 +734,6 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
             _error!,
             style: const TextStyle(fontSize: 11, color: Colors.redAccent),
           ),
-        const Divider(height: 24),
-        _buildCalibrationSection(),
         const Divider(height: 24),
         _buildRobotCalibrationSection(),
       ],
@@ -893,48 +885,6 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
     );
   }
 
-  Widget _buildCalibrationSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const _PanelHeader(
-          icon: Icons.tune,
-          title: 'Calibration Offset',
-          subtitle: 'RGB to CubeEye alignment',
-        ),
-        const SizedBox(height: 8),
-        _OffsetSlider(
-          label: 'U',
-          value: _offsetU,
-          enabled: !_loading,
-          min: _offsetMin,
-          max: _offsetMax,
-          divisions: _offsetDivisions,
-          onChanged: (value) => setState(() => _offsetU = value),
-          onChangeEnd: (_) => _setRgbCubeEyeOffset(),
-        ),
-        _OffsetSlider(
-          label: 'V',
-          value: _offsetV,
-          enabled: !_loading,
-          min: _offsetMin,
-          max: _offsetMax,
-          divisions: _offsetDivisions,
-          onChanged: (value) => setState(() => _offsetV = value),
-          onChangeEnd: (_) => _setRgbCubeEyeOffset(),
-        ),
-        if (_rgbCubeEyeOffset != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              'Current ${_rgbCubeEyeOffset!.u.toStringAsFixed(3)}, ${_rgbCubeEyeOffset!.v.toStringAsFixed(3)}',
-              style: const TextStyle(fontSize: 10, color: Colors.grey),
-            ),
-          ),
-      ],
-    );
-  }
-
   Widget _buildRobotCalibrationSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -968,7 +918,6 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
     _loadedOnce = true;
     await _run(() async {
       final settings = context.read<SettingsProvider>().settings;
-      await _applyOffset(await _api.fetchRgbCubeEyeOffset(settings));
       await _applyPointCloudRoi(await _api.fetchPointCloudRoi(settings));
       await _applyRobotCalibration(await _api.fetchRobotCalibration(settings));
       await _apply(await _api.fetchProperties(settings));
@@ -1176,18 +1125,6 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
         );
       },
     );
-  }
-
-  Future<void> _setRgbCubeEyeOffset() async {
-    await _run(() async {
-      final settings = context.read<SettingsProvider>().settings;
-      await _applyOffset(
-        await _api.setRgbCubeEyeOffset(
-          settings,
-          RgbCubeEyeOffset(u: _offsetU, v: _offsetV),
-        ),
-      );
-    });
   }
 
   Widget _roiRangeControl({
@@ -1402,14 +1339,6 @@ class _CubeEyeControlsState extends State<_CubeEyeControls> {
     );
   }
 
-  Future<void> _applyOffset(RgbCubeEyeOffset offset) async {
-    setState(() {
-      _rgbCubeEyeOffset = offset;
-      _offsetU = offset.u;
-      _offsetV = offset.v;
-    });
-  }
-
   Future<void> _applyPointCloudRoi(PointCloudRoiConfig config) async {
     setState(() {
       _pointCloudRoi = config;
@@ -1622,59 +1551,6 @@ class _TransformFieldBox extends StatelessWidget {
   }
 }
 
-class _OffsetSlider extends StatelessWidget {
-  final String label;
-  final double value;
-  final bool enabled;
-  final double min;
-  final double max;
-  final int divisions;
-  final ValueChanged<double> onChanged;
-  final ValueChanged<double> onChangeEnd;
-
-  const _OffsetSlider({
-    required this.label,
-    required this.value,
-    required this.enabled,
-    required this.min,
-    required this.max,
-    required this.divisions,
-    required this.onChanged,
-    required this.onChangeEnd,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 18,
-          child: Text(label, style: const TextStyle(fontSize: 12)),
-        ),
-        Expanded(
-          child: Slider(
-            value: value,
-            min: min,
-            max: max,
-            divisions: divisions,
-            label: value.toStringAsFixed(3),
-            onChanged: enabled ? onChanged : null,
-            onChangeEnd: enabled ? onChangeEnd : null,
-          ),
-        ),
-        SizedBox(
-          width: 48,
-          child: Text(
-            value.toStringAsFixed(3),
-            textAlign: TextAlign.right,
-            style: const TextStyle(fontSize: 11, color: Colors.grey),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _CubeEyePropertySpec {
   final String key;
   final String label;
@@ -1860,7 +1736,7 @@ class _PointCloudOptions extends StatelessWidget {
         Slider(
           value: pointSize,
           min: 0.5,
-          max: 6.0,
+          max: 12.0,
           onChanged: onPointSizeChanged,
         ),
         SwitchListTile(

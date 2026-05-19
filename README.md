@@ -8,15 +8,16 @@ Guard 또는 Pick 앱은 별도 장치에서 영상 스트림과 REST API를 제
 
 - Viewer
   - RTSP 스트림 재생
-  - WebSocket JPEG/pointcloud 다중 스트림 표시
+  - WebSocket JPEG/pointcloud/projected depth 다중 스트림 표시
   - 스트림별 독립 갱신 수신
   - RGB Camera / CubeEye ToF / Other Streams 그룹 표시
+  - `projected_depth` 점 배열을 현재 camera stream 위에 고대비 overlay 표시
   - 좌우 분할 화면에서 표시할 스트림 직접 선택
   - pointcloud point size, palette, axis, depth range, view lock 조절
   - pointcloud 회전 슬라이더는 연속 회전값을 유지하고 표시값만 한 바퀴 범위로 표시
   - depth 영상 컬러바 표시
   - CubeEye property 제어
-  - RGB-CubeEye 오프셋 조절
+  - 상단 아이콘 버튼에서 RGB-CubeEye R/T, RGB 왜곡 보정, RGB intrinsic 캘리브레이션, RGB 카메라 파라미터를 각각 팝업으로 조절
   - pointcloud ROI, robot calibration 설정
 
 - ROI Editor
@@ -66,8 +67,14 @@ Studio가 사용하는 주요 엔드포인트야. 실제 prefix는 `API Base Pat
 | PUT | `/api/pallet-roi` | Pallet ROI 저장 |
 | GET | `/api/cubeeye/properties` | CubeEye property 조회 |
 | PUT | `/api/cubeeye/properties/{key}` | CubeEye property 변경 |
-| GET | `/api/rgb-cubeeye-offset` | RGB-CubeEye 오프셋 조회 |
-| PUT | `/api/rgb-cubeeye-offset` | RGB-CubeEye 오프셋 저장 |
+| GET | `/api/rgb-camera/properties` | RGB Camera runtime property 조회 |
+| PUT | `/api/rgb-camera/properties/{key}` | RGB Camera runtime property 변경 |
+| GET | `/api/rgb-camera/intrinsic-calibration` | RGB intrinsic 현재값과 캡처 수 조회 |
+| DELETE | `/api/rgb-camera/intrinsic-calibration` | RGB intrinsic 캡처 초기화 |
+| POST | `/api/rgb-camera/intrinsic-calibration/capture` | 최신 RGB 프레임에서 A4 체커보드 캡처 |
+| POST | `/api/rgb-camera/intrinsic-calibration/solve` | 8장 이상 캡처한 RGB intrinsic 계산 후 장치 config 저장 |
+| GET | `/api/rgb-cubeeye-offset` | RGB-CubeEye projection 설정 조회 |
+| PUT | `/api/rgb-cubeeye-offset` | RGB-CubeEye projection 설정 저장 |
 | GET | `/api/pointcloud-roi` | pointcloud ROI 조회 |
 | PUT | `/api/pointcloud-roi` | pointcloud ROI 저장 |
 | GET | `/api/robot-calibration` | robot calibration 조회 |

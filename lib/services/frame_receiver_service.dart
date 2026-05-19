@@ -12,12 +12,15 @@ enum StreamTransport { rtsp, websocket }
 enum ViewerStreamEncoding {
   jpeg,
   pointcloudXyzF32,
+  projectedDepthXyDepthF32,
   unknown;
 
   static ViewerStreamEncoding parse(String value) {
     return switch (value) {
       'jpeg' => ViewerStreamEncoding.jpeg,
       'pointcloud_xyz_f32' => ViewerStreamEncoding.pointcloudXyzF32,
+      'projected_depth_xy_depth_f32' =>
+        ViewerStreamEncoding.projectedDepthXyDepthF32,
       _ => ViewerStreamEncoding.unknown,
     };
   }
@@ -82,6 +85,69 @@ class PointCloudData {
   double zAt(int index) => xyz[index * 3 + 2];
 }
 
+class ProjectedDepthData {
+  final Float32List xyDepth;
+  final int pointCount;
+  final double minDepth;
+  final double maxDepth;
+
+  const ProjectedDepthData({
+    required this.xyDepth,
+    required this.pointCount,
+    required this.minDepth,
+    required this.maxDepth,
+  });
+
+  factory ProjectedDepthData.parse(Uint8List bytes, int pointCount) {
+    const bytesPerPoint = 12;
+    final expectedBytes = pointCount * bytesPerPoint;
+    if (pointCount <= 0 || bytes.length != expectedBytes) {
+      throw FormatException(
+        'Invalid projected depth payload size: expected $expectedBytes, got ${bytes.length}',
+      );
+    }
+
+    final data = ByteData.sublistView(bytes);
+    final points = Float32List(pointCount * 3);
+    var validPointCount = 0;
+    double? minDepth;
+    double? maxDepth;
+    for (var i = 0; i < pointCount; i++) {
+      final offset = i * bytesPerPoint;
+      final x = data.getFloat32(offset, Endian.little);
+      final y = data.getFloat32(offset + 4, Endian.little);
+      final depth = data.getFloat32(offset + 8, Endian.little);
+      if (!x.isFinite || !y.isFinite || !depth.isFinite || depth <= 0) {
+        continue;
+      }
+      final writeOffset = validPointCount * 3;
+      points[writeOffset] = x;
+      points[writeOffset + 1] = y;
+      points[writeOffset + 2] = depth;
+      validPointCount++;
+      minDepth = minDepth == null
+          ? depth
+          : (depth < minDepth ? depth : minDepth);
+      maxDepth = maxDepth == null
+          ? depth
+          : (depth > maxDepth ? depth : maxDepth);
+    }
+
+    return ProjectedDepthData(
+      xyDepth: points,
+      pointCount: validPointCount,
+      minDepth: minDepth ?? 0,
+      maxDepth: maxDepth ?? 1,
+    );
+  }
+
+  double xAt(int index) => xyDepth[index * 3];
+
+  double yAt(int index) => xyDepth[index * 3 + 1];
+
+  double depthAt(int index) => xyDepth[index * 3 + 2];
+}
+
 class ViewerStreamFrame {
   final String name;
   final String kind;
@@ -94,6 +160,7 @@ class ViewerStreamFrame {
   final double? sourceTimestampMs;
   final Uint8List payloadBytes;
   final PointCloudData? pointCloud;
+  final ProjectedDepthData? projectedDepth;
 
   const ViewerStreamFrame({
     required this.name,
@@ -107,6 +174,7 @@ class ViewerStreamFrame {
     this.height,
     this.sourceTimestampMs,
     this.pointCloud,
+    this.projectedDepth,
   });
 
   factory ViewerStreamFrame.fromPayload({
@@ -135,6 +203,9 @@ class ViewerStreamFrame {
       pointCloud: encoding == ViewerStreamEncoding.pointcloudXyzF32
           ? PointCloudData.parse(payloadBytes, pointCount)
           : null,
+      projectedDepth: encoding == ViewerStreamEncoding.projectedDepthXyDepthF32
+          ? ProjectedDepthData.parse(payloadBytes, pointCount)
+          : null,
     );
   }
 
@@ -145,6 +216,9 @@ class ViewerStreamFrame {
   bool get isJpeg => encoding == ViewerStreamEncoding.jpeg;
 
   bool get isPointCloud => encoding == ViewerStreamEncoding.pointcloudXyzF32;
+
+  bool get isProjectedDepth =>
+      encoding == ViewerStreamEncoding.projectedDepthXyDepthF32;
 
   String get label {
     if (kind.isNotEmpty) return kind;

@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 import '../models/app_settings.dart';
 import '../providers/settings_provider.dart';
 import '../services/frame_receiver_service.dart';
+import '../widgets/calibration_settings_dialog.dart';
+import '../widgets/rgb_camera_properties_dialog.dart';
 import '../widgets/live_viewer.dart';
 import '../widgets/point_cloud_viewer.dart';
 import '../widgets/stream_selector.dart';
@@ -293,6 +295,13 @@ class _ViewerScreenState extends State<ViewerScreen> {
     if (receiver.connected &&
         !receiver.isRtsp &&
         selectedFrame != null &&
+        selectedFrame.isProjectedDepth) {
+      return _buildStreamContent(receiver, selectedFrame);
+    }
+
+    if (receiver.connected &&
+        !receiver.isRtsp &&
+        selectedFrame != null &&
         !selectedFrame.isJpeg) {
       return Container(
         color: Colors.black,
@@ -387,6 +396,43 @@ class _ViewerScreenState extends State<ViewerScreen> {
         color: Colors.black,
         alignment: Alignment.center,
         child: imageStack,
+      );
+    }
+    if (stream.isProjectedDepth && stream.projectedDepth != null) {
+      final camera = receiver.streams['camera'];
+      if (camera == null || !camera.isJpeg) {
+        return Container(
+          color: Colors.black,
+          alignment: Alignment.center,
+          child: const Text(
+            'Waiting for camera stream',
+            style: TextStyle(color: Colors.grey),
+          ),
+        );
+      }
+      final imageSize = camera.size ?? stream.size;
+      return Container(
+        color: Colors.black,
+        alignment: Alignment.center,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.memory(
+              camera.jpegBytes,
+              fit: BoxFit.contain,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.low,
+            ),
+            ColoredBox(color: Colors.black.withValues(alpha: 0.22)),
+            CustomPaint(
+              painter: _ProjectedDepthPainter(
+                data: stream.projectedDepth!,
+                imageSize: imageSize,
+                pointSize: _pointSize,
+              ),
+            ),
+          ],
+        ),
       );
     }
     return Container(
@@ -570,7 +616,6 @@ class _ViewerScreenState extends State<ViewerScreen> {
               onPressed: () => receiver.disconnect(),
             ),
           ],
-
           // Error message
           if (receiver.errorMessage != null)
             Flexible(
@@ -609,6 +654,35 @@ class _ViewerScreenState extends State<ViewerScreen> {
             ),
             const SizedBox(width: 8),
           ],
+          Tooltip(
+            message: 'RGB to CubeEye R/T',
+            child: IconButton(
+              icon: const Icon(Icons.threed_rotation),
+              onPressed: () => showRgbCubeEyeRtDialog(context),
+            ),
+          ),
+          Tooltip(
+            message: 'RGB undistortion',
+            child: IconButton(
+              icon: const Icon(Icons.photo_camera_back_outlined),
+              onPressed: () => showRgbUndistortionDialog(context),
+            ),
+          ),
+          Tooltip(
+            message: 'RGB intrinsic calibration',
+            child: IconButton(
+              icon: const Icon(Icons.grid_on),
+              onPressed: () => showRgbIntrinsicCalibrationDialog(context),
+            ),
+          ),
+          Tooltip(
+            message: 'RGB camera parameters',
+            child: IconButton(
+              icon: const Icon(Icons.settings_input_component_outlined),
+              onPressed: () => showRgbCameraPropertiesDialog(context),
+            ),
+          ),
+          const SizedBox(width: 8),
           Container(
             height: 38,
             width: 226,
@@ -823,6 +897,64 @@ class _ViewerScreenState extends State<ViewerScreen> {
         ],
       ),
     );
+  }
+}
+
+class _ProjectedDepthPainter extends CustomPainter {
+  final ProjectedDepthData data;
+  final Size? imageSize;
+  final double pointSize;
+
+  const _ProjectedDepthPainter({
+    required this.data,
+    required this.imageSize,
+    required this.pointSize,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final sourceSize = imageSize;
+    if (sourceSize == null ||
+        sourceSize.width <= 0 ||
+        sourceSize.height <= 0 ||
+        data.pointCount <= 0) {
+      return;
+    }
+
+    final scale = math.min(
+      size.width / sourceSize.width,
+      size.height / sourceSize.height,
+    );
+    final drawSize = Size(sourceSize.width * scale, sourceSize.height * scale);
+    final offset = Offset(
+      (size.width - drawSize.width) / 2,
+      (size.height - drawSize.height) / 2,
+    );
+    final radius = math.max(1.4, pointSize * 0.9);
+    final haloPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = Colors.black.withValues(alpha: 0.88);
+    final paint = Paint()..style = PaintingStyle.fill;
+    final range = math.max(0.001, data.maxDepth - data.minDepth);
+
+    for (var i = 0; i < data.pointCount; i++) {
+      final x = data.xAt(i);
+      final y = data.yAt(i);
+      final depth = data.depthAt(i);
+      final normalized = ((depth - data.minDepth) / range).clamp(0.0, 1.0);
+      final hue = 300.0 - (250.0 * normalized);
+      paint.color = HSLColor.fromAHSL(1.0, hue, 1.0, 0.55).toColor();
+      final point = Offset(offset.dx + (x * scale), offset.dy + (y * scale));
+      canvas.drawCircle(point, radius + 0.9, haloPaint);
+      canvas.drawCircle(point, radius, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ProjectedDepthPainter oldDelegate) {
+    return oldDelegate.data != data ||
+        oldDelegate.imageSize != imageSize ||
+        oldDelegate.pointSize != pointSize;
   }
 }
 

@@ -33,18 +33,94 @@ class CubeEyeProperties {
 }
 
 class RgbCubeEyeOffset {
-  final double u;
-  final double v;
+  final bool rgbUndistortEnabled;
+  final Map<String, double> values;
 
-  const RgbCubeEyeOffset({required this.u, required this.v});
+  const RgbCubeEyeOffset({
+    required this.rgbUndistortEnabled,
+    this.values = const {},
+  });
 
   factory RgbCubeEyeOffset.fromJson(Map<String, dynamic> json) {
+    final values = <String, double>{};
+    for (final entry in json.entries) {
+      if (entry.key == 'u' || entry.key == 'v') continue;
+      final value = entry.value;
+      if (value is num) {
+        values[entry.key] = value.toDouble();
+      }
+    }
     return RgbCubeEyeOffset(
-      u: (json['u'] as num).toDouble(),
-      v: (json['v'] as num).toDouble(),
+      rgbUndistortEnabled: json['rgb_undistort_enabled'] == true,
+      values: Map.unmodifiable(values),
+    );
+  }
+
+  RgbCubeEyeOffset copyWith({
+    bool? rgbUndistortEnabled,
+    Map<String, double>? values,
+  }) {
+    return RgbCubeEyeOffset(
+      rgbUndistortEnabled: rgbUndistortEnabled ?? this.rgbUndistortEnabled,
+      values: values ?? this.values,
+    );
+  }
+
+  Map<String, Object> toJson() => {
+    'rgb_undistort_enabled': rgbUndistortEnabled,
+    ...values,
+  };
+}
+
+class RgbCameraProperties {
+  final Map<String, Object> values;
+
+  const RgbCameraProperties({required this.values});
+
+  factory RgbCameraProperties.fromJson(Map<String, dynamic> json) {
+    final values = <String, Object>{};
+    for (final entry in json.entries) {
+      final value = entry.value;
+      if (value is bool || value is num || value is String) {
+        values[entry.key] = value as Object;
+      }
+    }
+    return RgbCameraProperties(values: Map.unmodifiable(values));
+  }
+}
+
+class RgbIntrinsicCalibration {
+  final int captureCount;
+  final double? rmsError;
+  final Map<String, double> values;
+
+  const RgbIntrinsicCalibration({
+    required this.captureCount,
+    required this.values,
+    this.rmsError,
+  });
+
+  factory RgbIntrinsicCalibration.fromJson(Map<String, dynamic> json) {
+    final values = <String, double>{};
+    for (final entry in json.entries) {
+      final value = entry.value;
+      if (value is num) {
+        values[entry.key] = value.toDouble();
+      }
+    }
+    return RgbIntrinsicCalibration(
+      captureCount: (json['capture_count'] as num).toInt(),
+      rmsError: (json['rms_error'] as num?)?.toDouble(),
+      values: Map.unmodifiable(values),
     );
   }
 }
+
+const rgbIntrinsicA4Board = <String, Object>{
+  'pattern_width': 9,
+  'pattern_height': 6,
+  'square_size_m': 0.020,
+};
 
 class PointCloudRoiConfig {
   final bool enabled;
@@ -155,9 +231,74 @@ class RemoteCubeEyeApiService {
     final json = await _requestJson(
       'PUT',
       settings.buildApiUri('rgb-cubeeye-offset'),
-      body: {'u': offset.u, 'v': offset.v},
+      body: offset.toJson(),
     );
     return RgbCubeEyeOffset.fromJson(json);
+  }
+
+  Future<RgbCameraProperties> fetchRgbCameraProperties(
+    AppSettings settings,
+  ) async {
+    final json = await _requestJson(
+      'GET',
+      settings.buildApiUri('rgb-camera/properties'),
+    );
+    return RgbCameraProperties.fromJson(json);
+  }
+
+  Future<RgbCameraProperties> setRgbCameraProperty(
+    AppSettings settings,
+    String key,
+    Object value,
+  ) async {
+    final json = await _requestJson(
+      'PUT',
+      settings.buildApiUri('rgb-camera/properties/$key'),
+      body: {'value': value},
+    );
+    return RgbCameraProperties.fromJson(json);
+  }
+
+  Future<RgbIntrinsicCalibration> fetchRgbIntrinsicCalibration(
+    AppSettings settings,
+  ) async {
+    final json = await _requestJson(
+      'GET',
+      settings.buildApiUri('rgb-camera/intrinsic-calibration'),
+    );
+    return RgbIntrinsicCalibration.fromJson(json);
+  }
+
+  Future<RgbIntrinsicCalibration> resetRgbIntrinsicCalibration(
+    AppSettings settings,
+  ) async {
+    final json = await _requestJson(
+      'DELETE',
+      settings.buildApiUri('rgb-camera/intrinsic-calibration'),
+    );
+    return RgbIntrinsicCalibration.fromJson(json);
+  }
+
+  Future<RgbIntrinsicCalibration> captureRgbIntrinsicCalibration(
+    AppSettings settings,
+  ) async {
+    final json = await _requestJson(
+      'POST',
+      settings.buildApiUri('rgb-camera/intrinsic-calibration/capture'),
+      body: rgbIntrinsicA4Board,
+    );
+    return RgbIntrinsicCalibration.fromJson(json);
+  }
+
+  Future<RgbIntrinsicCalibration> solveRgbIntrinsicCalibration(
+    AppSettings settings,
+  ) async {
+    final json = await _requestJson(
+      'POST',
+      settings.buildApiUri('rgb-camera/intrinsic-calibration/solve'),
+      body: rgbIntrinsicA4Board,
+    );
+    return RgbIntrinsicCalibration.fromJson(json);
   }
 
   Future<PointCloudRoiConfig> fetchPointCloudRoi(AppSettings settings) async {
