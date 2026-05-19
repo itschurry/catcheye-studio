@@ -7,8 +7,6 @@ import 'package:provider/provider.dart';
 import '../models/app_settings.dart';
 import '../providers/settings_provider.dart';
 import '../services/frame_receiver_service.dart';
-import '../widgets/calibration_settings_dialog.dart';
-import '../widgets/rgb_camera_properties_dialog.dart';
 import '../widgets/live_viewer.dart';
 import '../widgets/point_cloud_viewer.dart';
 import '../widgets/stream_selector.dart';
@@ -654,35 +652,6 @@ class _ViewerScreenState extends State<ViewerScreen> {
             ),
             const SizedBox(width: 8),
           ],
-          Tooltip(
-            message: 'RGB to CubeEye R/T',
-            child: IconButton(
-              icon: const Icon(Icons.threed_rotation),
-              onPressed: () => showRgbCubeEyeRtDialog(context),
-            ),
-          ),
-          Tooltip(
-            message: 'RGB undistortion',
-            child: IconButton(
-              icon: const Icon(Icons.photo_camera_back_outlined),
-              onPressed: () => showRgbUndistortionDialog(context),
-            ),
-          ),
-          Tooltip(
-            message: 'RGB intrinsic calibration',
-            child: IconButton(
-              icon: const Icon(Icons.grid_on),
-              onPressed: () => showRgbIntrinsicCalibrationDialog(context),
-            ),
-          ),
-          Tooltip(
-            message: 'RGB camera parameters',
-            child: IconButton(
-              icon: const Icon(Icons.settings_input_component_outlined),
-              onPressed: () => showRgbCameraPropertiesDialog(context),
-            ),
-          ),
-          const SizedBox(width: 8),
           Container(
             height: 38,
             width: 226,

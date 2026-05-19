@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -8,6 +9,8 @@ import 'package:window_manager/window_manager.dart';
 
 import 'providers/roi_config_provider.dart';
 import 'providers/settings_provider.dart';
+import 'screens/camera_calibration_screen.dart';
+import 'screens/camera_depth_calibration_screen.dart';
 import 'screens/roi_editor_screen.dart';
 import 'screens/viewer_screen.dart';
 import 'services/frame_receiver_service.dart';
@@ -139,9 +142,24 @@ class _AppShellState extends State<AppShell> {
       selectedIcon: Icon(Icons.edit_location_alt),
       label: Text('ROI Editor'),
     ),
+    NavigationRailDestination(
+      icon: Icon(Icons.grid_on_outlined),
+      selectedIcon: Icon(Icons.grid_on),
+      label: Text('Camera Calibration'),
+    ),
+    NavigationRailDestination(
+      icon: Icon(Icons.threed_rotation_outlined),
+      selectedIcon: Icon(Icons.threed_rotation),
+      label: Text('Camera-Depth Calibration'),
+    ),
   ];
 
-  static const _screens = [ViewerScreen(), RoiEditorScreen()];
+  static const _screens = [
+    ViewerScreen(),
+    RoiEditorScreen(),
+    CameraCalibrationScreen(),
+    CameraDepthCalibrationScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -151,6 +169,9 @@ class _AppShellState extends State<AppShell> {
           NavigationRail(
             selectedIndex: _selectedIndex,
             onDestinationSelected: (index) {
+              if (index >= 2) {
+                unawaited(context.read<FrameReceiverService>().disconnect());
+              }
               setState(() => _selectedIndex = index);
             },
             labelType: NavigationRailLabelType.all,

@@ -17,7 +17,6 @@ Guard 또는 Pick 앱은 별도 장치에서 영상 스트림과 REST API를 제
   - pointcloud 회전 슬라이더는 연속 회전값을 유지하고 표시값만 한 바퀴 범위로 표시
   - depth 영상 컬러바 표시
   - CubeEye property 제어
-  - 상단 아이콘 버튼에서 RGB-CubeEye R/T, RGB 왜곡 보정, RGB intrinsic 캘리브레이션, RGB 카메라 파라미터를 각각 팝업으로 조절
   - pointcloud ROI, robot calibration 설정
 
 - ROI Editor
@@ -27,14 +26,26 @@ Guard 또는 Pick 앱은 별도 장치에서 영상 스트림과 REST API를 제
   - 포인트 드래그 편집 및 추가
   - 원격 장치에 ROI 전송
 
+- Camera Calibration
+  - Viewer와 별도 receiver로 RGB stream 수신
+  - A4 checkerboard 기반 RGB intrinsic capture / solve / save
+  - `rgb_fx/fy/cx/cy`, `rgb_dist_*` 결과 확인
+
+- Camera-Depth Calibration
+  - Viewer와 별도 receiver로 RGB/depth/projected depth stream 수신
+  - RGB-CubeEye R/T slider 조정
+  - projected depth overlay를 보면서 extrinsic 보정
+
 ## 화면 구성
 
 ```text
-Viewer      스트림 연결, 다중 스트림 표시, CubeEye/pointcloud 설정
-ROI Editor  Person/Pallet ROI 편집과 원격 동기화
+Viewer                    스트림 연결, 다중 스트림 표시, CubeEye/pointcloud 설정
+ROI Editor                Person/Pallet ROI 편집과 원격 동기화
+Camera Calibration        RGB intrinsic 캘리브레이션
+Camera-Depth Calibration  RGB-CubeEye extrinsic 캘리브레이션
 ```
 
-좌측 NavigationRail로 화면을 전환해.
+좌측 NavigationRail로 화면을 전환해. `Camera Calibration` 또는 `Camera-Depth Calibration`로 들어가면 Viewer receiver는 끊고, 해당 화면의 receiver가 stream을 새로 수신해.
 
 ## 연결 설정
 
