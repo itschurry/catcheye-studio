@@ -11,6 +11,7 @@ import 'providers/roi_config_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/camera_calibration_screen.dart';
 import 'screens/camera_depth_calibration_screen.dart';
+import 'screens/camera_properties_screen.dart';
 import 'screens/roi_editor_screen.dart';
 import 'screens/viewer_screen.dart';
 import 'services/frame_receiver_service.dart';
@@ -142,6 +143,11 @@ class _AppShellState extends State<AppShell> {
       selectedIcon: Icons.edit_location_alt,
     ),
     _NavItem(
+      label: 'Camera Properties',
+      icon: Icons.settings_input_component_outlined,
+      selectedIcon: Icons.settings_input_component,
+    ),
+    _NavItem(
       label: 'Camera Calibration',
       icon: Icons.grid_on_outlined,
       selectedIcon: Icons.grid_on,
@@ -156,6 +162,7 @@ class _AppShellState extends State<AppShell> {
   static const _screens = [
     ViewerScreen(),
     RoiEditorScreen(),
+    CameraPropertiesScreen(),
     CameraCalibrationScreen(),
     CameraDepthCalibrationScreen(),
   ];

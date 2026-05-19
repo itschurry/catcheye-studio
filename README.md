@@ -26,6 +26,11 @@ Guard 또는 Pick 앱은 별도 장치에서 영상 스트림과 REST API를 제
   - 포인트 드래그 편집 및 추가
   - 원격 장치에 ROI 전송
 
+- Camera Properties
+  - Viewer와 별도 receiver로 RGB stream 수신
+  - Camera Module 3 runtime property 조회/변경
+  - 노출, 게인, 화이트밸런스, 초점, 기본 화질 파라미터 조절
+
 - Camera Calibration
   - Viewer와 별도 receiver로 RGB stream 수신
   - A4 checkerboard 기반 RGB intrinsic capture / solve / save
@@ -41,6 +46,7 @@ Guard 또는 Pick 앱은 별도 장치에서 영상 스트림과 REST API를 제
 ```text
 Viewer                    스트림 연결, 다중 스트림 표시, CubeEye/pointcloud 설정
 ROI Editor                Person/Pallet ROI 편집과 원격 동기화
+Camera Properties         Camera Module 3 runtime property 조절
 Camera Calibration        RGB intrinsic 캘리브레이션
 Camera-Depth Calibration  RGB-CubeEye extrinsic 캘리브레이션
 ```
