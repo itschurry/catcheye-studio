@@ -13,7 +13,8 @@ Guard 또는 Pick 앱은 별도 장치에서 영상 스트림과 REST API를 제
   - RGB Camera / CubeEye ToF / Other Streams 그룹 표시
   - 좌우 분할 화면에서 표시할 스트림 직접 선택
   - pointcloud point size, palette, axis, depth range, view lock 조절
-  - depth 영상 컬러바와 축 표시
+  - pointcloud 회전 슬라이더는 연속 회전값을 유지하고 표시값만 한 바퀴 범위로 표시
+  - depth 영상 컬러바 표시
   - CubeEye property 제어
   - RGB-CubeEye 오프셋 조절
   - pointcloud ROI, robot calibration 설정

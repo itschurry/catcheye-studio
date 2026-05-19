@@ -386,33 +386,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
       return Container(
         color: Colors.black,
         alignment: Alignment.center,
-        child: isDepthStream && _showAxis
-            ? LayoutBuilder(
-                builder: (context, constraints) {
-                  final axisWidth = constraints.maxWidth >= 360 ? 84.0 : 58.0;
-                  return Row(
-                    children: [
-                      SizedBox(
-                        width: axisWidth,
-                        child: CustomPaint(
-                          painter: _DepthLegendPainter(
-                            imageSize: null,
-                            minDepth: settings.cubeEyeDepthRangeMin.toDouble(),
-                            maxDepth: settings.cubeEyeDepthRangeMax.toDouble(),
-                            showColorbar: false,
-                            showAxis: true,
-                            axisScale: _axisScale,
-                            yaw: _viewYaw,
-                            pitch: _viewPitch,
-                          ),
-                        ),
-                      ),
-                      Expanded(child: imageStack),
-                    ],
-                  );
-                },
-              )
-            : imageStack,
+        child: imageStack,
       );
     }
     return Container(

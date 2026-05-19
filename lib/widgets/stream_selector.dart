@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -1734,6 +1736,22 @@ class _PointCloudOptions extends StatelessWidget {
     required this.onResetView,
   });
 
+  static const double _angleMin = -math.pi;
+  static const double _angleMax = math.pi;
+
+  double _wrapAngle(double value) {
+    final wrapped = (value + math.pi) % (math.pi * 2);
+    return wrapped < 0 ? wrapped + math.pi : wrapped - math.pi;
+  }
+
+  double _unwrapSliderAngle(double current, double nextWrapped) {
+    final currentWrapped = _wrapAngle(current);
+    var delta = nextWrapped - currentWrapped;
+    if (delta > math.pi) delta -= math.pi * 2;
+    if (delta < -math.pi) delta += math.pi * 2;
+    return current + delta;
+  }
+
   @override
   Widget build(BuildContext context) {
     final rangeStart = dataMinDepth == dataMaxDepth
@@ -1744,6 +1762,8 @@ class _PointCloudOptions extends StatelessWidget {
         : dataMaxDepth;
     final safeDepthMin = depthMin.clamp(rangeStart, rangeEnd).toDouble();
     final safeDepthMax = depthMax.clamp(rangeStart, rangeEnd).toDouble();
+    final yawSliderValue = _wrapAngle(yaw);
+    final pitchSliderValue = _wrapAngle(pitch);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1818,20 +1838,21 @@ class _PointCloudOptions extends StatelessWidget {
               'Yaw ${(yaw * 180 / 3.141592653589793).toStringAsFixed(0)} deg',
         ),
         Slider(
-          value: yaw,
-          min: -3.141592653589793,
-          max: 3.141592653589793,
-          onChanged: onYawChanged,
+          value: yawSliderValue,
+          min: _angleMin,
+          max: _angleMax,
+          onChanged: (value) => onYawChanged(_unwrapSliderAngle(yaw, value)),
         ),
         _OptionLabel(
           value:
               'Pitch ${(pitch * 180 / 3.141592653589793).toStringAsFixed(0)} deg',
         ),
         Slider(
-          value: pitch,
-          min: -3.141592653589793,
-          max: 3.141592653589793,
-          onChanged: onPitchChanged,
+          value: pitchSliderValue,
+          min: _angleMin,
+          max: _angleMax,
+          onChanged: (value) =>
+              onPitchChanged(_unwrapSliderAngle(pitch, value)),
         ),
         _OptionLabel(value: 'Zoom ${zoom.toStringAsFixed(1)}x'),
         Slider(value: zoom, min: 0.2, max: 8.0, onChanged: onZoomChanged),
