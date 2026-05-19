@@ -685,123 +685,126 @@ class _ViewerScreenState extends State<ViewerScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: Row(
-        children: [
-          _StatusChip(
-            label: 'Status',
-            value: receiver.connected
-                ? 'Connected'
-                : receiver.connecting
-                ? 'Connecting'
-                : 'Disconnected',
-            valueWidth: 82,
-            color: receiver.connected ? Colors.green : Colors.grey,
-          ),
-          const SizedBox(width: 16),
-          _StatusChip(
-            label: 'FPS',
-            value: !connected
-                ? '-'
-                : receiver.isWebSocket
-                ? receiver.fps.toStringAsFixed(1)
-                : 'N/A (RTSP)',
-            valueWidth: 34,
-            color: !connected
-                ? Colors.grey
-                : receiver.isWebSocket
-                ? receiver.fps > 20
-                      ? Colors.green
-                      : receiver.fps > 10
-                      ? Colors.orange
-                      : Colors.red
-                : Colors.grey,
-          ),
-          const SizedBox(width: 16),
-          _StatusChip(
-            label: 'Frames',
-            value: !connected
-                ? '-'
-                : receiver.isWebSocket
-                ? '${receiver.frameCount}'
-                : 'N/A (RTSP)',
-            valueWidth: 72,
-            color: connected && receiver.isWebSocket
-                ? Colors.cyan
-                : Colors.grey,
-          ),
-          const SizedBox(width: 16),
-          _StatusChip(
-            label: 'Inference',
-            value: !connected
-                ? '-'
-                : receiver.isWebSocket
-                ? inferenceMs == null
-                      ? 'N/A'
-                      : '${inferenceMs.toStringAsFixed(1)} ms'
-                : 'N/A (RTSP)',
-            valueWidth: 54,
-            color: !connected || inferenceMs == null
-                ? Colors.grey
-                : inferenceMs <= 33.0
-                ? Colors.green
-                : inferenceMs <= 100.0
-                ? Colors.orange
-                : Colors.red,
-          ),
-          const SizedBox(width: 16),
-          _StatusChip(
-            label: 'Wall',
-            value: !connected
-                ? '-'
-                : receiver.isWebSocket
-                ? wallClockText ?? 'N/A'
-                : 'N/A (RTSP)',
-            valueWidth: 132,
-            color: !connected || wallClockText == null
-                ? Colors.grey
-                : Colors.lightBlueAccent,
-          ),
-          const SizedBox(width: 16),
-          _StatusChip(
-            label: 'Transport',
-            value: receiver.isWebSocket
-                ? 'WebSocket'
-                : receiver.isRtsp
-                ? 'RTSP'
-                : 'Idle',
-            valueWidth: 72,
-            color: receiver.connected ? Colors.blueAccent : Colors.grey,
-          ),
-          const SizedBox(width: 16),
-          _StatusChip(
-            label: 'Stream',
-            value: !connected ? '-' : selectedFrame?.label ?? 'N/A',
-            valueWidth: 74,
-            color: connected && selectedFrame != null
-                ? Colors.lightBlueAccent
-                : Colors.grey,
-          ),
-          const SizedBox(width: 16),
-          _StatusChip(
-            label: 'Resolution',
-            value: !connected ? '-' : resolutionText,
-            valueWidth: 82,
-            color: connected && selectedSize != null
-                ? Colors.cyan
-                : Colors.grey,
-          ),
-          const Spacer(),
-          SizedBox(
-            width: 230,
-            child: Text(
-              receiver.connectedUri?.toString() ?? defaultStreamUrl,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 10, color: Colors.grey),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _StatusChip(
+              label: 'Status',
+              value: receiver.connected
+                  ? 'Connected'
+                  : receiver.connecting
+                  ? 'Connecting'
+                  : 'Disconnected',
+              valueWidth: 82,
+              color: receiver.connected ? Colors.green : Colors.grey,
             ),
-          ),
-        ],
+            const SizedBox(width: 14),
+            _StatusChip(
+              label: 'FPS',
+              value: !connected
+                  ? '-'
+                  : receiver.isWebSocket
+                  ? receiver.fps.toStringAsFixed(1)
+                  : 'N/A (RTSP)',
+              valueWidth: 34,
+              color: !connected
+                  ? Colors.grey
+                  : receiver.isWebSocket
+                  ? receiver.fps > 20
+                        ? Colors.green
+                        : receiver.fps > 10
+                        ? Colors.orange
+                        : Colors.red
+                  : Colors.grey,
+            ),
+            const SizedBox(width: 14),
+            _StatusChip(
+              label: 'Frames',
+              value: !connected
+                  ? '-'
+                  : receiver.isWebSocket
+                  ? '${receiver.frameCount}'
+                  : 'N/A (RTSP)',
+              valueWidth: 72,
+              color: connected && receiver.isWebSocket
+                  ? Colors.cyan
+                  : Colors.grey,
+            ),
+            const SizedBox(width: 14),
+            _StatusChip(
+              label: 'Inference',
+              value: !connected
+                  ? '-'
+                  : receiver.isWebSocket
+                  ? inferenceMs == null
+                        ? 'N/A'
+                        : '${inferenceMs.toStringAsFixed(1)} ms'
+                  : 'N/A (RTSP)',
+              valueWidth: 54,
+              color: !connected || inferenceMs == null
+                  ? Colors.grey
+                  : inferenceMs <= 33.0
+                  ? Colors.green
+                  : inferenceMs <= 100.0
+                  ? Colors.orange
+                  : Colors.red,
+            ),
+            const SizedBox(width: 14),
+            _StatusChip(
+              label: 'Wall',
+              value: !connected
+                  ? '-'
+                  : receiver.isWebSocket
+                  ? wallClockText ?? 'N/A'
+                  : 'N/A (RTSP)',
+              valueWidth: 132,
+              color: !connected || wallClockText == null
+                  ? Colors.grey
+                  : Colors.lightBlueAccent,
+            ),
+            const SizedBox(width: 14),
+            _StatusChip(
+              label: 'Transport',
+              value: receiver.isWebSocket
+                  ? 'WebSocket'
+                  : receiver.isRtsp
+                  ? 'RTSP'
+                  : 'Idle',
+              valueWidth: 72,
+              color: receiver.connected ? Colors.blueAccent : Colors.grey,
+            ),
+            const SizedBox(width: 14),
+            _StatusChip(
+              label: 'Stream',
+              value: !connected ? '-' : selectedFrame?.label ?? 'N/A',
+              valueWidth: 74,
+              color: connected && selectedFrame != null
+                  ? Colors.lightBlueAccent
+                  : Colors.grey,
+            ),
+            const SizedBox(width: 14),
+            _StatusChip(
+              label: 'Resolution',
+              value: !connected ? '-' : resolutionText,
+              valueWidth: 82,
+              color: connected && selectedSize != null
+                  ? Colors.cyan
+                  : Colors.grey,
+            ),
+            const SizedBox(width: 18),
+            SizedBox(
+              width: 180,
+              child: Text(
+                receiver.connectedUri?.toString() ?? defaultStreamUrl,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: const TextStyle(fontSize: 10, color: Colors.grey),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

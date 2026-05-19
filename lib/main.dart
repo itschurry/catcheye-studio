@@ -131,26 +131,26 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
 
-  static const _destinations = [
-    NavigationRailDestination(
-      icon: Icon(Icons.live_tv_outlined),
-      selectedIcon: Icon(Icons.live_tv),
-      label: Text('Viewer'),
+  static const _items = [
+    _NavItem(
+      label: 'Viewer',
+      icon: Icons.live_tv_outlined,
+      selectedIcon: Icons.live_tv,
     ),
-    NavigationRailDestination(
-      icon: Icon(Icons.edit_location_alt_outlined),
-      selectedIcon: Icon(Icons.edit_location_alt),
-      label: Text('ROI Editor'),
+    _NavItem(
+      label: 'ROI Editor',
+      icon: Icons.edit_location_alt_outlined,
+      selectedIcon: Icons.edit_location_alt,
     ),
-    NavigationRailDestination(
-      icon: Icon(Icons.grid_on_outlined),
-      selectedIcon: Icon(Icons.grid_on),
-      label: Text('Camera Calibration'),
+    _NavItem(
+      label: 'Camera Calibration',
+      icon: Icons.grid_on_outlined,
+      selectedIcon: Icons.grid_on,
     ),
-    NavigationRailDestination(
-      icon: Icon(Icons.threed_rotation_outlined),
-      selectedIcon: Icon(Icons.threed_rotation),
-      label: Text('Camera-Depth Calibration'),
+    _NavItem(
+      label: 'Depth Calibration',
+      icon: Icons.threed_rotation_outlined,
+      selectedIcon: Icons.threed_rotation,
     ),
   ];
 
@@ -166,41 +166,145 @@ class _AppShellState extends State<AppShell> {
     return Scaffold(
       body: Row(
         children: [
-          NavigationRail(
+          _AppSidebar(
             selectedIndex: _selectedIndex,
-            onDestinationSelected: (index) {
+            items: _items,
+            onSelected: (index) {
               if (index >= 2) {
                 unawaited(context.read<FrameReceiverService>().disconnect());
               }
               setState(() => _selectedIndex = index);
             },
-            labelType: NavigationRailLabelType.all,
-            leading: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Column(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F6F5),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF73D4DC)),
-                    ),
-                    child: Image.asset(
-                      'assets/emblem.png',
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            destinations: _destinations,
           ),
           const VerticalDivider(thickness: 1, width: 1),
           Expanded(child: _screens[_selectedIndex]),
         ],
+      ),
+    );
+  }
+}
+
+class _NavItem {
+  const _NavItem({
+    required this.label,
+    required this.icon,
+    required this.selectedIcon,
+  });
+
+  final String label;
+  final IconData icon;
+  final IconData selectedIcon;
+}
+
+class _AppSidebar extends StatelessWidget {
+  const _AppSidebar({
+    required this.selectedIndex,
+    required this.items,
+    required this.onSelected,
+  });
+
+  final int selectedIndex;
+  final List<_NavItem> items;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 224,
+      color: const Color(0xFF101B1D),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  width: 52,
+                  height: 52,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F6F5),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF73D4DC)),
+                  ),
+                  child: Image.asset('assets/emblem.png', fit: BoxFit.contain),
+                ),
+              ),
+              const SizedBox(height: 18),
+              for (var i = 0; i < items.length; i++) ...[
+                _SidebarButton(
+                  item: items[i],
+                  selected: i == selectedIndex,
+                  onTap: () => onSelected(i),
+                ),
+                const SizedBox(height: 6),
+              ],
+              const Spacer(),
+              Image.asset('assets/logo.png', height: 34, fit: BoxFit.contain),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SidebarButton extends StatelessWidget {
+  const _SidebarButton({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _NavItem item;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final iconColor = selected
+        ? const Color(0xFF73D4DC)
+        : const Color(0xFFA8B9BC);
+    return Material(
+      color: selected ? const Color(0xFF17363A) : Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: selected ? const Color(0xFF3F8890) : Colors.transparent,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                selected ? item.selectedIcon : item.icon,
+                size: 20,
+                color: iconColor,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  item.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    color: selected ? Colors.white : const Color(0xFFA8B9BC),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
