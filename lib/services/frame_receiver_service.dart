@@ -328,6 +328,7 @@ class FrameReceiverService extends ChangeNotifier {
   double _fps = 0;
   double? _previousSourceTimestampMs;
   StreamTransport? _transport;
+  bool _disposed = false;
 
   Size? _frameSize;
 
@@ -457,14 +458,16 @@ class FrameReceiverService extends ChangeNotifier {
 
   FrameReceiverService() {
     _playingSubscription = _player.stream.playing.listen((isPlaying) {
+      if (_disposed) return;
       if (_connected != isPlaying) {
         _connected = isPlaying;
-        notifyListeners();
+        _notifyListeners();
       }
     });
   }
 
   Future<void> connect([String streamUrl = defaultStreamUrl]) async {
+    if (_disposed) return;
     if (_connected || _connecting) return;
 
     _connecting = true;
@@ -472,35 +475,41 @@ class FrameReceiverService extends ChangeNotifier {
     _fps = 0;
     _frameCount = 0;
     _previousSourceTimestampMs = null;
-    notifyListeners();
+    _notifyListeners();
 
     try {
       final uri = _normalizeUri(streamUrl);
       await _disconnect();
+      if (_disposed) return;
 
       if (_isWebSocketUri(uri)) {
         await _connectWebSocket(uri);
       } else {
         await _connectRtsp(uri);
       }
+      if (_disposed) return;
 
-      notifyListeners();
+      _notifyListeners();
     } catch (e) {
+      if (_disposed) return;
       _connecting = false;
       _connected = false;
       _transport = null;
       _errorMessage = 'Connection failed: $e';
-      notifyListeners();
+      _notifyListeners();
     }
   }
 
   Future<void> disconnect() async {
+    if (_disposed) return;
     await _disconnect();
+    if (_disposed) return;
     _errorMessage = null;
-    notifyListeners();
+    _notifyListeners();
   }
 
   Future<void> _disconnect() async {
+    if (_disposed) return;
     _closingWebSocket = true;
     _connected = false;
     _connecting = false;
@@ -584,6 +593,7 @@ class FrameReceiverService extends ChangeNotifier {
   }
 
   void _onWebSocketData(dynamic data) {
+    if (_disposed) return;
     if (data is String) {
       _onWebSocketMetadata(data);
       return;
@@ -608,7 +618,7 @@ class FrameReceiverService extends ChangeNotifier {
       _pendingStreams = null;
       _pendingPayloads.clear();
     }
-    notifyListeners();
+    _notifyListeners();
   }
 
   void _updateFpsFromMetadata(Map<String, dynamic> metadataFrame) {
@@ -632,7 +642,7 @@ class FrameReceiverService extends ChangeNotifier {
     final pendingStreams = _pendingStreams;
     if (pendingStreams == null) {
       _setSingleFrame(payload);
-      notifyListeners();
+      _notifyListeners();
       return;
     }
 
@@ -647,7 +657,7 @@ class FrameReceiverService extends ChangeNotifier {
     );
     if (streamInfo.payloadIndex < 0) {
       _errorMessage = 'Unexpected WebSocket payload';
-      notifyListeners();
+      _notifyListeners();
       return;
     }
 
@@ -657,7 +667,7 @@ class FrameReceiverService extends ChangeNotifier {
           'Invalid ${streamInfo.label} payload size: expected $expectedPayloadSize, got ${payload.length}';
       _pendingStreams = null;
       _pendingPayloads.clear();
-      notifyListeners();
+      _notifyListeners();
       return;
     }
 
@@ -673,7 +683,7 @@ class FrameReceiverService extends ChangeNotifier {
         _errorMessage = 'Missing WebSocket payload: ${stream.label}';
         _pendingStreams = null;
         _pendingPayloads.clear();
-        notifyListeners();
+        _notifyListeners();
         return;
       }
       try {
@@ -694,7 +704,7 @@ class FrameReceiverService extends ChangeNotifier {
         _errorMessage = 'Invalid ${stream.label} payload: $e';
         _pendingStreams = null;
         _pendingPayloads.clear();
-        notifyListeners();
+        _notifyListeners();
         return;
       }
     }
@@ -706,7 +716,7 @@ class FrameReceiverService extends ChangeNotifier {
     _frameCount++;
     _pendingStreams = null;
     _pendingPayloads.clear();
-    notifyListeners();
+    _notifyListeners();
   }
 
   void _setSingleFrame(Uint8List payload) {
@@ -795,7 +805,7 @@ class FrameReceiverService extends ChangeNotifier {
     if (!_streams.containsKey(key) || _selectedStreamKey == key) return;
     _selectedStreamKey = key;
     _syncSelectedFrameState();
-    notifyListeners();
+    _notifyListeners();
   }
 
   void _syncSelectedFrameState() {
@@ -863,17 +873,25 @@ class FrameReceiverService extends ChangeNotifier {
   }
 
   void _handleSocketClosed(String message) {
+    if (_disposed) return;
     _errorMessage = message;
     _closingWebSocket = true;
     unawaited(
       _disconnect().then((_) {
-        notifyListeners();
+        if (_disposed) return;
+        _notifyListeners();
       }),
     );
   }
 
+  void _notifyListeners() {
+    if (_disposed) return;
+    notifyListeners();
+  }
+
   @override
   void dispose() {
+    _disposed = true;
     _playingSubscription?.cancel();
     _webSocketSubscription?.cancel();
     _webSocket?.close();
