@@ -115,8 +115,8 @@ class _CameraCalibrationScreenState extends State<CameraCalibrationScreen> {
     final calibration = _calibration;
     return DecoratedBox(
       decoration: const BoxDecoration(
-        color: Color(0xFF121212),
-        border: Border(left: BorderSide(color: Color(0xFF3A3A3A))),
+        color: Color(0xFF1F1F1F),
+        border: Border(left: BorderSide(color: Color(0xFF4A4A4A))),
       ),
       child: ListView(
         padding: const EdgeInsets.all(16),
@@ -376,9 +376,9 @@ class _MetricBox extends StatelessWidget {
       width: 104,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: const Color(0xFF222222),
+          color: const Color(0xFF303030),
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: const Color(0xFF3A3A3A)),
+          border: Border.all(color: const Color(0xFF4A4A4A)),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),

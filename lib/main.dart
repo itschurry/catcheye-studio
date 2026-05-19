@@ -53,9 +53,9 @@ class CatchEyeStudioApp extends StatelessWidget {
   Widget build(BuildContext context) {
     const brandOrange = Color(0xFFFF7A2F);
     const neutralPrimary = Color(0xFFE2E8F0);
-    const appBackground = Color(0xFF0A0A0A);
-    const appSurface = Color(0xFF171717);
-    const appSurfaceHigh = Color(0xFF242424);
+    const appBackground = Color(0xFF151515);
+    const appSurface = Color(0xFF252525);
+    const appSurfaceHigh = Color(0xFF303030);
 
     return MultiProvider(
       providers: [
@@ -74,16 +74,16 @@ class CatchEyeStudioApp extends StatelessWidget {
           colorScheme: const ColorScheme.dark(
             primary: neutralPrimary,
             onPrimary: Color(0xFF111111),
-            primaryContainer: Color(0xFF3A3A3A),
+            primaryContainer: Color(0xFF4A4A4A),
             onPrimaryContainer: Colors.white,
             secondary: brandOrange,
             onSecondary: Color(0xFF241005),
             surface: appSurface,
             onSurface: Color(0xFFEDEDED),
             surfaceContainerHighest: appSurfaceHigh,
-            outline: Color(0xFF525252),
+            outline: Color(0xFF686868),
           ),
-          dividerColor: const Color(0xFF3A3A3A),
+          dividerColor: const Color(0xFF4A4A4A),
           useMaterial3: true,
           filledButtonTheme: FilledButtonThemeData(
             style: FilledButton.styleFrom(
@@ -210,7 +210,7 @@ class _AppSidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 224,
-      color: const Color(0xFF171717),
+      color: const Color(0xFF252525),
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
@@ -227,7 +227,7 @@ class _AppSidebar extends StatelessWidget {
                 const SizedBox(height: 6),
               ],
               const Spacer(),
-              Image.asset('assets/logo.png', height: 34, fit: BoxFit.contain),
+              Image.asset('assets/logo.png', height: 40, fit: BoxFit.contain),
             ],
           ),
         ),
@@ -253,7 +253,7 @@ class _SidebarButton extends StatelessWidget {
         ? const Color(0xFFE5E7EB)
         : const Color(0xFFA3A3A3);
     return Material(
-      color: selected ? const Color(0xFF2A2A2A) : Colors.transparent,
+      color: selected ? const Color(0xFF3A3A3A) : Colors.transparent,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
@@ -264,7 +264,7 @@ class _SidebarButton extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: selected ? const Color(0xFF5A5A5A) : Colors.transparent,
+              color: selected ? const Color(0xFF737373) : Colors.transparent,
             ),
           ),
           child: Row(

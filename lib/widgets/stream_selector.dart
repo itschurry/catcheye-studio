@@ -32,7 +32,7 @@ class SplitStreamPanel extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.black,
           border: Border.all(
-            color: selected ? colorScheme.primary : const Color(0xFF3A3A3A),
+            color: selected ? colorScheme.primary : const Color(0xFF4A4A4A),
           ),
         ),
         child: Column(
@@ -42,8 +42,8 @@ class SplitStreamPanel extends StatelessWidget {
               height: 30,
               padding: const EdgeInsets.symmetric(horizontal: 10),
               color: selected
-                  ? const Color(0xFF303030)
-                  : const Color(0xFF171717),
+                  ? const Color(0xFF4A4A4A)
+                  : const Color(0xFF252525),
               child: Row(
                 children: [
                   Expanded(
@@ -87,7 +87,7 @@ class MissingSplitPanel extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.black,
-        border: Border.all(color: const Color(0xFF3A3A3A)),
+        border: Border.all(color: const Color(0xFF4A4A4A)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -95,7 +95,7 @@ class MissingSplitPanel extends StatelessWidget {
           Container(
             height: 30,
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            color: const Color(0xFF171717),
+            color: const Color(0xFF252525),
             alignment: Alignment.centerLeft,
             child: Text(
               label,
@@ -359,9 +359,9 @@ class _SplitViewControls extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF171717),
+        color: const Color(0xFF252525),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFF3A3A3A)),
+        border: Border.all(color: const Color(0xFF4A4A4A)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -457,9 +457,9 @@ class _StreamGroupCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF171717),
+        color: const Color(0xFF252525),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFF3A3A3A)),
+        border: Border.all(color: const Color(0xFF4A4A4A)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -513,10 +513,10 @@ class _StreamSlot extends StatelessWidget {
         height: 36,
         padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF303030) : const Color(0xFF121212),
+          color: selected ? const Color(0xFF4A4A4A) : const Color(0xFF1F1F1F),
           borderRadius: BorderRadius.circular(4),
           border: Border.all(
-            color: selected ? colorScheme.primary : const Color(0xFF26383B),
+            color: selected ? colorScheme.primary : const Color(0xFF4A4A4A),
           ),
         ),
         child: Row(
@@ -1431,9 +1431,9 @@ class _FilterSettingsButton extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF171717),
+        color: const Color(0xFF252525),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFF3A3A3A)),
+        border: Border.all(color: const Color(0xFF4A4A4A)),
       ),
       child: Row(
         children: [
