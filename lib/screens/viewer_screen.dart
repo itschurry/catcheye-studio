@@ -105,8 +105,8 @@ class _ViewerScreenState extends State<ViewerScreen> {
         Container(
           width: _streamSelectorPanelWidth,
           decoration: const BoxDecoration(
-            color: Color(0xFF0B1416),
-            border: Border(left: BorderSide(color: Color(0xFF30474B))),
+            color: Color(0xFF121212),
+            border: Border(left: BorderSide(color: Color(0xFF3A3A3A))),
           ),
           child: StreamSelector(
             receiver: receiver,
@@ -652,17 +652,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
             ),
             const SizedBox(width: 8),
           ],
-          Container(
-            height: 38,
-            width: 226,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F6F5),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: colorScheme.primary),
-            ),
-            child: Image.asset('assets/logo.png', fit: BoxFit.contain),
-          ),
+          const SizedBox(width: 8),
         ],
       ),
     );

@@ -51,12 +51,11 @@ class CatchEyeStudioApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const brandTeal = Color(0xFF006E7A);
-    const brandTealLight = Color(0xFF73D4DC);
     const brandOrange = Color(0xFFFF7A2F);
-    const appBackground = Color(0xFF071011);
-    const appSurface = Color(0xFF101B1D);
-    const appSurfaceHigh = Color(0xFF172A2D);
+    const neutralPrimary = Color(0xFFE2E8F0);
+    const appBackground = Color(0xFF0A0A0A);
+    const appSurface = Color(0xFF171717);
+    const appSurfaceHigh = Color(0xFF242424);
 
     return MultiProvider(
       providers: [
@@ -73,37 +72,37 @@ class CatchEyeStudioApp extends StatelessWidget {
           brightness: Brightness.dark,
           scaffoldBackgroundColor: appBackground,
           colorScheme: const ColorScheme.dark(
-            primary: brandTealLight,
-            onPrimary: Color(0xFF062426),
-            primaryContainer: brandTeal,
+            primary: neutralPrimary,
+            onPrimary: Color(0xFF111111),
+            primaryContainer: Color(0xFF3A3A3A),
             onPrimaryContainer: Colors.white,
             secondary: brandOrange,
             onSecondary: Color(0xFF241005),
             surface: appSurface,
-            onSurface: Color(0xFFEAF2F2),
+            onSurface: Color(0xFFEDEDED),
             surfaceContainerHighest: appSurfaceHigh,
-            outline: Color(0xFF3E5559),
+            outline: Color(0xFF525252),
           ),
-          dividerColor: const Color(0xFF30474B),
+          dividerColor: const Color(0xFF3A3A3A),
           useMaterial3: true,
           filledButtonTheme: FilledButtonThemeData(
             style: FilledButton.styleFrom(
-              backgroundColor: brandTealLight,
-              foregroundColor: const Color(0xFF062426),
+              backgroundColor: neutralPrimary,
+              foregroundColor: const Color(0xFF111111),
               textStyle: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
           outlinedButtonTheme: OutlinedButtonThemeData(
             style: OutlinedButton.styleFrom(
-              foregroundColor: brandTealLight,
-              side: const BorderSide(color: Color(0xFF5E858A)),
+              foregroundColor: neutralPrimary,
+              side: const BorderSide(color: Color(0xFF666666)),
               textStyle: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
           navigationRailTheme: const NavigationRailThemeData(
             backgroundColor: appSurface,
-            indicatorColor: Color(0xFF23474D),
-            selectedIconTheme: IconThemeData(color: brandTealLight),
+            indicatorColor: Color(0xFF333333),
+            selectedIconTheme: IconThemeData(color: neutralPrimary),
             selectedLabelTextStyle: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w700,
@@ -211,28 +210,14 @@ class _AppSidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 224,
-      color: const Color(0xFF101B1D),
+      color: const Color(0xFF171717),
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Container(
-                  width: 52,
-                  height: 52,
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF1F6F5),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFF73D4DC)),
-                  ),
-                  child: Image.asset('assets/emblem.png', fit: BoxFit.contain),
-                ),
-              ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 4),
               for (var i = 0; i < items.length; i++) ...[
                 _SidebarButton(
                   item: items[i],
@@ -265,10 +250,10 @@ class _SidebarButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final iconColor = selected
-        ? const Color(0xFF73D4DC)
-        : const Color(0xFFA8B9BC);
+        ? const Color(0xFFE5E7EB)
+        : const Color(0xFFA3A3A3);
     return Material(
-      color: selected ? const Color(0xFF17363A) : Colors.transparent,
+      color: selected ? const Color(0xFF2A2A2A) : Colors.transparent,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
@@ -279,7 +264,7 @@ class _SidebarButton extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: selected ? const Color(0xFF3F8890) : Colors.transparent,
+              color: selected ? const Color(0xFF5A5A5A) : Colors.transparent,
             ),
           ),
           child: Row(

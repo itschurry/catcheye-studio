@@ -150,8 +150,8 @@ class _CameraDepthCalibrationScreenState
     final offset = _offset;
     return DecoratedBox(
       decoration: const BoxDecoration(
-        color: Color(0xFF0B1416),
-        border: Border(left: BorderSide(color: Color(0xFF30474B))),
+        color: Color(0xFF121212),
+        border: Border(left: BorderSide(color: Color(0xFF3A3A3A))),
       ),
       child: ListView(
         padding: const EdgeInsets.all(16),
