@@ -32,44 +32,60 @@ class CubeEyeProperties {
   }
 }
 
-class RgbCubeEyeOffset {
-  final bool rgbUndistortEnabled;
+class RgbIntrinsic {
+  final bool undistortEnabled;
   final Map<String, double> values;
 
-  const RgbCubeEyeOffset({
-    required this.rgbUndistortEnabled,
-    this.values = const {},
-  });
+  const RgbIntrinsic({required this.undistortEnabled, this.values = const {}});
 
-  factory RgbCubeEyeOffset.fromJson(Map<String, dynamic> json) {
+  factory RgbIntrinsic.fromJson(Map<String, dynamic> json) {
     final values = <String, double>{};
     for (final entry in json.entries) {
-      if (entry.key == 'u' || entry.key == 'v') continue;
       final value = entry.value;
       if (value is num) {
         values[entry.key] = value.toDouble();
       }
     }
-    return RgbCubeEyeOffset(
-      rgbUndistortEnabled: json['rgb_undistort_enabled'] == true,
+    return RgbIntrinsic(
+      undistortEnabled: json['undistort_enabled'] == true,
       values: Map.unmodifiable(values),
     );
   }
 
-  RgbCubeEyeOffset copyWith({
-    bool? rgbUndistortEnabled,
-    Map<String, double>? values,
-  }) {
-    return RgbCubeEyeOffset(
-      rgbUndistortEnabled: rgbUndistortEnabled ?? this.rgbUndistortEnabled,
+  RgbIntrinsic copyWith({bool? undistortEnabled, Map<String, double>? values}) {
+    return RgbIntrinsic(
+      undistortEnabled: undistortEnabled ?? this.undistortEnabled,
       values: values ?? this.values,
     );
   }
 
   Map<String, Object> toJson() => {
-    'rgb_undistort_enabled': rgbUndistortEnabled,
+    'undistort_enabled': undistortEnabled,
     ...values,
   };
+}
+
+class RgbCubeEyeExtrinsic {
+  final Map<String, double> values;
+
+  const RgbCubeEyeExtrinsic({this.values = const {}});
+
+  factory RgbCubeEyeExtrinsic.fromJson(Map<String, dynamic> json) {
+    final values = <String, double>{};
+    for (final entry in json.entries) {
+      final value = entry.value;
+      if (value is num) {
+        values[entry.key] = value.toDouble();
+      }
+    }
+    return RgbCubeEyeExtrinsic(values: Map.unmodifiable(values));
+  }
+
+  RgbCubeEyeExtrinsic copyWith({Map<String, double>? values}) {
+    return RgbCubeEyeExtrinsic(values: values ?? this.values);
+  }
+
+  Map<String, Object> toJson() => {...values};
 }
 
 class RgbCameraProperties {
@@ -216,24 +232,46 @@ class RemoteCubeEyeApiService {
     return CubeEyeProperties.fromJson(json);
   }
 
-  Future<RgbCubeEyeOffset> fetchRgbCubeEyeOffset(AppSettings settings) async {
+  Future<RgbIntrinsic> fetchRgbIntrinsic(AppSettings settings) async {
     final json = await _requestJson(
       'GET',
-      settings.buildApiUri('rgb-cubeeye-offset'),
+      settings.buildApiUri('rgb-camera/intrinsic'),
     );
-    return RgbCubeEyeOffset.fromJson(json);
+    return RgbIntrinsic.fromJson(json);
   }
 
-  Future<RgbCubeEyeOffset> setRgbCubeEyeOffset(
+  Future<RgbIntrinsic> setRgbIntrinsic(
     AppSettings settings,
-    RgbCubeEyeOffset offset,
+    RgbIntrinsic intrinsic,
   ) async {
     final json = await _requestJson(
       'PUT',
-      settings.buildApiUri('rgb-cubeeye-offset'),
-      body: offset.toJson(),
+      settings.buildApiUri('rgb-camera/intrinsic'),
+      body: intrinsic.toJson(),
     );
-    return RgbCubeEyeOffset.fromJson(json);
+    return RgbIntrinsic.fromJson(json);
+  }
+
+  Future<RgbCubeEyeExtrinsic> fetchRgbCubeEyeExtrinsic(
+    AppSettings settings,
+  ) async {
+    final json = await _requestJson(
+      'GET',
+      settings.buildApiUri('rgb-cubeeye/extrinsic'),
+    );
+    return RgbCubeEyeExtrinsic.fromJson(json);
+  }
+
+  Future<RgbCubeEyeExtrinsic> setRgbCubeEyeExtrinsic(
+    AppSettings settings,
+    RgbCubeEyeExtrinsic extrinsic,
+  ) async {
+    final json = await _requestJson(
+      'PUT',
+      settings.buildApiUri('rgb-cubeeye/extrinsic'),
+      body: extrinsic.toJson(),
+    );
+    return RgbCubeEyeExtrinsic.fromJson(json);
   }
 
   Future<RgbCameraProperties> fetchRgbCameraProperties(

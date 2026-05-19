@@ -34,7 +34,8 @@ Guard 또는 Pick 앱은 별도 장치에서 영상 스트림과 REST API를 제
 - Camera Calibration
   - Viewer와 별도 receiver로 RGB stream 수신
   - A4 checkerboard 기반 RGB intrinsic capture / solve / save
-  - `rgb_fx/fy/cx/cy`, `rgb_dist_*` 결과 확인
+  - `fx/fy/cx/cy`, `dist_*` 결과 확인
+  - `Apply Intrinsic` 토글로 RGB 왜곡 보정 적용 여부 변경
 
 - Camera-Depth Calibration
   - Viewer와 별도 receiver로 RGB/depth/projected depth stream 수신
@@ -86,12 +87,14 @@ Studio가 사용하는 주요 엔드포인트야. 실제 prefix는 `API Base Pat
 | PUT | `/api/cubeeye/properties/{key}` | CubeEye property 변경 |
 | GET | `/api/rgb-camera/properties` | RGB Camera runtime property 조회 |
 | PUT | `/api/rgb-camera/properties/{key}` | RGB Camera runtime property 변경 |
+| GET | `/api/rgb-camera/intrinsic` | RGB intrinsic 설정 조회 |
+| PUT | `/api/rgb-camera/intrinsic` | RGB intrinsic 설정과 적용 토글 저장 |
 | GET | `/api/rgb-camera/intrinsic-calibration` | RGB intrinsic 현재값과 캡처 수 조회 |
 | DELETE | `/api/rgb-camera/intrinsic-calibration` | RGB intrinsic 캡처 초기화 |
 | POST | `/api/rgb-camera/intrinsic-calibration/capture` | 최신 RGB 프레임에서 A4 체커보드 캡처 |
 | POST | `/api/rgb-camera/intrinsic-calibration/solve` | 8장 이상 캡처한 RGB intrinsic 계산 후 장치 config 저장 |
-| GET | `/api/rgb-cubeeye-offset` | RGB-CubeEye projection 설정 조회 |
-| PUT | `/api/rgb-cubeeye-offset` | RGB-CubeEye projection 설정 저장 |
+| GET | `/api/rgb-cubeeye/extrinsic` | RGB-CubeEye extrinsic 설정 조회 |
+| PUT | `/api/rgb-cubeeye/extrinsic` | RGB-CubeEye extrinsic 설정 저장 |
 | GET | `/api/pointcloud-roi` | pointcloud ROI 조회 |
 | PUT | `/api/pointcloud-roi` | pointcloud ROI 저장 |
 | GET | `/api/robot-calibration` | robot calibration 조회 |

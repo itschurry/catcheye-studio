@@ -20,7 +20,7 @@ class _CameraDepthCalibrationScreenState
     extends State<CameraDepthCalibrationScreen> {
   final FrameReceiverService _receiver = FrameReceiverService();
   final RemoteCubeEyeApiService _api = RemoteCubeEyeApiService();
-  RgbCubeEyeOffset? _offset;
+  RgbCubeEyeExtrinsic? _extrinsic;
   String? _selectedStreamKey;
   String? _error;
   bool _started = false;
@@ -147,7 +147,6 @@ class _CameraDepthCalibrationScreenState
   }
 
   Widget _buildPanel(List<ViewerStreamFrame> streams) {
-    final offset = _offset;
     return DecoratedBox(
       decoration: const BoxDecoration(
         color: Color(0xFF1F1F1F),
@@ -177,21 +176,6 @@ class _CameraDepthCalibrationScreenState
           const _SectionTitle('RGB to CubeEye R/T'),
           const SizedBox(height: 8),
           for (final key in _rtKeys) _rtSlider(key),
-          const SizedBox(height: 12),
-          SwitchListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: const Text('RGB Undistortion'),
-            value: offset?.rgbUndistortEnabled ?? false,
-            onChanged: _busy || offset == null
-                ? null
-                : (value) {
-                    setState(() {
-                      _offset = offset.copyWith(rgbUndistortEnabled: value);
-                    });
-                    unawaited(_save());
-                  },
-          ),
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: _busy ? null : _save,
@@ -223,12 +207,12 @@ class _CameraDepthCalibrationScreenState
   }
 
   Widget _rtSlider(String key) {
-    final offset = _offset;
+    final extrinsic = _extrinsic;
     final isRotation = key.endsWith('_deg');
     final min = isRotation ? -180.0 : -2.0;
     final max = isRotation ? 180.0 : 2.0;
     final divisions = isRotation ? 3600 : 4000;
-    final value = (offset?.values[key] ?? 0.0).clamp(min, max).toDouble();
+    final value = (extrinsic?.values[key] ?? 0.0).clamp(min, max).toDouble();
     return Row(
       children: [
         SizedBox(
@@ -242,16 +226,16 @@ class _CameraDepthCalibrationScreenState
             divisions: divisions,
             value: value,
             label: value.toStringAsFixed(3),
-            onChanged: _busy || offset == null
+            onChanged: _busy || extrinsic == null
                 ? null
                 : (next) {
                     setState(() {
-                      _offset = offset.copyWith(
-                        values: {...offset.values, key: next},
+                      _extrinsic = extrinsic.copyWith(
+                        values: {...extrinsic.values, key: next},
                       );
                     });
                   },
-            onChangeEnd: _busy || offset == null ? null : (_) => _save(),
+            onChangeEnd: _busy || extrinsic == null ? null : (_) => _save(),
           ),
         ),
         SizedBox(
@@ -269,12 +253,12 @@ class _CameraDepthCalibrationScreenState
   Future<void> _loadOffset() async {
     await _run(() async {
       final settings = context.read<SettingsProvider>().settings;
-      _offset = await _api.fetchRgbCubeEyeOffset(settings);
+      _extrinsic = await _api.fetchRgbCubeEyeExtrinsic(settings);
     });
   }
 
   Future<void> _save() async {
-    final current = _offset;
+    final current = _extrinsic;
     if (current == null) return;
     await _run(() async {
       final values = <String, double>{...current.values};
@@ -282,7 +266,7 @@ class _CameraDepthCalibrationScreenState
         values[key] = values[key] ?? 0.0;
       }
       final settings = context.read<SettingsProvider>().settings;
-      _offset = await _api.setRgbCubeEyeOffset(
+      _extrinsic = await _api.setRgbCubeEyeExtrinsic(
         settings,
         current.copyWith(values: values),
       );
@@ -290,13 +274,13 @@ class _CameraDepthCalibrationScreenState
   }
 
   void _resetRt() {
-    final current = _offset;
+    final current = _extrinsic;
     if (current == null) return;
     final values = <String, double>{...current.values};
     for (final key in _rtKeys) {
       values[key] = 0.0;
     }
-    setState(() => _offset = current.copyWith(values: values));
+    setState(() => _extrinsic = current.copyWith(values: values));
   }
 
   Future<void> _run(Future<void> Function() action) async {

@@ -20,6 +20,7 @@ class _CameraCalibrationScreenState extends State<CameraCalibrationScreen> {
   final FrameReceiverService _receiver = FrameReceiverService();
   final RemoteCubeEyeApiService _api = RemoteCubeEyeApiService();
   RgbIntrinsicCalibration? _calibration;
+  RgbIntrinsic? _intrinsic;
   String? _error;
   bool _started = false;
   bool _busy = false;
@@ -113,6 +114,7 @@ class _CameraCalibrationScreenState extends State<CameraCalibrationScreen> {
 
   Widget _buildPanel() {
     final calibration = _calibration;
+    final intrinsic = _intrinsic;
     return DecoratedBox(
       decoration: const BoxDecoration(
         color: Color(0xFF1F1F1F),
@@ -132,35 +134,32 @@ class _CameraCalibrationScreenState extends State<CameraCalibrationScreen> {
             label: 'RMS',
             value: calibration?.rmsError?.toStringAsFixed(4) ?? '-',
           ),
+          const SizedBox(height: 12),
+          SwitchListTile(
+            value: intrinsic?.undistortEnabled ?? false,
+            onChanged: _busy || intrinsic == null ? null : _setIntrinsicApplied,
+            title: const Text('Apply Intrinsic'),
+            subtitle: Text(
+              intrinsic == null
+                  ? 'Not loaded'
+                  : (intrinsic.undistortEnabled ? 'Enabled' : 'Disabled'),
+            ),
+            contentPadding: EdgeInsets.zero,
+          ),
           const SizedBox(height: 16),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              _MetricBox(label: 'fx', value: calibration?.values['rgb_fx']),
-              _MetricBox(label: 'fy', value: calibration?.values['rgb_fy']),
-              _MetricBox(label: 'cx', value: calibration?.values['rgb_cx']),
-              _MetricBox(label: 'cy', value: calibration?.values['rgb_cy']),
-              _MetricBox(
-                label: 'k1',
-                value: calibration?.values['rgb_dist_k1'],
-              ),
-              _MetricBox(
-                label: 'k2',
-                value: calibration?.values['rgb_dist_k2'],
-              ),
-              _MetricBox(
-                label: 'p1',
-                value: calibration?.values['rgb_dist_p1'],
-              ),
-              _MetricBox(
-                label: 'p2',
-                value: calibration?.values['rgb_dist_p2'],
-              ),
-              _MetricBox(
-                label: 'k3',
-                value: calibration?.values['rgb_dist_k3'],
-              ),
+              _MetricBox(label: 'fx', value: calibration?.values['fx']),
+              _MetricBox(label: 'fy', value: calibration?.values['fy']),
+              _MetricBox(label: 'cx', value: calibration?.values['cx']),
+              _MetricBox(label: 'cy', value: calibration?.values['cy']),
+              _MetricBox(label: 'k1', value: calibration?.values['dist_k1']),
+              _MetricBox(label: 'k2', value: calibration?.values['dist_k2']),
+              _MetricBox(label: 'p1', value: calibration?.values['dist_p1']),
+              _MetricBox(label: 'p2', value: calibration?.values['dist_p2']),
+              _MetricBox(label: 'k3', value: calibration?.values['dist_k3']),
             ],
           ),
           const SizedBox(height: 20),
@@ -203,6 +202,7 @@ class _CameraCalibrationScreenState extends State<CameraCalibrationScreen> {
     await _run(() async {
       final settings = context.read<SettingsProvider>().settings;
       _calibration = await _api.fetchRgbIntrinsicCalibration(settings);
+      _intrinsic = await _api.fetchRgbIntrinsic(settings);
     });
   }
 
@@ -217,6 +217,7 @@ class _CameraCalibrationScreenState extends State<CameraCalibrationScreen> {
     await _run(() async {
       final settings = context.read<SettingsProvider>().settings;
       _calibration = await _api.solveRgbIntrinsicCalibration(settings);
+      _intrinsic = await _api.fetchRgbIntrinsic(settings);
     });
   }
 
@@ -224,6 +225,19 @@ class _CameraCalibrationScreenState extends State<CameraCalibrationScreen> {
     await _run(() async {
       final settings = context.read<SettingsProvider>().settings;
       _calibration = await _api.resetRgbIntrinsicCalibration(settings);
+    });
+  }
+
+  Future<void> _setIntrinsicApplied(bool enabled) async {
+    final intrinsic = _intrinsic;
+    if (intrinsic == null) return;
+    await _run(() async {
+      final settings = context.read<SettingsProvider>().settings;
+      _intrinsic = await _api.setRgbIntrinsic(
+        settings,
+        intrinsic.copyWith(undistortEnabled: enabled),
+      );
+      _calibration = await _api.fetchRgbIntrinsicCalibration(settings);
     });
   }
 
