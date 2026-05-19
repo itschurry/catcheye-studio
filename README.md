@@ -54,7 +54,7 @@ Camera Calibration        RGB intrinsic 캘리브레이션
 Camera-Depth Calibration  CubeEye-RGB extrinsic 캘리브레이션
 ```
 
-Guard 연결 시에는 `Viewer`, `ROI Editor(Person ROI)`, `Camera Properties`만 활성화해.
+Guard 연결 시에는 `Viewer`, `ROI Editor(Person ROI/Pallet ROI)`, `Camera Properties`만 활성화해.
 Pick 연결 시에는 `Viewer`, `ROI Editor(Pallet ROI)`, `Camera Properties`, `Camera Calibration`, `Depth Calibration`을 활성화해.
 
 좌측 NavigationRail로 화면을 전환해. `Camera Calibration` 또는 `Camera-Depth Calibration`로 들어가면 Viewer receiver는 끊고, 해당 화면의 receiver가 stream을 새로 수신해.

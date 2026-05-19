@@ -169,7 +169,10 @@ class RoiEditorScreen extends StatelessWidget {
 
   List<RoiConfigKind> _allowedKinds(RemoteDeviceKind? deviceKind) {
     return switch (deviceKind) {
-      RemoteDeviceKind.guard => const [RoiConfigKind.person],
+      RemoteDeviceKind.guard => const [
+        RoiConfigKind.person,
+        RoiConfigKind.pallet,
+      ],
       RemoteDeviceKind.pick => const [RoiConfigKind.pallet],
       null => const [RoiConfigKind.person],
     };
