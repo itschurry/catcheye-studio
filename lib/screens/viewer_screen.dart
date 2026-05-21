@@ -68,6 +68,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
     return Consumer2<FrameReceiverService, SettingsProvider>(
       builder: (context, receiver, settingsProvider, _) {
         final settings = settingsProvider.settings;
+        final remoteDeviceKind = settings.remoteDeviceKind;
         return Column(
           children: [
             // Toolbar
@@ -76,11 +77,12 @@ class _ViewerScreenState extends State<ViewerScreen> {
               receiver,
               settings.streamUri.toString(),
               settings.detectorBaseUrl,
+              remoteDeviceKind,
             ),
             const Divider(height: 1),
 
             // Frame viewer
-            Expanded(child: _buildViewerArea(receiver)),
+            Expanded(child: _buildViewerArea(receiver, remoteDeviceKind)),
 
             // Status bar
             _buildStatusBar(context, receiver, settings.streamUri.toString()),
@@ -90,9 +92,17 @@ class _ViewerScreenState extends State<ViewerScreen> {
     );
   }
 
-  Widget _buildViewerArea(FrameReceiverService receiver) {
+  Widget _buildViewerArea(
+    FrameReceiverService receiver,
+    RemoteDeviceKind? remoteDeviceKind,
+  ) {
     final selectedFrame = receiver.selectedFrame;
-    final viewer = _splitView && receiver.connected && receiver.isWebSocket
+    final splitViewEnabled = remoteDeviceKind == RemoteDeviceKind.pick;
+    final viewer =
+        splitViewEnabled &&
+            _splitView &&
+            receiver.connected &&
+            receiver.isWebSocket
         ? _buildSplitViewer(receiver)
         : _buildMainViewer(receiver, selectedFrame);
 
@@ -124,10 +134,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
             depthMin: _effectiveDepthMin(selectedFrame),
             depthMax: _effectiveDepthMax(selectedFrame),
             viewportLocked: _isViewportLocked(selectedFrame),
-            remoteDeviceKind: context
-                .read<SettingsProvider>()
-                .settings
-                .remoteDeviceKind,
+            remoteDeviceKind: remoteDeviceKind,
             onPointSizeChanged: (value) {
               setState(() => _pointSize = value);
               _persistPointCloudViewerSettings();
@@ -550,8 +557,10 @@ class _ViewerScreenState extends State<ViewerScreen> {
     FrameReceiverService receiver,
     String defaultStreamUrl,
     String defaultApiBaseUrl,
+    RemoteDeviceKind? remoteDeviceKind,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
+    final splitViewEnabled = remoteDeviceKind == RemoteDeviceKind.pick;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -643,7 +652,9 @@ class _ViewerScreenState extends State<ViewerScreen> {
               ),
             ),
           const Spacer(),
-          if (receiver.connected && receiver.isWebSocket) ...[
+          if (splitViewEnabled &&
+              receiver.connected &&
+              receiver.isWebSocket) ...[
             Tooltip(
               message: _splitView ? 'Single view' : 'Split view',
               child: IconButton(

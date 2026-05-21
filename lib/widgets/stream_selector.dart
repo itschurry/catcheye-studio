@@ -232,15 +232,17 @@ class StreamSelector extends StatelessWidget {
           Expanded(
             child: ListView(
               children: [
-                _SplitViewControls(
-                  streams: streams,
-                  splitView: splitView,
-                  leftKey: splitLeftStreamKey,
-                  rightKey: splitRightStreamKey,
-                  onSplitViewChanged: onSplitViewChanged,
-                  onSplitSelectionChanged: onSplitSelectionChanged,
-                ),
-                const SizedBox(height: 14),
+                if (pickControlsEnabled) ...[
+                  _SplitViewControls(
+                    streams: streams,
+                    splitView: splitView,
+                    leftKey: splitLeftStreamKey,
+                    rightKey: splitRightStreamKey,
+                    onSplitViewChanged: onSplitViewChanged,
+                    onSplitSelectionChanged: onSplitSelectionChanged,
+                  ),
+                  const SizedBox(height: 14),
+                ],
                 _StreamGroupCard(
                   title: 'RGB Camera',
                   icon: Icons.videocam_outlined,

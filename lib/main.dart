@@ -174,8 +174,8 @@ class _AppShellState extends State<AppShell> {
         .watch<SettingsProvider>()
         .settings
         .remoteDeviceKind;
-    final enabledItems = _enabledItems(remoteDeviceKind);
-    final selectedIndex = enabledItems.contains(_selectedIndex)
+    final visibleItemIndexes = _visibleItemIndexes(remoteDeviceKind);
+    final selectedIndex = visibleItemIndexes.contains(_selectedIndex)
         ? _selectedIndex
         : 0;
 
@@ -185,9 +185,9 @@ class _AppShellState extends State<AppShell> {
           _AppSidebar(
             selectedIndex: selectedIndex,
             items: _items,
-            enabledItems: enabledItems,
+            visibleItemIndexes: visibleItemIndexes,
             onSelected: (index) {
-              if (!enabledItems.contains(index)) {
+              if (!visibleItemIndexes.contains(index)) {
                 return;
               }
               if (index >= 2) {
@@ -203,11 +203,11 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Set<int> _enabledItems(RemoteDeviceKind? kind) {
+  List<int> _visibleItemIndexes(RemoteDeviceKind? kind) {
     return switch (kind) {
-      RemoteDeviceKind.guard => {0, 1, 2},
-      RemoteDeviceKind.pick => {0, 1, 2, 3, 4},
-      null => {0},
+      RemoteDeviceKind.guard => const [0, 1, 2],
+      RemoteDeviceKind.pick => const [0, 1, 2, 3, 4],
+      null => const [0],
     };
   }
 }
@@ -228,13 +228,13 @@ class _AppSidebar extends StatelessWidget {
   const _AppSidebar({
     required this.selectedIndex,
     required this.items,
-    required this.enabledItems,
+    required this.visibleItemIndexes,
     required this.onSelected,
   });
 
   final int selectedIndex;
   final List<_NavItem> items;
-  final Set<int> enabledItems;
+  final List<int> visibleItemIndexes;
   final ValueChanged<int> onSelected;
 
   @override
@@ -249,11 +249,10 @@ class _AppSidebar extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 4),
-              for (var i = 0; i < items.length; i++) ...[
+              for (final i in visibleItemIndexes) ...[
                 _SidebarButton(
                   item: items[i],
                   selected: i == selectedIndex,
-                  enabled: enabledItems.contains(i),
                   onTap: () => onSelected(i),
                 ),
                 const SizedBox(height: 6),
@@ -272,20 +271,16 @@ class _SidebarButton extends StatelessWidget {
   const _SidebarButton({
     required this.item,
     required this.selected,
-    required this.enabled,
     required this.onTap,
   });
 
   final _NavItem item;
   final bool selected;
-  final bool enabled;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final iconColor = !enabled
-        ? const Color(0xFF5A5A5A)
-        : selected
+    final iconColor = selected
         ? const Color(0xFFE5E7EB)
         : const Color(0xFFA3A3A3);
     return Material(
@@ -293,7 +288,7 @@ class _SidebarButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: enabled ? onTap : null,
+        onTap: onTap,
         child: Container(
           height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -319,11 +314,7 @@ class _SidebarButton extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                    color: !enabled
-                        ? const Color(0xFF5A5A5A)
-                        : selected
-                        ? Colors.white
-                        : const Color(0xFFA8B9BC),
+                    color: selected ? Colors.white : const Color(0xFFA8B9BC),
                   ),
                 ),
               ),
