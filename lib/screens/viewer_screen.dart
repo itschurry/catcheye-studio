@@ -8,6 +8,7 @@ import '../models/app_settings.dart';
 import '../providers/settings_provider.dart';
 import '../services/frame_receiver_service.dart';
 import '../services/remote_device_info_service.dart';
+import '../services/remote_guard_api_service.dart';
 import '../widgets/live_viewer.dart';
 import '../widgets/point_cloud_viewer.dart';
 import '../widgets/stream_selector.dart';
@@ -43,6 +44,8 @@ class _ViewerScreenState extends State<ViewerScreen> {
   bool _splitView = false;
   String? _splitLeftStreamKey;
   String? _splitRightStreamKey;
+  GuardRecordingStatus? _recordingStatus;
+  bool _recordingActionInFlight = false;
 
   @override
   void didChangeDependencies() {
@@ -78,6 +81,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
               settings.streamUri.toString(),
               settings.detectorBaseUrl,
               remoteDeviceKind,
+              settings,
             ),
             const Divider(height: 1),
 
@@ -558,6 +562,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
     String defaultStreamUrl,
     String defaultApiBaseUrl,
     RemoteDeviceKind? remoteDeviceKind,
+    AppSettings settings,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
     final splitViewEnabled = remoteDeviceKind == RemoteDeviceKind.pick;
@@ -673,9 +678,70 @@ class _ViewerScreenState extends State<ViewerScreen> {
             ),
             const SizedBox(width: 8),
           ],
+          if (remoteDeviceKind == RemoteDeviceKind.guard &&
+              receiver.connected) ...[
+            _buildRecordingControls(settings),
+            const SizedBox(width: 8),
+          ],
           const SizedBox(width: 8),
         ],
       ),
+    );
+  }
+
+  Widget _buildRecordingControls(AppSettings settings) {
+    final status = _recordingStatus;
+    final state = status?.state ?? GuardRecordingState.idle;
+    final busy = _recordingActionInFlight;
+
+    if (state == GuardRecordingState.idle) {
+      return FilledButton.icon(
+        icon: const Icon(Icons.fiber_manual_record, size: 16),
+        label: const Text('Record'),
+        onPressed: busy
+            ? null
+            : () => _runRecordingAction((api) => api.startRecording(settings)),
+      );
+    }
+
+    final isPaused = state == GuardRecordingState.paused;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        OutlinedButton.icon(
+          icon: const Icon(Icons.save, size: 16),
+          label: const Text('Save'),
+          onPressed: busy
+              ? null
+              : () => _runRecordingAction(
+                  (api) => api.saveRecording(settings),
+                  successMessage: (next) => next.savedPath.isEmpty
+                      ? 'Recording saved'
+                      : 'Recording saved: ${next.savedPath}',
+                ),
+        ),
+        const SizedBox(width: 8),
+        OutlinedButton.icon(
+          icon: Icon(isPaused ? Icons.play_arrow : Icons.pause, size: 16),
+          label: Text(isPaused ? 'Resume' : 'Pause'),
+          onPressed: busy
+              ? null
+              : () => _runRecordingAction(
+                  (api) => isPaused
+                      ? api.resumeRecording(settings)
+                      : api.pauseRecording(settings),
+                ),
+        ),
+        const SizedBox(width: 8),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.close, size: 16),
+          label: const Text('Cancel'),
+          onPressed: busy
+              ? null
+              : () =>
+                    _runRecordingAction((api) => api.cancelRecording(settings)),
+        ),
+      ],
     );
   }
 
@@ -902,6 +968,15 @@ class _ViewerScreenState extends State<ViewerScreen> {
         detectorBaseUrl: apiBaseUrl,
         remoteDeviceKind: remoteDeviceKind,
       );
+      if (remoteDeviceKind == RemoteDeviceKind.guard) {
+        final recordingStatus = await RemoteGuardApiService()
+            .fetchRecordingStatus(settingsProvider.settings);
+        if (context.mounted) {
+          setState(() => _recordingStatus = recordingStatus);
+        }
+      } else if (context.mounted) {
+        setState(() => _recordingStatus = null);
+      }
       if (context.mounted) {
         unawaited(receiver.connect(streamPath));
       }
@@ -911,6 +986,36 @@ class _ViewerScreenState extends State<ViewerScreen> {
           context,
         ).showSnackBar(SnackBar(content: Text('Device info load failed: $e')));
       }
+    }
+  }
+
+  Future<void> _runRecordingAction(
+    Future<GuardRecordingStatus> Function(RemoteGuardApiService api) action, {
+    String Function(GuardRecordingStatus status)? successMessage,
+  }) async {
+    setState(() => _recordingActionInFlight = true);
+    try {
+      final next = await action(RemoteGuardApiService());
+      if (!mounted) return;
+      setState(() {
+        _recordingStatus = next;
+        _recordingActionInFlight = false;
+      });
+      if (next.error.isNotEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(next.error)));
+      } else if (successMessage != null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(successMessage(next))));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _recordingActionInFlight = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Recording API failed: $e')));
     }
   }
 }

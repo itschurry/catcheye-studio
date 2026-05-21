@@ -5,6 +5,38 @@ import '../models/app_settings.dart';
 import '../models/roi_config.dart';
 import 'roi_config_service.dart';
 
+enum GuardRecordingState { idle, recording, paused }
+
+class GuardRecordingStatus {
+  const GuardRecordingStatus({
+    required this.state,
+    required this.activePath,
+    required this.savedPath,
+    required this.error,
+    required this.writtenFrames,
+  });
+
+  final GuardRecordingState state;
+  final String activePath;
+  final String savedPath;
+  final String error;
+  final int writtenFrames;
+
+  factory GuardRecordingStatus.fromJson(Map<String, dynamic> json) {
+    return GuardRecordingStatus(
+      state: switch (json['state'] as String? ?? 'idle') {
+        'recording' => GuardRecordingState.recording,
+        'paused' => GuardRecordingState.paused,
+        _ => GuardRecordingState.idle,
+      },
+      activePath: json['active_path'] as String? ?? '',
+      savedPath: json['saved_path'] as String? ?? '',
+      error: json['error'] as String? ?? '',
+      writtenFrames: json['written_frames'] as int? ?? 0,
+    );
+  }
+}
+
 class RemoteGuardApiService {
   final HttpClient _client = HttpClient();
 
@@ -27,6 +59,44 @@ class RemoteGuardApiService {
       body: config.toJson(),
       expectedStatusCodes: const {200, 204},
     );
+  }
+
+  Future<GuardRecordingStatus> fetchRecordingStatus(
+    AppSettings settings,
+  ) async {
+    final json = await _requestJson('GET', settings.buildApiUri('recording'));
+    return GuardRecordingStatus.fromJson(json);
+  }
+
+  Future<GuardRecordingStatus> startRecording(AppSettings settings) {
+    return _recordingAction(settings, 'start');
+  }
+
+  Future<GuardRecordingStatus> pauseRecording(AppSettings settings) {
+    return _recordingAction(settings, 'pause');
+  }
+
+  Future<GuardRecordingStatus> resumeRecording(AppSettings settings) {
+    return _recordingAction(settings, 'resume');
+  }
+
+  Future<GuardRecordingStatus> saveRecording(AppSettings settings) {
+    return _recordingAction(settings, 'save');
+  }
+
+  Future<GuardRecordingStatus> cancelRecording(AppSettings settings) {
+    return _recordingAction(settings, 'cancel');
+  }
+
+  Future<GuardRecordingStatus> _recordingAction(
+    AppSettings settings,
+    String action,
+  ) async {
+    final json = await _requestJson(
+      'POST',
+      settings.buildApiUri('recording/$action'),
+    );
+    return GuardRecordingStatus.fromJson(json);
   }
 
   Future<Map<String, dynamic>> _requestJson(

@@ -10,6 +10,7 @@ Studio는 연결 시 `GET /api/device-info`를 먼저 호출해서 Guard/Pick을
 - Viewer
   - RTSP 스트림 재생
   - WebSocket JPEG/pointcloud/projected depth 다중 스트림 표시
+  - Guard 연결 시 preview frame 녹화 시작/저장/일시정지/재시작/취소 제어
   - 스트림별 독립 갱신 수신
   - RGB Camera / CubeEye ToF / Other Streams 그룹 표시
   - `projected_depth` 점 배열을 현재 camera stream 위에 고대비 overlay 표시
@@ -67,6 +68,10 @@ Pick 연결 시에는 `Viewer`, `ROI Editor(Pallet ROI)`, `Camera Properties`, `
 
 좌측 NavigationRail로 화면을 전환해. `Camera Calibration` 또는 `Camera-Depth Calibration`로 들어가면 Viewer receiver는 끊고, 해당 화면의 receiver가 stream을 새로 수신해.
 
+Guard Viewer에서 `Record`를 누르면 Guard 장비가 현재 preview frame 저장을 시작해.
+녹화 중에는 `Save`, `Pause`, `Cancel`만 보이고, `Pause` 후에는 `Resume`으로 다시 파일 쓰기를 시작해.
+`Save`는 장비의 `recordings/` 폴더에 MP4를 확정 저장하고, `Cancel`은 녹화 파일을 버려.
+
 ## 연결 설정
 
 Viewer의 URL 설정에서 아래 값을 지정해.
@@ -109,6 +114,12 @@ Studio가 사용하는 주요 엔드포인트야. 실제 prefix는 `API Base Pat
 | PUT | `/api/cubeeye/properties/{key}` | CubeEye property 변경 |
 | GET | `/api/rgb-camera/properties` | RGB Camera runtime property 조회 |
 | PUT | `/api/rgb-camera/properties/{key}` | RGB Camera runtime property 변경 |
+| GET | `/api/recording` | Guard 녹화 상태 조회 |
+| POST | `/api/recording/start` | Guard preview frame 녹화 시작 |
+| POST | `/api/recording/pause` | Guard 녹화 파일 쓰기 일시정지 |
+| POST | `/api/recording/resume` | Guard 녹화 파일 쓰기 재시작 |
+| POST | `/api/recording/save` | Guard 녹화 파일 저장 확정 |
+| POST | `/api/recording/cancel` | Guard 녹화 중지 후 파일 삭제 |
 | GET | `/api/rgb-camera/intrinsic` | RGB intrinsic 설정 조회 |
 | PUT | `/api/rgb-camera/intrinsic` | RGB intrinsic 설정과 적용 토글 저장 |
 | GET | `/api/rgb-camera/intrinsic-calibration` | RGB intrinsic 현재값과 캡처 수 조회 |
