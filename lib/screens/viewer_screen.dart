@@ -110,7 +110,9 @@ class _ViewerScreenState extends State<ViewerScreen> {
         ? _buildSplitViewer(receiver)
         : _buildMainViewer(receiver, selectedFrame);
 
-    if (!receiver.connected || receiver.isRtsp) {
+    final selectorPanelEnabled = remoteDeviceKind == RemoteDeviceKind.pick;
+
+    if (!receiver.connected || receiver.isRtsp || !selectorPanelEnabled) {
       return viewer;
     }
 

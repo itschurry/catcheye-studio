@@ -63,8 +63,8 @@ Camera Calibration        RGB intrinsic 캘리브레이션
 Camera-Depth Calibration  CubeEye-RGB extrinsic 캘리브레이션
 ```
 
-Guard 연결 시에는 `Viewer`, `Monitor`, `ROI Editor(Person ROI/Pallet ROI)`, `Camera Properties`만 보여. Viewer split view도 숨겨.
-Pick 연결 시에는 `Viewer`, `ROI Editor(Pallet ROI)`, `Camera Properties`, `Camera Calibration`, `Depth Calibration`을 보여. Viewer split view도 Pick에서만 보여.
+Guard 연결 시에는 `Viewer`, `Monitor`, `ROI Editor(Person ROI/Pallet ROI)`, `Camera Properties`만 보여. Viewer 오른쪽 스트림 패널과 split view도 숨겨.
+Pick 연결 시에는 `Viewer`, `ROI Editor(Pallet ROI)`, `Camera Properties`, `Camera Calibration`, `Depth Calibration`을 보여. Viewer 오른쪽 스트림 패널과 split view도 Pick에서만 보여.
 
 좌측 NavigationRail로 화면을 전환해. `Camera Calibration` 또는 `Camera-Depth Calibration`로 들어가면 Viewer receiver는 끊고, 해당 화면의 receiver가 stream을 새로 수신해.
 
