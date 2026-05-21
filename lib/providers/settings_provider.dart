@@ -19,6 +19,7 @@ class SettingsProvider extends ChangeNotifier {
   static const _pointCloudPaletteKey = 'settings.pointCloud.palette';
   static const _pointCloudDepthMinKey = 'settings.pointCloud.depthMin';
   static const _pointCloudDepthMaxKey = 'settings.pointCloud.depthMax';
+  static const _guardMonitorStreamsKey = 'settings.guardMonitor.streams';
 
   final AppSettings _settings;
 
@@ -68,6 +69,9 @@ class SettingsProvider extends ChangeNotifier {
             AppSettings.defaultPointCloudPalette,
         pointCloudDepthMin: prefs.getDouble(_pointCloudDepthMinKey),
         pointCloudDepthMax: prefs.getDouble(_pointCloudDepthMaxKey),
+        guardMonitorStreams:
+            prefs.getStringList(_guardMonitorStreamsKey) ??
+            AppSettings.defaultGuardMonitorStreams,
       ),
     );
   }
@@ -144,6 +148,15 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateGuardMonitorStreams(List<String> streams) async {
+    _settings.guardMonitorStreams = streams
+        .map((stream) => stream.trim())
+        .where((stream) => stream.isNotEmpty)
+        .toList(growable: false);
+    await _save();
+    notifyListeners();
+  }
+
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_detectorBaseUrlKey, _settings.detectorBaseUrl);
@@ -192,6 +205,10 @@ class SettingsProvider extends ChangeNotifier {
         _settings.pointCloudDepthMax!,
       );
     }
+    await prefs.setStringList(
+      _guardMonitorStreamsKey,
+      _settings.guardMonitorStreams,
+    );
   }
 
   static RemoteDeviceKind? _remoteDeviceKindFromPrefs(String? value) {

@@ -20,6 +20,13 @@ Studio는 연결 시 `GET /api/device-info`를 먼저 호출해서 Guard/Pick을
   - CubeEye property 제어
   - pointcloud ROI, robot calibration 설정
 
+- Monitor
+  - Guard 연결에서만 표시
+  - 여러 RTSP/WebSocket camera stream을 카드 그리드로 동시 표시
+  - 카메라 Stream URL 추가/삭제
+  - 전체 카메라 연결/해제
+  - 카메라 목록은 로컬 설정에 저장
+
 - ROI Editor
   - Person ROI / Pallet ROI 전환
   - 원격 장치에서 ROI 불러오기
@@ -48,13 +55,14 @@ Studio는 연결 시 `GET /api/device-info`를 먼저 호출해서 Guard/Pick을
 
 ```text
 Viewer                    스트림 연결, 다중 스트림 표시, CubeEye/pointcloud 설정
+Monitor                   Guard 다중 카메라 관제
 ROI Editor                Person/Pallet ROI 편집과 원격 동기화
 Camera Properties         Camera Module 3 runtime property 조절
 Camera Calibration        RGB intrinsic 캘리브레이션
 Camera-Depth Calibration  CubeEye-RGB extrinsic 캘리브레이션
 ```
 
-Guard 연결 시에는 `Viewer`, `ROI Editor(Person ROI/Pallet ROI)`, `Camera Properties`만 보여. Viewer split view도 숨겨.
+Guard 연결 시에는 `Viewer`, `Monitor`, `ROI Editor(Person ROI/Pallet ROI)`, `Camera Properties`만 보여. Viewer split view도 숨겨.
 Pick 연결 시에는 `Viewer`, `ROI Editor(Pallet ROI)`, `Camera Properties`, `Camera Calibration`, `Depth Calibration`을 보여. Viewer split view도 Pick에서만 보여.
 
 좌측 NavigationRail로 화면을 전환해. `Camera Calibration` 또는 `Camera-Depth Calibration`로 들어가면 Viewer receiver는 끊고, 해당 화면의 receiver가 stream을 새로 수신해.
@@ -78,6 +86,13 @@ API Base URL http://192.168.1.3:8090
 
 RTSP를 쓸 때는 `rtsp://192.168.1.3:8554/live`처럼 전체 URL을 넣으면 돼.
 연결 버튼은 `API Base URL`의 `/api/device-info`가 `{"kind":"guard"}` 또는 `{"kind":"pick"}`을 반환해야 진행돼.
+
+Guard `Monitor`에서 카메라를 추가할 때는 Stream URL만 넣어.
+
+```text
+ws://192.168.1.31:8080/
+rtsp://192.168.1.32:8554/live
+```
 
 ## REST API
 
@@ -171,7 +186,7 @@ lib/
   main.dart                    앱 진입점
   models/                      설정, ROI 데이터 모델
   providers/                   설정/ROI 상태 관리
-  screens/                     Viewer, ROI Editor 화면
+  screens/                     Viewer, Monitor, ROI Editor 화면
   services/                    REST API, 프레임 수신, ROI 파일 처리
   widgets/                     뷰어, 스트림 선택, ROI 캔버스, pointcloud UI
 ```
@@ -180,7 +195,7 @@ lib/
 
 - `macos/`, `windows/`, `linux/` 폴더는 Flutter가 생성하는 플랫폼 산출물이라 Git에 올리지 않아.
 - macOS 빌드가 필요하면 로컬에서 `flutter build macos`로 생성해서 써.
-- URL, pointcloud viewer 설정은 `shared_preferences`에 저장돼.
+- URL, Guard Monitor 카메라 목록, pointcloud viewer 설정은 `shared_preferences`에 저장돼.
 
 ## 참고
 

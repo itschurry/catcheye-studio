@@ -29,6 +29,7 @@ class AppSettings {
   static const bool defaultPointCloudShowAxis = true;
   static const double defaultPointCloudAxisScale = 1.0;
   static const String defaultPointCloudPalette = 'depth';
+  static const List<String> defaultGuardMonitorStreams = [];
 
   String detectorBaseUrl;
   String streamPath;
@@ -45,6 +46,7 @@ class AppSettings {
   String pointCloudPalette;
   double? pointCloudDepthMin;
   double? pointCloudDepthMax;
+  List<String> guardMonitorStreams;
 
   AppSettings({
     this.detectorBaseUrl = defaultDetectorBaseUrl,
@@ -62,7 +64,9 @@ class AppSettings {
     this.pointCloudPalette = defaultPointCloudPalette,
     this.pointCloudDepthMin,
     this.pointCloudDepthMax,
-  });
+    List<String>? guardMonitorStreams,
+  }) : guardMonitorStreams =
+           guardMonitorStreams ?? List.of(defaultGuardMonitorStreams);
 
   Uri get streamUri => _resolveUri(streamPath);
 

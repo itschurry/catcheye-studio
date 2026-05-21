@@ -12,6 +12,7 @@ import 'providers/settings_provider.dart';
 import 'screens/camera_calibration_screen.dart';
 import 'screens/camera_depth_calibration_screen.dart';
 import 'screens/camera_properties_screen.dart';
+import 'screens/monitor_screen.dart';
 import 'screens/roi_editor_screen.dart';
 import 'screens/viewer_screen.dart';
 import 'models/app_settings.dart';
@@ -139,6 +140,11 @@ class _AppShellState extends State<AppShell> {
       selectedIcon: Icons.live_tv,
     ),
     _NavItem(
+      label: 'Monitor',
+      icon: Icons.grid_view_outlined,
+      selectedIcon: Icons.grid_view,
+    ),
+    _NavItem(
       label: 'ROI Editor',
       icon: Icons.edit_location_alt_outlined,
       selectedIcon: Icons.edit_location_alt,
@@ -162,6 +168,7 @@ class _AppShellState extends State<AppShell> {
 
   static const _screens = [
     ViewerScreen(),
+    MonitorScreen(),
     RoiEditorScreen(),
     CameraPropertiesScreen(),
     CameraCalibrationScreen(),
@@ -190,7 +197,7 @@ class _AppShellState extends State<AppShell> {
               if (!visibleItemIndexes.contains(index)) {
                 return;
               }
-              if (index >= 2) {
+              if (index != 0) {
                 unawaited(context.read<FrameReceiverService>().disconnect());
               }
               setState(() => _selectedIndex = index);
@@ -205,8 +212,8 @@ class _AppShellState extends State<AppShell> {
 
   List<int> _visibleItemIndexes(RemoteDeviceKind? kind) {
     return switch (kind) {
-      RemoteDeviceKind.guard => const [0, 1, 2],
-      RemoteDeviceKind.pick => const [0, 1, 2, 3, 4],
+      RemoteDeviceKind.guard => const [0, 1, 2, 3],
+      RemoteDeviceKind.pick => const [0, 2, 3, 4, 5],
       null => const [0],
     };
   }
