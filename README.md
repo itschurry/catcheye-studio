@@ -29,6 +29,7 @@ Studio는 연결 시 `GET /api/device-info`를 먼저 호출해서 Guard/Pick을
   - 카메라 목록은 로컬 설정에 저장
 
 - ROI Editor
+  - 탭 진입 시 WebSocket camera/RGB JPEG 프레임 1장을 스냅샷으로 캡처해서 배경 표시
   - Person ROI / Pallet ROI 전환
   - 원격 장치에서 ROI 불러오기
   - 폴리곤 존 추가/삭제/이름 변경/활성화 토글

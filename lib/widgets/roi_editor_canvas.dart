@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -9,7 +11,9 @@ import 'roi_canvas_painter.dart';
 /// Canvas widget for visually editing ROI polygons
 
 class RoiEditorCanvas extends StatefulWidget {
-  const RoiEditorCanvas({super.key});
+  const RoiEditorCanvas({super.key, this.backgroundImageBytes});
+
+  final Uint8List? backgroundImageBytes;
 
   @override
   State<RoiEditorCanvas> createState() => _RoiEditorCanvasState();
@@ -37,9 +41,9 @@ class _RoiEditorCanvasState extends State<RoiEditorCanvas> {
     final size = _frameReceiver?.frameSize;
     if (size == null) return;
     context.read<RoiConfigProvider>().syncImageSize(
-          size.width.round(),
-          size.height.round(),
-        );
+      size.width.round(),
+      size.height.round(),
+    );
   }
 
   @override
@@ -68,8 +72,12 @@ class _RoiEditorCanvasState extends State<RoiEditorCanvas> {
             }
 
             final canvasSize = Size(canvasWidth, canvasHeight);
-            final scaleX = config.imageWidth > 0 ? canvasWidth / config.imageWidth : 1.0;
-            final scaleY = config.imageHeight > 0 ? canvasHeight / config.imageHeight : 1.0;
+            final scaleX = config.imageWidth > 0
+                ? canvasWidth / config.imageWidth
+                : 1.0;
+            final scaleY = config.imageHeight > 0
+                ? canvasHeight / config.imageHeight
+                : 1.0;
 
             return Center(
               child: Container(
@@ -80,34 +88,59 @@ class _RoiEditorCanvasState extends State<RoiEditorCanvas> {
                   border: Border.all(color: Colors.grey.shade700),
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: MouseRegion(
-                  onHover: (event) => _onHover(event.localPosition, config, scaleX, scaleY),
-                  onExit: (_) => setState(() {
-                    _hoveredZone = null;
-                    _hoveredPoint = null;
-                  }),
-                  cursor: _hoveredPoint != null
-                      ? SystemMouseCursors.grab
-                      : SystemMouseCursors.precise,
-                  child: GestureDetector(
-                    onPanStart: (details) =>
-                        _onPanStart(details.localPosition, config, scaleX, scaleY),
-                    onPanUpdate: (details) =>
-                        _onPanUpdate(details.localPosition, provider, scaleX, scaleY),
-                    onPanEnd: (_) => _onPanEnd(),
-                    onTapUp: (details) =>
-                        _onTapUp(details.localPosition, provider, config, scaleX, scaleY),
-                    child: CustomPaint(
-                      size: canvasSize,
-                      painter: RoiCanvasPainter(
-                        config: config,
-                        selectedZoneIndex: provider.selectedZoneIndex,
-                        hoveredPointZone: _hoveredZone,
-                        hoveredPointIndex: _hoveredPoint,
-                        canvasSize: canvasSize,
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (widget.backgroundImageBytes != null)
+                      Image.memory(
+                        widget.backgroundImageBytes!,
+                        fit: BoxFit.fill,
+                      ),
+                    MouseRegion(
+                      onHover: (event) =>
+                          _onHover(event.localPosition, config, scaleX, scaleY),
+                      onExit: (_) => setState(() {
+                        _hoveredZone = null;
+                        _hoveredPoint = null;
+                      }),
+                      cursor: _hoveredPoint != null
+                          ? SystemMouseCursors.grab
+                          : SystemMouseCursors.precise,
+                      child: GestureDetector(
+                        onPanStart: (details) => _onPanStart(
+                          details.localPosition,
+                          config,
+                          scaleX,
+                          scaleY,
+                        ),
+                        onPanUpdate: (details) => _onPanUpdate(
+                          details.localPosition,
+                          provider,
+                          scaleX,
+                          scaleY,
+                        ),
+                        onPanEnd: (_) => _onPanEnd(),
+                        onTapUp: (details) => _onTapUp(
+                          details.localPosition,
+                          provider,
+                          config,
+                          scaleX,
+                          scaleY,
+                        ),
+                        child: CustomPaint(
+                          size: canvasSize,
+                          painter: RoiCanvasPainter(
+                            config: config,
+                            selectedZoneIndex: provider.selectedZoneIndex,
+                            hoveredPointZone: _hoveredZone,
+                            hoveredPointIndex: _hoveredPoint,
+                            canvasSize: canvasSize,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             );
@@ -160,7 +193,12 @@ class _RoiEditorCanvasState extends State<RoiEditorCanvas> {
     }
   }
 
-  void _onPanUpdate(Offset pos, RoiConfigProvider provider, double sx, double sy) {
+  void _onPanUpdate(
+    Offset pos,
+    RoiConfigProvider provider,
+    double sx,
+    double sy,
+  ) {
     if (_draggingZone == null || _draggingPoint == null) return;
 
     final config = provider.config;
@@ -175,8 +213,13 @@ class _RoiEditorCanvasState extends State<RoiEditorCanvas> {
     _draggingPoint = null;
   }
 
-  void _onTapUp(Offset pos, RoiConfigProvider provider, CameraRoiConfig config,
-      double sx, double sy) {
+  void _onTapUp(
+    Offset pos,
+    RoiConfigProvider provider,
+    CameraRoiConfig config,
+    double sx,
+    double sy,
+  ) {
     // Tap on a point to select its zone
     const hitRadius = 10.0;
     for (var i = 0; i < config.allowedZones.length; i++) {

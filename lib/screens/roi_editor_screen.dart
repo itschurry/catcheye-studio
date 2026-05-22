@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -5,14 +8,34 @@ import '../models/app_settings.dart';
 import '../models/roi_config.dart';
 import '../providers/roi_config_provider.dart';
 import '../providers/settings_provider.dart';
+import '../services/frame_receiver_service.dart';
 import '../services/remote_guard_api_service.dart';
 import '../widgets/roi_editor_canvas.dart';
 import '../widgets/zone_list_panel.dart';
 
 /// ROI Editor screen
 
-class RoiEditorScreen extends StatelessWidget {
+class RoiEditorScreen extends StatefulWidget {
   const RoiEditorScreen({super.key});
+
+  @override
+  State<RoiEditorScreen> createState() => _RoiEditorScreenState();
+}
+
+class _RoiEditorScreenState extends State<RoiEditorScreen> {
+  Uint8List? _snapshotBytes;
+  bool _capturingSnapshot = false;
+  String? _snapshotError;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_captureSnapshot());
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,10 +69,12 @@ class RoiEditorScreen extends StatelessWidget {
                         // Config info bar
                         _buildConfigInfoBar(provider),
                         // ROI canvas
-                        const Expanded(
+                        Expanded(
                           child: Padding(
-                            padding: EdgeInsets.all(16),
-                            child: RoiEditorCanvas(),
+                            padding: const EdgeInsets.all(16),
+                            child: RoiEditorCanvas(
+                              backgroundImageBytes: _snapshotBytes,
+                            ),
                           ),
                         ),
                       ],
@@ -73,6 +98,95 @@ class RoiEditorScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _captureSnapshot() async {
+    final settings = context.read<SettingsProvider>().settings;
+    final streamUri = settings.streamUri;
+    if (streamUri.scheme != 'ws' && streamUri.scheme != 'wss') {
+      setState(() {
+        _snapshotBytes = null;
+        _capturingSnapshot = false;
+        _snapshotError = 'WebSocket only';
+      });
+      return;
+    }
+
+    setState(() {
+      _snapshotBytes = null;
+      _capturingSnapshot = true;
+      _snapshotError = null;
+    });
+
+    final receiver = context.read<FrameReceiverService>();
+    final completer = Completer<ViewerStreamFrame>();
+    late final VoidCallback listener;
+    listener = () {
+      final frame = _snapshotFrame(receiver);
+      if (frame != null && !completer.isCompleted) {
+        completer.complete(frame);
+        return;
+      }
+      final errorMessage = receiver.errorMessage;
+      if (errorMessage != null && !completer.isCompleted) {
+        completer.completeError(StateError(errorMessage));
+      }
+    };
+    receiver.addListener(listener);
+
+    try {
+      unawaited(receiver.connect(streamUri.toString()));
+      final frame = await completer.future.timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          throw TimeoutException('ROI snapshot frame timeout');
+        },
+      );
+      if (!mounted) return;
+      final size = frame.size;
+      if (size != null) {
+        context.read<RoiConfigProvider>().syncImageSize(
+          size.width.round(),
+          size.height.round(),
+        );
+      }
+      setState(() {
+        _snapshotBytes = Uint8List.fromList(frame.jpegBytes);
+        _capturingSnapshot = false;
+        _snapshotError = null;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _snapshotBytes = null;
+          _capturingSnapshot = false;
+          _snapshotError = 'Failed';
+        });
+      }
+    } finally {
+      receiver.removeListener(listener);
+      unawaited(receiver.disconnect());
+    }
+  }
+
+  ViewerStreamFrame? _snapshotFrame(FrameReceiverService receiver) {
+    for (final frame in receiver.streams.values) {
+      if (frame.isJpeg && _isCameraFrame(frame)) {
+        return frame;
+      }
+    }
+    return null;
+  }
+
+  bool _isCameraFrame(ViewerStreamFrame frame) {
+    final name = frame.name.toLowerCase();
+    final kind = frame.kind.toLowerCase();
+    return kind == 'camera' ||
+        kind == 'rgb' ||
+        kind == 'rgb_camera' ||
+        name == 'camera' ||
+        name == 'rgb' ||
+        name == 'rgb_camera';
   }
 
   Widget _buildToolbar(
@@ -201,6 +315,15 @@ class RoiEditorScreen extends StatelessWidget {
             _InfoChip(
               label: 'Zones',
               value: '${provider.config.allowedZones.length}',
+            ),
+            const SizedBox(width: 16),
+            _InfoChip(
+              label: 'Snapshot',
+              value: _snapshotBytes != null
+                  ? 'Ready'
+                  : _capturingSnapshot
+                  ? 'Capturing'
+                  : _snapshotError ?? '-',
             ),
             const Spacer(),
             if (provider.errorMessage != null)
