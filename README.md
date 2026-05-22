@@ -66,7 +66,8 @@ Camera-Depth Calibration  CubeEye-RGB extrinsic 캘리브레이션
 Guard 연결 시에는 `Viewer`, `Monitor`, `ROI Editor(Person ROI/Pallet ROI)`, `Camera Properties`만 보여. Viewer 오른쪽 스트림 패널과 split view도 숨겨.
 Pick 연결 시에는 `Viewer`, `ROI Editor(Pallet ROI)`, `Camera Properties`, `Camera Calibration`, `Depth Calibration`을 보여. Viewer 오른쪽 스트림 패널과 split view도 Pick에서만 보여.
 
-좌측 NavigationRail로 화면을 전환해. `Camera Calibration` 또는 `Camera-Depth Calibration`로 들어가면 Viewer receiver는 끊고, 해당 화면의 receiver가 stream을 새로 수신해.
+좌측 NavigationRail로 화면을 전환해. 다른 화면으로 이동하면 Viewer receiver는 끊고, 해당 화면의 receiver가 필요하면 stream을 새로 수신해.
+Viewer가 연결된 상태에서 다른 화면으로 이동했다가 Viewer로 돌아오면 저장된 Stream URL/API Base URL로 자동 재연결해.
 
 Guard Viewer에서 `Record`를 누르면 Guard 장비가 현재 preview frame 저장을 시작해.
 녹화 중에는 `Save`, `Pause`, `Cancel`만 보이고, `Pause` 후에는 `Resume`으로 다시 파일 쓰기를 시작해.

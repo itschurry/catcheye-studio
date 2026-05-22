@@ -18,7 +18,9 @@ import '../widgets/stream_selector.dart';
 const double _streamSelectorPanelWidth = 380;
 
 class ViewerScreen extends StatefulWidget {
-  const ViewerScreen({super.key});
+  const ViewerScreen({super.key, required this.reconnectToken});
+
+  final int reconnectToken;
 
   @override
   State<ViewerScreen> createState() => _ViewerScreenState();
@@ -46,6 +48,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
   String? _splitRightStreamKey;
   GuardRecordingStatus? _recordingStatus;
   bool _recordingActionInFlight = false;
+  int _handledReconnectToken = 0;
 
   @override
   void didChangeDependencies() {
@@ -64,6 +67,35 @@ class _ViewerScreenState extends State<ViewerScreen> {
     _hasManualDepthRange =
         settings.pointCloudDepthMin != null &&
         settings.pointCloudDepthMax != null;
+    _connectAfterTabReturn();
+  }
+
+  @override
+  void didUpdateWidget(covariant ViewerScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _connectAfterTabReturn();
+  }
+
+  void _connectAfterTabReturn() {
+    if (widget.reconnectToken == 0 ||
+        _handledReconnectToken == widget.reconnectToken) {
+      return;
+    }
+    _handledReconnectToken = widget.reconnectToken;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final receiver = context.read<FrameReceiverService>();
+      if (receiver.connected || receiver.connecting) return;
+      final settings = context.read<SettingsProvider>().settings;
+      unawaited(
+        _connect(
+          context: context,
+          receiver: receiver,
+          streamPath: settings.streamUri.toString(),
+          apiBaseUrl: settings.detectorBaseUrl,
+        ),
+      );
+    });
   }
 
   @override

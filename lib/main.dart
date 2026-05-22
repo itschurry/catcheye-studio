@@ -132,6 +132,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
+  int _viewerReconnectToken = 0;
 
   static const _items = [
     _NavItem(
@@ -166,15 +167,6 @@ class _AppShellState extends State<AppShell> {
     ),
   ];
 
-  static const _screens = [
-    ViewerScreen(),
-    MonitorScreen(),
-    RoiEditorScreen(),
-    CameraPropertiesScreen(),
-    CameraCalibrationScreen(),
-    CameraDepthCalibrationScreen(),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final remoteDeviceKind = context
@@ -197,17 +189,37 @@ class _AppShellState extends State<AppShell> {
               if (!visibleItemIndexes.contains(index)) {
                 return;
               }
+              final receiver = context.read<FrameReceiverService>();
+              final shouldReconnectViewer =
+                  selectedIndex == 0 &&
+                  index != 0 &&
+                  (receiver.connected || receiver.connecting);
               if (index != 0) {
-                unawaited(context.read<FrameReceiverService>().disconnect());
+                if (shouldReconnectViewer) {
+                  _viewerReconnectToken += 1;
+                }
+                unawaited(receiver.disconnect());
               }
               setState(() => _selectedIndex = index);
             },
           ),
           const VerticalDivider(thickness: 1, width: 1),
-          Expanded(child: _screens[selectedIndex]),
+          Expanded(child: _screenForIndex(selectedIndex)),
         ],
       ),
     );
+  }
+
+  Widget _screenForIndex(int index) {
+    return switch (index) {
+      0 => ViewerScreen(reconnectToken: _viewerReconnectToken),
+      1 => const MonitorScreen(),
+      2 => const RoiEditorScreen(),
+      3 => const CameraPropertiesScreen(),
+      4 => const CameraCalibrationScreen(),
+      5 => const CameraDepthCalibrationScreen(),
+      _ => throw StateError('Unsupported screen index: $index'),
+    };
   }
 
   List<int> _visibleItemIndexes(RemoteDeviceKind? kind) {

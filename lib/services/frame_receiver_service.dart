@@ -513,9 +513,9 @@ class FrameReceiverService extends ChangeNotifier {
     _closingWebSocket = true;
     _connected = false;
     _connecting = false;
+    await _closeWebSocket();
     await _webSocketSubscription?.cancel();
     _webSocketSubscription = null;
-    await _closeWebSocket();
     await _player.stop();
     _connectedUri = null;
     _currentFrame = null;
