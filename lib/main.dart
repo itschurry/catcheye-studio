@@ -133,6 +133,8 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
   int _viewerReconnectToken = 0;
+  static const _wideBreakpoint = 900.0;
+  static const _phoneBreakpoint = 600.0;
 
   static const _items = [
     _NavItem(
@@ -173,48 +175,54 @@ class _AppShellState extends State<AppShell> {
         .watch<SettingsProvider>()
         .settings
         .remoteDeviceKind;
-    final visibleItemIndexes = _visibleItemIndexes(remoteDeviceKind);
+    final width = MediaQuery.of(context).size.width;
+    final isWide = width >= _wideBreakpoint;
+    final isPhone = width < _phoneBreakpoint;
+    final visibleItemIndexes = _visibleItemIndexes(remoteDeviceKind, isPhone);
     final selectedIndex = visibleItemIndexes.contains(_selectedIndex)
         ? _selectedIndex
         : 0;
 
     return Scaffold(
-      body: Row(
-        children: [
-          _AppSidebar(
-            selectedIndex: selectedIndex,
-            items: _items,
-            visibleItemIndexes: visibleItemIndexes,
-            onSelected: (index) {
-              if (!visibleItemIndexes.contains(index)) {
-                return;
-              }
-              final receiver = context.read<FrameReceiverService>();
-              final shouldReconnectViewer =
-                  selectedIndex == 0 &&
-                  index != 0 &&
-                  (receiver.connected || receiver.connecting);
-              if (index != 0) {
-                if (shouldReconnectViewer) {
-                  _viewerReconnectToken += 1;
-                }
-                unawaited(receiver.disconnect());
-              }
-              setState(() => _selectedIndex = index);
-            },
-          ),
-          const VerticalDivider(thickness: 1, width: 1),
-          Expanded(child: _screenForIndex(selectedIndex)),
-        ],
+      body: SafeArea(
+        bottom: false,
+        child: isWide
+            ? Row(
+                children: [
+                  _AppSidebar(
+                    selectedIndex: selectedIndex,
+                    items: _items,
+                    visibleItemIndexes: visibleItemIndexes,
+                    onSelected: (index) => _onNavSelected(index, selectedIndex),
+                  ),
+                  const VerticalDivider(thickness: 1, width: 1),
+                  Expanded(
+                    child: _screenForIndex(selectedIndex, isPhone: isPhone),
+                  ),
+                ],
+              )
+            : _screenForIndex(selectedIndex, isPhone: isPhone),
       ),
+      bottomNavigationBar: isWide
+          ? null
+          : _BottomNavigation(
+              selectedIndex: selectedIndex,
+              visibleItemIndexes: visibleItemIndexes,
+              items: _items,
+              isPhone: isPhone,
+              onSelected: (index) => _onNavSelected(index, selectedIndex),
+            ),
     );
   }
 
-  Widget _screenForIndex(int index) {
+  Widget _screenForIndex(int index, {required bool isPhone}) {
     return switch (index) {
-      0 => ViewerScreen(reconnectToken: _viewerReconnectToken),
-      1 => const MonitorScreen(),
-      2 => const RoiEditorScreen(),
+      0 => ViewerScreen(
+        reconnectToken: _viewerReconnectToken,
+        isPhone: isPhone,
+      ),
+      1 => MonitorScreen(isPhone: isPhone),
+      2 => RoiEditorScreen(isPhone: isPhone),
       3 => const CameraPropertiesScreen(),
       4 => const CameraCalibrationScreen(),
       5 => const CameraDepthCalibrationScreen(),
@@ -222,12 +230,37 @@ class _AppShellState extends State<AppShell> {
     };
   }
 
-  List<int> _visibleItemIndexes(RemoteDeviceKind? kind) {
+  List<int> _visibleItemIndexes(RemoteDeviceKind? kind, bool isPhone) {
+    if (isPhone) {
+      return switch (kind) {
+        RemoteDeviceKind.guard => const [0, 1, 2],
+        RemoteDeviceKind.pick => const [0, 2],
+        null => const [0],
+      };
+    }
     return switch (kind) {
       RemoteDeviceKind.guard => const [0, 1, 2, 3],
       RemoteDeviceKind.pick => const [0, 2, 3, 4, 5],
       null => const [0],
     };
+  }
+
+  void _onNavSelected(int index, int currentSelectedIndex) {
+    if (index == currentSelectedIndex) {
+      return;
+    }
+    final receiver = context.read<FrameReceiverService>();
+    final shouldReconnectViewer =
+        currentSelectedIndex == 0 &&
+        index != 0 &&
+        (receiver.connected || receiver.connecting);
+    if (index != 0) {
+      if (shouldReconnectViewer) {
+        _viewerReconnectToken += 1;
+      }
+      unawaited(receiver.disconnect());
+    }
+    setState(() => _selectedIndex = index);
   }
 }
 
@@ -341,6 +374,43 @@ class _SidebarButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _BottomNavigation extends StatelessWidget {
+  const _BottomNavigation({
+    required this.selectedIndex,
+    required this.visibleItemIndexes,
+    required this.items,
+    required this.isPhone,
+    required this.onSelected,
+  });
+
+  final int selectedIndex;
+  final List<int> visibleItemIndexes;
+  final List<_NavItem> items;
+  final bool isPhone;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return BottomNavigationBar(
+      type: BottomNavigationBarType.fixed,
+      backgroundColor: const Color(0xFF252525),
+      currentIndex: visibleItemIndexes.indexOf(selectedIndex),
+      showUnselectedLabels: !isPhone,
+      onTap: (selectedNavIndex) {
+        onSelected(visibleItemIndexes[selectedNavIndex]);
+      },
+      items: [
+        for (final index in visibleItemIndexes)
+          BottomNavigationBarItem(
+            icon: Icon(items[index].icon),
+            activeIcon: Icon(items[index].selectedIcon),
+            label: items[index].label,
+          ),
+      ],
     );
   }
 }

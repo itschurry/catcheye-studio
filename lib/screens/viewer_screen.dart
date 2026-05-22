@@ -18,9 +18,14 @@ import '../widgets/stream_selector.dart';
 const double _streamSelectorPanelWidth = 380;
 
 class ViewerScreen extends StatefulWidget {
-  const ViewerScreen({super.key, required this.reconnectToken});
+  const ViewerScreen({
+    super.key,
+    required this.reconnectToken,
+    required this.isPhone,
+  });
 
   final int reconnectToken;
+  final bool isPhone;
 
   @override
   State<ViewerScreen> createState() => _ViewerScreenState();
@@ -114,6 +119,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
               settings.detectorBaseUrl,
               remoteDeviceKind,
               settings,
+              isPhone: widget.isPhone,
             ),
             const Divider(height: 1),
 
@@ -133,7 +139,8 @@ class _ViewerScreenState extends State<ViewerScreen> {
     RemoteDeviceKind? remoteDeviceKind,
   ) {
     final selectedFrame = receiver.selectedFrame;
-    final splitViewEnabled = remoteDeviceKind == RemoteDeviceKind.pick;
+    final splitViewEnabled =
+        remoteDeviceKind == RemoteDeviceKind.pick && !widget.isPhone;
     final viewer =
         splitViewEnabled &&
             _splitView &&
@@ -143,8 +150,10 @@ class _ViewerScreenState extends State<ViewerScreen> {
         : _buildMainViewer(receiver, selectedFrame);
 
     final selectorPanelEnabled = remoteDeviceKind == RemoteDeviceKind.pick;
+    final sidePanelVisible =
+        selectorPanelEnabled && !widget.isPhone && !receiver.isRtsp;
 
-    if (!receiver.connected || receiver.isRtsp || !selectorPanelEnabled) {
+    if (!receiver.connected || !sidePanelVisible) {
       return viewer;
     }
 
@@ -226,6 +235,152 @@ class _ViewerScreenState extends State<ViewerScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  void _showPhoneStreamSheet(FrameReceiverService receiver) {
+    if (!receiver.connected || receiver.isRtsp) {
+      return;
+    }
+    final streams = receiver.streams.values.toList()
+      ..sort((a, b) => a.payloadIndex.compareTo(b.payloadIndex));
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Stream',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                for (final stream in streams)
+                  ListTile(
+                    dense: true,
+                    title: Text(
+                      stream.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      stream.isPointCloud
+                          ? '${stream.pointCount} pts'
+                          : stream.size == null
+                          ? 'unknown size'
+                          : '${stream.size!.width.toInt()} x ${stream.size!.height.toInt()}',
+                    ),
+                    selected: stream.key == receiver.selectedStreamKey,
+                    onTap: () {
+                      receiver.selectStream(stream.key);
+                      Navigator.pop(sheetContext);
+                    },
+                  ),
+                const Divider(height: 16),
+                FilledButton.tonal(
+                  onPressed: () {
+                    Navigator.pop(sheetContext);
+                    _showPhoneAdvancedSheet(receiver);
+                  },
+                  child: const Text('Advanced controls'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showPhoneAdvancedSheet(FrameReceiverService receiver) {
+    final settings = context.read<SettingsProvider>().settings;
+    final selectedFrame = receiver.selectedFrame;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(context).height * 0.75,
+            child: StreamSelector(
+              receiver: receiver,
+              splitView: _splitView,
+              splitLeftStreamKey: _splitLeftStreamKey,
+              splitRightStreamKey: _splitRightStreamKey,
+              pointSize: _pointSize,
+              showAxis: _showAxis,
+              axisScale: _axisScale,
+              palette: _palette,
+              yaw: _viewYaw,
+              pitch: _viewPitch,
+              zoom: _viewZoom,
+              depthMin: _effectiveDepthMin(selectedFrame),
+              depthMax: _effectiveDepthMax(selectedFrame),
+              viewportLocked: _isViewportLocked(selectedFrame),
+              remoteDeviceKind: settings.remoteDeviceKind,
+              onPointSizeChanged: (value) {
+                setState(() => _pointSize = value);
+                _persistPointCloudViewerSettings();
+              },
+              onShowAxisChanged: (value) {
+                setState(() => _showAxis = value);
+                _persistPointCloudViewerSettings();
+              },
+              onAxisScaleChanged: (value) {
+                setState(() => _axisScale = value);
+                _persistPointCloudViewerSettings();
+              },
+              onPaletteChanged: (value) {
+                setState(() => _palette = value);
+                _persistPointCloudViewerSettings();
+              },
+              onYawChanged: (value) => setState(() => _viewYaw = value),
+              onPitchChanged: (value) => setState(() => _viewPitch = value),
+              onZoomChanged: (value) => setState(() => _viewZoom = value),
+              onResetCamera: () => setState(() {
+                _viewYaw = -0.55;
+                _viewPitch = 0.35;
+                _viewZoom = 1.0;
+                _viewPanOffset = Offset.zero;
+              }),
+              onSplitViewChanged: (enabled) {
+                setState(() {
+                  _splitView = enabled;
+                  if (enabled) {
+                    _assignInitialSplitStreams(receiver);
+                  }
+                });
+                if (sheetContext.mounted) {
+                  Navigator.pop(sheetContext);
+                }
+              },
+              onSplitSelectionChanged: (selection) {
+                setState(() {
+                  _splitLeftStreamKey = selection.leftKey;
+                  _splitRightStreamKey = selection.rightKey;
+                });
+              },
+              onDepthRangeChanged: (values) {
+                setState(() {
+                  _depthMin = values.start;
+                  _depthMax = values.end;
+                  _hasManualDepthRange = true;
+                });
+                _persistPointCloudViewerSettings();
+              },
+              onLockView: () => _lockViewport(selectedFrame),
+              onUnlockView: _unlockViewport,
+              onResetView: () => _resetViewport(selectedFrame),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -596,8 +751,20 @@ class _ViewerScreenState extends State<ViewerScreen> {
     String defaultStreamUrl,
     String defaultApiBaseUrl,
     RemoteDeviceKind? remoteDeviceKind,
-    AppSettings settings,
-  ) {
+    AppSettings settings, {
+    bool isPhone = false,
+  }) {
+    if (isPhone) {
+      return _buildPhoneToolbar(
+        context,
+        receiver,
+        defaultStreamUrl,
+        defaultApiBaseUrl,
+        remoteDeviceKind,
+        settings,
+      );
+    }
+
     final colorScheme = Theme.of(context).colorScheme;
     final splitViewEnabled = remoteDeviceKind == RemoteDeviceKind.pick;
 
@@ -692,6 +859,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
             ),
           const Spacer(),
           if (splitViewEnabled &&
+              !isPhone &&
               receiver.connected &&
               receiver.isWebSocket) ...[
             Tooltip(
@@ -712,6 +880,21 @@ class _ViewerScreenState extends State<ViewerScreen> {
             ),
             const SizedBox(width: 8),
           ],
+          if (splitViewEnabled && isPhone && receiver.connected) ...[
+            OutlinedButton.icon(
+              icon: const Icon(Icons.layers_outlined, size: 16),
+              label: const Text('Streams'),
+              onPressed: () => _showPhoneStreamSheet(receiver),
+            ),
+            const SizedBox(width: 8),
+            if (receiver.streams.length > 1)
+              OutlinedButton.icon(
+                icon: const Icon(Icons.tune_outlined, size: 16),
+                label: const Text('Advanced'),
+                onPressed: () => _showPhoneAdvancedSheet(receiver),
+              ),
+            const SizedBox(width: 8),
+          ],
           if (remoteDeviceKind == RemoteDeviceKind.guard &&
               receiver.connected) ...[
             _buildRecordingControls(settings),
@@ -720,6 +903,208 @@ class _ViewerScreenState extends State<ViewerScreen> {
           const SizedBox(width: 8),
         ],
       ),
+    );
+  }
+
+  Widget _buildPhoneToolbar(
+    BuildContext context,
+    FrameReceiverService receiver,
+    String defaultStreamUrl,
+    String defaultApiBaseUrl,
+    RemoteDeviceKind? remoteDeviceKind,
+    AppSettings settings,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final splitViewEnabled = remoteDeviceKind == RemoteDeviceKind.pick;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      color: colorScheme.surface,
+      child: Row(
+        children: [
+          Icon(Icons.live_tv, size: 22, color: colorScheme.secondary),
+          const SizedBox(width: 8),
+          const Flexible(
+            child: Text(
+              'Viewer',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              reverse: true,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!receiver.connected && !receiver.connecting) ...[
+                    Tooltip(
+                      message: 'Connect',
+                      child: IconButton.filled(
+                        icon: const Icon(Icons.power, size: 20),
+                        onPressed: () => _connect(
+                          context: context,
+                          receiver: receiver,
+                          streamPath: defaultStreamUrl,
+                          apiBaseUrl: defaultApiBaseUrl,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Tooltip(
+                      message: 'Change URL',
+                      child: IconButton.outlined(
+                        icon: const Icon(Icons.link, size: 20),
+                        onPressed: () => _showConnectDialog(
+                          context,
+                          receiver,
+                          defaultStreamUrl,
+                          defaultApiBaseUrl,
+                        ),
+                      ),
+                    ),
+                  ] else if (receiver.connecting) ...[
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('Connecting...', style: TextStyle(fontSize: 13)),
+                  ] else ...[
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        color: Colors.green,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Tooltip(
+                      message: 'Disconnect',
+                      child: IconButton.outlined(
+                        icon: const Icon(Icons.power_off, size: 20),
+                        onPressed: () => receiver.disconnect(),
+                      ),
+                    ),
+                  ],
+                  if (splitViewEnabled && receiver.connected) ...[
+                    const SizedBox(width: 4),
+                    Tooltip(
+                      message: 'Streams',
+                      child: IconButton.outlined(
+                        icon: const Icon(Icons.layers_outlined, size: 20),
+                        onPressed: () => _showPhoneStreamSheet(receiver),
+                      ),
+                    ),
+                    if (receiver.streams.length > 1) ...[
+                      const SizedBox(width: 4),
+                      Tooltip(
+                        message: 'Advanced controls',
+                        child: IconButton.outlined(
+                          icon: const Icon(Icons.tune_outlined, size: 20),
+                          onPressed: () => _showPhoneAdvancedSheet(receiver),
+                        ),
+                      ),
+                    ],
+                  ],
+                  if (remoteDeviceKind == RemoteDeviceKind.guard &&
+                      receiver.connected) ...[
+                    const SizedBox(width: 4),
+                    _buildPhoneRecordingControls(settings),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          if (receiver.errorMessage != null) ...[
+            const SizedBox(width: 4),
+            Tooltip(
+              message: receiver.errorMessage!,
+              child: const Icon(
+                Icons.error_outline,
+                size: 18,
+                color: Colors.red,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhoneRecordingControls(AppSettings settings) {
+    final status = _recordingStatus;
+    final state = status?.state ?? GuardRecordingState.idle;
+    final busy = _recordingActionInFlight;
+
+    if (state == GuardRecordingState.idle) {
+      return Tooltip(
+        message: 'Record',
+        child: IconButton.outlined(
+          icon: const Icon(Icons.fiber_manual_record, size: 20),
+          color: Colors.redAccent,
+          onPressed: busy
+              ? null
+              : () =>
+                    _runRecordingAction((api) => api.startRecording(settings)),
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Tooltip(
+          message: 'Save',
+          child: IconButton.outlined(
+            icon: const Icon(Icons.save, size: 20),
+            onPressed: busy
+                ? null
+                : () => _runRecordingAction(
+                    (api) => api.saveRecording(settings),
+                    successMessage: (next) => next.savedPath.isEmpty
+                        ? 'Recording saved'
+                        : 'Recording saved: ${next.savedPath}',
+                  ),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Tooltip(
+          message: state == GuardRecordingState.paused ? 'Resume' : 'Pause',
+          child: IconButton.outlined(
+            icon: Icon(
+              state == GuardRecordingState.paused
+                  ? Icons.play_arrow
+                  : Icons.pause,
+              size: 20,
+            ),
+            onPressed: busy
+                ? null
+                : () => _runRecordingAction(
+                    (api) => state == GuardRecordingState.paused
+                        ? api.resumeRecording(settings)
+                        : api.pauseRecording(settings),
+                  ),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Tooltip(
+          message: 'Cancel',
+          child: IconButton.outlined(
+            icon: const Icon(Icons.close, size: 20),
+            onPressed: busy
+                ? null
+                : () => _runRecordingAction(
+                    (api) => api.cancelRecording(settings),
+                  ),
+          ),
+        ),
+      ],
     );
   }
 

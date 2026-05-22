@@ -16,7 +16,9 @@ import '../widgets/zone_list_panel.dart';
 /// ROI Editor screen
 
 class RoiEditorScreen extends StatefulWidget {
-  const RoiEditorScreen({super.key});
+  const RoiEditorScreen({super.key, this.isPhone = false});
+
+  final bool isPhone;
 
   @override
   State<RoiEditorScreen> createState() => _RoiEditorScreenState();
@@ -26,6 +28,7 @@ class _RoiEditorScreenState extends State<RoiEditorScreen> {
   Uint8List? _snapshotBytes;
   bool _capturingSnapshot = false;
   String? _snapshotError;
+  bool _zonePanelExpanded = false;
 
   @override
   void initState() {
@@ -54,45 +57,102 @@ class _RoiEditorScreenState extends State<RoiEditorScreen> {
         return Column(
           children: [
             // Toolbar
-            _buildToolbar(context, provider, allowedKinds),
+            _buildToolbar(
+              context,
+              provider,
+              allowedKinds,
+              isPhone: widget.isPhone,
+            ),
             const Divider(height: 1),
 
             // Main area
             Expanded(
-              child: Row(
-                children: [
-                  // Canvas
-                  Expanded(
-                    flex: 3,
-                    child: Column(
+              child: widget.isPhone
+                  ? Column(
                       children: [
-                        // Config info bar
-                        _buildConfigInfoBar(provider),
-                        // ROI canvas
                         Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: RoiEditorCanvas(
-                              backgroundImageBytes: _snapshotBytes,
+                          child: Column(
+                            children: [
+                              _buildConfigInfoBar(provider),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: RoiEditorCanvas(
+                                    backgroundImageBytes: _snapshotBytes,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Divider(height: 1),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          child: Row(
+                            children: [
+                              const Text(
+                                'Zones',
+                                style: TextStyle(fontSize: 14),
+                              ),
+                              const Spacer(),
+                              TextButton.icon(
+                                onPressed: () => setState(
+                                  () =>
+                                      _zonePanelExpanded = !_zonePanelExpanded,
+                                ),
+                                icon: Icon(
+                                  _zonePanelExpanded
+                                      ? Icons.keyboard_arrow_up
+                                      : Icons.keyboard_arrow_down,
+                                ),
+                                label: Text(
+                                  _zonePanelExpanded
+                                      ? 'Hide zones'
+                                      : 'Show zones',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (_zonePanelExpanded)
+                          Expanded(child: const ZoneListPanel()),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: Column(
+                            children: [
+                              _buildConfigInfoBar(provider),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: RoiEditorCanvas(
+                                    backgroundImageBytes: _snapshotBytes,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          width: 280,
+                          decoration: BoxDecoration(
+                            border: Border(
+                              left: BorderSide(
+                                color: Theme.of(context).dividerColor,
+                              ),
                             ),
                           ),
+                          child: const ZoneListPanel(),
                         ),
                       ],
                     ),
-                  ),
-
-                  // Zone list panel
-                  Container(
-                    width: 280,
-                    decoration: BoxDecoration(
-                      border: Border(
-                        left: BorderSide(color: Theme.of(context).dividerColor),
-                      ),
-                    ),
-                    child: const ZoneListPanel(),
-                  ),
-                ],
-              ),
             ),
           ],
         );
@@ -192,8 +252,9 @@ class _RoiEditorScreenState extends State<RoiEditorScreen> {
   Widget _buildToolbar(
     BuildContext context,
     RoiConfigProvider provider,
-    List<RoiConfigKind> allowedKinds,
-  ) {
+    List<RoiConfigKind> allowedKinds, {
+    required bool isPhone,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
@@ -234,22 +295,22 @@ class _RoiEditorScreenState extends State<RoiEditorScreen> {
           ),
           const SizedBox(width: 16),
 
-          // File path
-          if (provider.filePath != null)
-            Expanded(
-              child: Text(
-                provider.filePath!,
-                style: const TextStyle(fontSize: 11, color: Colors.grey),
-                overflow: TextOverflow.ellipsis,
+          if (!isPhone)
+            if (provider.filePath != null)
+              Expanded(
+                child: Text(
+                  provider.filePath!,
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              )
+            else
+              const Expanded(
+                child: Text(
+                  'No file',
+                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                ),
               ),
-            )
-          else
-            const Expanded(
-              child: Text(
-                'No file',
-                style: TextStyle(fontSize: 11, color: Colors.grey),
-              ),
-            ),
 
           if (provider.isDirty)
             Container(

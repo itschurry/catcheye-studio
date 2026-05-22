@@ -8,7 +8,9 @@ import '../services/frame_receiver_service.dart';
 import '../widgets/live_viewer.dart';
 
 class MonitorScreen extends StatefulWidget {
-  const MonitorScreen({super.key});
+  const MonitorScreen({super.key, this.isPhone = false});
+
+  final bool isPhone;
 
   @override
   State<MonitorScreen> createState() => _MonitorScreenState();
@@ -41,7 +43,7 @@ class _MonitorScreenState extends State<MonitorScreen> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _buildToolbar(context),
+        _buildToolbar(context, isPhone: widget.isPhone),
         const Divider(height: 1),
         Expanded(
           child: _cameras.isEmpty
@@ -79,7 +81,11 @@ class _MonitorScreenState extends State<MonitorScreen> {
     );
   }
 
-  Widget _buildToolbar(BuildContext context) {
+  Widget _buildToolbar(BuildContext context, {required bool isPhone}) {
+    if (isPhone) {
+      return _buildPhoneToolbar(context);
+    }
+
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -109,6 +115,63 @@ class _MonitorScreenState extends State<MonitorScreen> {
             icon: const Icon(Icons.add, size: 16),
             label: const Text('Add Camera'),
             onPressed: () => _showAddCameraDialog(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhoneToolbar(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      color: colorScheme.surface,
+      child: Row(
+        children: [
+          Icon(Icons.grid_view, size: 22, color: colorScheme.secondary),
+          const SizedBox(width: 8),
+          const Flexible(
+            child: Text(
+              'Monitor',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              reverse: true,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Tooltip(
+                    message: 'Connect all',
+                    child: IconButton.outlined(
+                      icon: const Icon(Icons.play_arrow, size: 20),
+                      onPressed: _cameras.isEmpty ? null : _connectAll,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Tooltip(
+                    message: 'Disconnect all',
+                    child: IconButton.outlined(
+                      icon: const Icon(Icons.stop, size: 20),
+                      onPressed: _cameras.isEmpty ? null : _disconnectAll,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Tooltip(
+                    message: 'Add camera',
+                    child: IconButton.filled(
+                      icon: const Icon(Icons.add, size: 20),
+                      onPressed: () => _showAddCameraDialog(context),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
