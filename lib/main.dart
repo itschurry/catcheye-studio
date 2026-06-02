@@ -9,7 +9,6 @@ import 'package:window_manager/window_manager.dart';
 
 import 'providers/roi_config_provider.dart';
 import 'providers/settings_provider.dart';
-import 'screens/camera_calibration_screen.dart';
 import 'screens/camera_depth_calibration_screen.dart';
 import 'screens/camera_properties_screen.dart';
 import 'screens/monitor_screen.dart';
@@ -158,12 +157,7 @@ class _AppShellState extends State<AppShell> {
       selectedIcon: Icons.settings_input_component,
     ),
     _NavItem(
-      label: 'Camera Calibration',
-      icon: Icons.grid_on_outlined,
-      selectedIcon: Icons.grid_on,
-    ),
-    _NavItem(
-      label: 'Depth Calibration',
+      label: 'Camera Geometry',
       icon: Icons.threed_rotation_outlined,
       selectedIcon: Icons.threed_rotation,
     ),
@@ -224,8 +218,7 @@ class _AppShellState extends State<AppShell> {
       1 => MonitorScreen(isPhone: isPhone),
       2 => RoiEditorScreen(isPhone: isPhone),
       3 => const CameraPropertiesScreen(),
-      4 => const CameraCalibrationScreen(),
-      5 => const CameraDepthCalibrationScreen(),
+      4 => const CameraDepthCalibrationScreen(),
       _ => throw StateError('Unsupported screen index: $index'),
     };
   }
@@ -240,7 +233,7 @@ class _AppShellState extends State<AppShell> {
     }
     return switch (kind) {
       RemoteDeviceKind.guard => const [0, 1, 2, 3],
-      RemoteDeviceKind.pick => const [0, 2, 3, 4, 5],
+      RemoteDeviceKind.pick => const [0, 2, 4],
       null => const [0],
     };
   }
