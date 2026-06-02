@@ -28,6 +28,38 @@ flutter run -d macos
 
 Pick 연결에서는 `Viewer`, `ROI Editor`, `Camera Geometry`만 보여준다.
 
+## Pick Viewer 스트림
+
+Pick Viewer는 WebSocket `viewer_frame` multi-stream을 받으면 우측 `Streams` 패널에 RGB와 Depth를 나눠 보여준다.
+
+Desktop에서는 Split View를 켜면 왼쪽은 color/RGB JPEG, 오른쪽은 depth JPEG를 기본 선택한다. Depth stream이 없으면 오른쪽 패널은 비어 있다.
+
+예시 metadata:
+
+```json
+{
+  "type": "viewer_frame",
+  "streams": [
+    {
+      "name": "camera",
+      "kind": "camera",
+      "encoding": "jpeg",
+      "payload_index": 0,
+      "width": 1280,
+      "height": 720
+    },
+    {
+      "name": "depth",
+      "kind": "depth",
+      "encoding": "jpeg",
+      "payload_index": 1,
+      "width": 1280,
+      "height": 720
+    }
+  ]
+}
+```
+
 ## 연결 설정
 
 Viewer의 URL 설정에서 아래 값을 지정한다.

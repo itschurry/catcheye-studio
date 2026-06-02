@@ -141,6 +141,9 @@ class _ViewerScreenState extends State<ViewerScreen> {
     final selectedFrame = receiver.selectedFrame;
     final splitViewEnabled =
         remoteDeviceKind == RemoteDeviceKind.pick && !widget.isPhone;
+    if (splitViewEnabled && _splitView && receiver.connected) {
+      _ensureSplitStreams(receiver);
+    }
     final viewer =
         splitViewEnabled &&
             _splitView &&
@@ -442,18 +445,71 @@ class _ViewerScreenState extends State<ViewerScreen> {
   }
 
   void _assignInitialSplitStreams(FrameReceiverService receiver) {
+    _splitLeftStreamKey = null;
+    _splitRightStreamKey = null;
+    _ensureSplitStreams(receiver);
+  }
+
+  void _ensureSplitStreams(FrameReceiverService receiver) {
     final streams = receiver.streams.values.toList()
       ..sort((a, b) => a.payloadIndex.compareTo(b.payloadIndex));
     if (streams.isEmpty) return;
-    _splitLeftStreamKey ??= receiver.selectedStreamKey ?? streams.first.key;
-    _splitRightStreamKey ??= streams.length > 1
-        ? streams
-              .firstWhere(
-                (stream) => stream.key != _splitLeftStreamKey,
-                orElse: () => streams.first,
-              )
-              .key
-        : streams.first.key;
+
+    final leftIsValid = _streamByKey(streams, _splitLeftStreamKey) != null;
+    if (!leftIsValid) {
+      _splitLeftStreamKey =
+          _firstStreamKeyWhere(streams, _isColorImageStream) ??
+          receiver.selectedStreamKey ??
+          streams.first.key;
+    }
+
+    final rightIsValid = _streamByKey(streams, _splitRightStreamKey) != null;
+    if (!rightIsValid || _splitRightStreamKey == _splitLeftStreamKey) {
+      _splitRightStreamKey = _firstStreamKeyWhere(
+        streams,
+        (stream) =>
+            stream.key != _splitLeftStreamKey && _isDepthImageStream(stream),
+      );
+    }
+  }
+
+  String? _firstStreamKeyWhere(
+    List<ViewerStreamFrame> streams,
+    bool Function(ViewerStreamFrame stream) test,
+  ) {
+    for (final stream in streams) {
+      if (test(stream)) return stream.key;
+    }
+    return null;
+  }
+
+  bool _isColorImageStream(ViewerStreamFrame stream) {
+    if (!stream.isJpeg) return false;
+    final values = _streamIdentityValues(stream);
+    return values.any(
+      (value) =>
+          value == 'camera' ||
+          value == 'color' ||
+          value == 'rgb' ||
+          value == 'rgb_camera' ||
+          value.contains('color') ||
+          value.contains('rgb'),
+    );
+  }
+
+  bool _isDepthImageStream(ViewerStreamFrame stream) {
+    if (!stream.isJpeg) return false;
+    final values = _streamIdentityValues(stream);
+    return values.any((value) => value == 'depth' || value.contains('depth'));
+  }
+
+  List<String> _streamIdentityValues(ViewerStreamFrame stream) {
+    return [
+      stream.key.toLowerCase(),
+      stream.name.toLowerCase(),
+      stream.kind.toLowerCase(),
+      stream.label.toLowerCase(),
+    ];
   }
 
   Widget _buildMainViewer(
