@@ -31,7 +31,8 @@ class ViewerScreen extends StatefulWidget {
   State<ViewerScreen> createState() => _ViewerScreenState();
 }
 
-class _ViewerScreenState extends State<ViewerScreen> {
+class _ViewerScreenState extends State<ViewerScreen>
+    with SingleTickerProviderStateMixin {
   double _pointSize = 2.0;
   bool _showAxis = true;
   double _axisScale = AppSettings.defaultPointCloudAxisScale;
@@ -54,6 +55,29 @@ class _ViewerScreenState extends State<ViewerScreen> {
   GuardRecordingStatus? _recordingStatus;
   bool _recordingActionInFlight = false;
   int _handledReconnectToken = 0;
+  late final AnimationController _roiAlertBlinkController;
+  late final Animation<double> _roiAlertOpacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _roiAlertBlinkController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 850),
+    )..repeat(reverse: true);
+    _roiAlertOpacity = Tween<double>(begin: 0.32, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _roiAlertBlinkController,
+        curve: Curves.easeInOut,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _roiAlertBlinkController.dispose();
+    super.dispose();
+  }
 
   @override
   void didChangeDependencies() {
@@ -109,6 +133,10 @@ class _ViewerScreenState extends State<ViewerScreen> {
       builder: (context, receiver, settingsProvider, _) {
         final settings = settingsProvider.settings;
         final remoteDeviceKind = settings.remoteDeviceKind;
+        final showRoiAlertOff =
+            remoteDeviceKind == RemoteDeviceKind.guard &&
+            receiver.connected &&
+            settings.personRoiAlertDisabled;
         return Column(
           children: [
             // Toolbar
@@ -124,7 +152,13 @@ class _ViewerScreenState extends State<ViewerScreen> {
             const Divider(height: 1),
 
             // Frame viewer
-            Expanded(child: _buildViewerArea(receiver, remoteDeviceKind)),
+            Expanded(
+              child: _buildViewerArea(
+                receiver,
+                remoteDeviceKind,
+                showRoiAlertOff: showRoiAlertOff,
+              ),
+            ),
 
             // Status bar
             _buildStatusBar(context, receiver, settings.streamUri.toString()),
@@ -136,8 +170,9 @@ class _ViewerScreenState extends State<ViewerScreen> {
 
   Widget _buildViewerArea(
     FrameReceiverService receiver,
-    RemoteDeviceKind? remoteDeviceKind,
-  ) {
+    RemoteDeviceKind? remoteDeviceKind, {
+    required bool showRoiAlertOff,
+  }) {
     final selectedFrame = receiver.selectedFrame;
     final splitViewEnabled =
         remoteDeviceKind == RemoteDeviceKind.pick && !widget.isPhone;
@@ -157,12 +192,20 @@ class _ViewerScreenState extends State<ViewerScreen> {
         selectorPanelEnabled && !widget.isPhone && !receiver.isRtsp;
 
     if (!receiver.connected || !sidePanelVisible) {
-      return viewer;
+      return _buildViewerWithRoiAlertOverlay(
+        viewer,
+        showRoiAlertOff: showRoiAlertOff,
+      );
     }
 
     return Row(
       children: [
-        Expanded(child: viewer),
+        Expanded(
+          child: _buildViewerWithRoiAlertOverlay(
+            viewer,
+            showRoiAlertOff: showRoiAlertOff,
+          ),
+        ),
         Container(
           width: _streamSelectorPanelWidth,
           decoration: const BoxDecoration(
@@ -235,6 +278,33 @@ class _ViewerScreenState extends State<ViewerScreen> {
             onLockView: () => _lockViewport(selectedFrame),
             onUnlockView: _unlockViewport,
             onResetView: () => _resetViewport(selectedFrame),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildViewerWithRoiAlertOverlay(
+    Widget viewer, {
+    required bool showRoiAlertOff,
+  }) {
+    if (!showRoiAlertOff) {
+      return viewer;
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        viewer,
+        IgnorePointer(
+          child: AnimatedBuilder(
+            animation: _roiAlertOpacity,
+            builder: (context, _) {
+              return Opacity(
+                opacity: _roiAlertOpacity.value,
+                child: const _RoiAlertOffOverlay(),
+              );
+            },
           ),
         ),
       ],
@@ -823,6 +893,10 @@ class _ViewerScreenState extends State<ViewerScreen> {
 
     final colorScheme = Theme.of(context).colorScheme;
     final splitViewEnabled = remoteDeviceKind == RemoteDeviceKind.pick;
+    final showRoiAlertOff =
+        remoteDeviceKind == RemoteDeviceKind.guard &&
+        receiver.connected &&
+        settings.personRoiAlertDisabled;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -914,6 +988,10 @@ class _ViewerScreenState extends State<ViewerScreen> {
               ),
             ),
           const Spacer(),
+          if (showRoiAlertOff) ...[
+            _buildRoiAlertOffBadge(),
+            const SizedBox(width: 8),
+          ],
           if (splitViewEnabled &&
               !isPhone &&
               receiver.connected &&
@@ -972,6 +1050,10 @@ class _ViewerScreenState extends State<ViewerScreen> {
   ) {
     final colorScheme = Theme.of(context).colorScheme;
     final splitViewEnabled = remoteDeviceKind == RemoteDeviceKind.pick;
+    final showRoiAlertOff =
+        remoteDeviceKind == RemoteDeviceKind.guard &&
+        receiver.connected &&
+        settings.personRoiAlertDisabled;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -1073,6 +1155,20 @@ class _ViewerScreenState extends State<ViewerScreen> {
                     const SizedBox(width: 4),
                     _buildPhoneRecordingControls(settings),
                   ],
+                  if (showRoiAlertOff) ...[
+                    const SizedBox(width: 4),
+                    Tooltip(
+                      message: 'ROI Alert Off',
+                      child: IconButton.outlined(
+                        icon: const Icon(
+                          Icons.warning_amber_outlined,
+                          size: 20,
+                        ),
+                        color: Colors.amberAccent,
+                        onPressed: null,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1088,6 +1184,32 @@ class _ViewerScreenState extends State<ViewerScreen> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRoiAlertOffBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.amber.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: Colors.amberAccent),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.warning_amber_outlined,
+            size: 16,
+            color: Colors.amberAccent,
+          ),
+          SizedBox(width: 6),
+          Text(
+            'ROI Alert Off',
+            style: TextStyle(fontSize: 12, color: Colors.amberAccent),
+          ),
         ],
       ),
     );
@@ -1431,7 +1553,7 @@ class _ViewerScreenState extends State<ViewerScreen> {
   }) async {
     final settingsProvider = context.read<SettingsProvider>();
     try {
-      final remoteDeviceKind = await RemoteDeviceInfoService().fetchKind(
+      final deviceInfo = await RemoteDeviceInfoService().fetchInfo(
         AppSettings(
           detectorBaseUrl: apiBaseUrl,
           streamPath: streamPath,
@@ -1441,9 +1563,10 @@ class _ViewerScreenState extends State<ViewerScreen> {
       await settingsProvider.updateConnectionUrls(
         streamPath: streamPath,
         detectorBaseUrl: apiBaseUrl,
-        remoteDeviceKind: remoteDeviceKind,
+        remoteDeviceKind: deviceInfo.kind,
+        personRoiAlertDisabled: deviceInfo.personRoiAlertDisabled,
       );
-      if (remoteDeviceKind == RemoteDeviceKind.guard) {
+      if (deviceInfo.kind == RemoteDeviceKind.guard) {
         final recordingStatus = await RemoteGuardApiService()
             .fetchRecordingStatus(settingsProvider.settings);
         if (context.mounted) {
@@ -1492,6 +1615,56 @@ class _ViewerScreenState extends State<ViewerScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text('Recording API failed: $e')));
     }
+  }
+}
+
+class _RoiAlertOffOverlay extends StatelessWidget {
+  const _RoiAlertOffOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.amber.withValues(alpha: 0.08),
+            border: Border.all(color: Colors.amberAccent, width: 3),
+          ),
+        ),
+        Align(
+          alignment: Alignment.topCenter,
+          child: Container(
+            margin: const EdgeInsets.only(top: 28),
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.72),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: Colors.amberAccent, width: 2),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.warning_amber_outlined,
+                  size: 28,
+                  color: Colors.amberAccent,
+                ),
+                SizedBox(width: 10),
+                Text(
+                  'ROI Alert Off',
+                  style: TextStyle(
+                    color: Colors.amberAccent,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 

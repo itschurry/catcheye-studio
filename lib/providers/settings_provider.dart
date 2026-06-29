@@ -20,6 +20,8 @@ class SettingsProvider extends ChangeNotifier {
   static const _pointCloudDepthMinKey = 'settings.pointCloud.depthMin';
   static const _pointCloudDepthMaxKey = 'settings.pointCloud.depthMax';
   static const _guardMonitorStreamsKey = 'settings.guardMonitor.streams';
+  static const _personRoiAlertDisabledKey =
+      'settings.personRoiAlertDisabled';
 
   final AppSettings _settings;
 
@@ -72,6 +74,9 @@ class SettingsProvider extends ChangeNotifier {
         guardMonitorStreams:
             prefs.getStringList(_guardMonitorStreamsKey) ??
             AppSettings.defaultGuardMonitorStreams,
+        personRoiAlertDisabled:
+            prefs.getBool(_personRoiAlertDisabledKey) ??
+            AppSettings.defaultPersonRoiAlertDisabled,
       ),
     );
   }
@@ -100,10 +105,12 @@ class SettingsProvider extends ChangeNotifier {
     required String streamPath,
     required String detectorBaseUrl,
     required RemoteDeviceKind remoteDeviceKind,
+    required bool personRoiAlertDisabled,
   }) async {
     _settings.streamPath = streamPath;
     _settings.detectorBaseUrl = detectorBaseUrl;
     _settings.remoteDeviceKind = remoteDeviceKind;
+    _settings.personRoiAlertDisabled = personRoiAlertDisabled;
     await _save();
     notifyListeners();
   }
@@ -208,6 +215,10 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setStringList(
       _guardMonitorStreamsKey,
       _settings.guardMonitorStreams,
+    );
+    await prefs.setBool(
+      _personRoiAlertDisabledKey,
+      _settings.personRoiAlertDisabled,
     );
   }
 

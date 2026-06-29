@@ -3,6 +3,7 @@
 CatchEye 장비의 영상 스트림을 확인하고 원격 설정을 조정하는 Flutter 데스크톱 앱.
 
 Studio는 연결 시 `GET /api/device-info`를 호출해서 Guard/Pick을 구분하고, 대상에 맞는 화면만 보여준다.
+Guard 연결에서 `person_roi_alert_disabled`가 `true`면 Viewer 툴바와 영상 영역 위에 깜빡이는 `ROI Alert Off` 경고를 표시한다.
 
 ## 설치
 
@@ -76,6 +77,19 @@ Viewer의 URL 설정에서 아래 값을 지정한다.
 Stream URL   ws://192.168.1.4:8080
 API Base URL http://192.168.1.4:8090
 ```
+
+`GET /api/device-info` 응답 예시:
+
+```json
+{
+  "app": "catcheye-guard",
+  "kind": "guard",
+  "person_roi_alert_disabled": false,
+  "roi_alert_output_active": true
+}
+```
+
+`kind`는 `guard` 또는 `pick`이어야 한다. `person_roi_alert_disabled`는 bool 필수값이고, `true`면 Person ROI 침범 감지 알림이 꺼진 상태로 보고 Viewer에 반투명 blink 경고를 띄운다.
 
 ## Pick API
 

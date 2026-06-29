@@ -3,10 +3,20 @@ import 'dart:io';
 
 import '../models/app_settings.dart';
 
+class RemoteDeviceInfo {
+  final RemoteDeviceKind kind;
+  final bool personRoiAlertDisabled;
+
+  const RemoteDeviceInfo({
+    required this.kind,
+    required this.personRoiAlertDisabled,
+  });
+}
+
 class RemoteDeviceInfoService {
   final HttpClient _client = HttpClient();
 
-  Future<RemoteDeviceKind> fetchKind(AppSettings settings) async {
+  Future<RemoteDeviceInfo> fetchInfo(AppSettings settings) async {
     final request = await _client.openUrl(
       'GET',
       settings.buildApiUri('device-info'),
@@ -32,6 +42,15 @@ class RemoteDeviceInfoService {
     if (kind is! String) {
       throw const FormatException('device kind string expected');
     }
-    return RemoteDeviceKind.fromApiValue(kind);
+    final personRoiAlertDisabled = decoded['person_roi_alert_disabled'];
+    if (personRoiAlertDisabled is! bool) {
+      throw const FormatException(
+        'person_roi_alert_disabled bool expected',
+      );
+    }
+    return RemoteDeviceInfo(
+      kind: RemoteDeviceKind.fromApiValue(kind),
+      personRoiAlertDisabled: personRoiAlertDisabled,
+    );
   }
 }
