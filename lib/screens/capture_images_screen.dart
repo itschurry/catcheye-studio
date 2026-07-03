@@ -268,9 +268,7 @@ class _CaptureImagesScreenState extends State<CaptureImagesScreen> {
   }
 
   Widget _buildStorageSummary(CaptureStorageInfo storage) {
-    final usedRatio = storage.totalBytes <= 0
-        ? 0.0
-        : (storage.usedBytes / storage.totalBytes).clamp(0.0, 1.0).toDouble();
+    final usedRatio = (storage.usedPercent / 100.0).clamp(0.0, 1.0).toDouble();
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Container(
