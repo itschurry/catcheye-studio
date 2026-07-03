@@ -21,14 +21,14 @@ flutter run -d macos
 
 | 화면 | 대상 | 설명 |
 | --- | --- | --- |
-| Viewer | Guard / Pick / Capture | RTSP 또는 WebSocket 영상 표시 |
+| Viewer | Guard / Pick / Capture | RTSP 또는 WebSocket 영상 표시, Guard/Capture 녹화, Capture 수동 캡처 |
 | Monitor | Guard / Capture | 여러 카메라 stream 동시 보기 |
 | ROI Editor | Guard / Pick | Person 또는 Pallet ROI 편집 |
 | Camera Properties | Guard / Capture | 카메라 runtime property 조절 |
 | Camera Geometry | Pick | 카메라 intrinsic과 로봇 base 기준 extrinsic 위치 관계 조회 |
 
 Pick 연결에서는 `Viewer`, `ROI Editor`, `Camera Geometry`만 보여준다.
-Capture 연결에서는 데스크톱에서 `Viewer`, `Monitor`, `Camera Properties`만 보여주고, 폰에서는 `Viewer`, `Monitor`만 보여준다.
+Capture 연결에서는 데스크톱에서 `Viewer`, `Monitor`, `Camera Properties`만 보여주고, 폰에서는 `Viewer`, `Monitor`만 보여준다. Capture Viewer에서는 `Capture` 버튼으로 `/api/capture/request`를 호출하고, `Record` 버튼으로 `/api/recording/*`를 호출한다.
 
 ## Pick Viewer 스트림
 
@@ -96,6 +96,13 @@ API Base URL http://192.168.1.4:8090
 | --- | --- | --- |
 | GET | `/api/device-info` | 연결 대상 종류 조회 |
 | GET | `/api/capture/status` | 캡처 상태 조회 |
+| POST | `/api/capture/request` | 수동 캡처 요청 |
+| GET | `/api/recording` | 녹화 상태 조회 |
+| POST | `/api/recording/start` | 녹화 시작 |
+| POST | `/api/recording/pause` | 녹화 일시정지 |
+| POST | `/api/recording/resume` | 녹화 재시작 |
+| POST | `/api/recording/save` | 녹화 저장 |
+| POST | `/api/recording/cancel` | 녹화 취소 |
 | GET | `/api/rgb-camera/properties` | RGB 카메라 속성 조회 |
 | PUT | `/api/rgb-camera/properties/<key>` | RGB 카메라 속성 변경 |
 

@@ -7,8 +7,9 @@ import 'package:provider/provider.dart';
 import '../models/app_settings.dart';
 import '../providers/settings_provider.dart';
 import '../services/frame_receiver_service.dart';
+import '../services/remote_capture_api_service.dart';
 import '../services/remote_device_info_service.dart';
-import '../services/remote_guard_api_service.dart';
+import '../services/remote_recording_api_service.dart';
 import '../widgets/live_viewer.dart';
 import '../widgets/point_cloud_viewer.dart';
 import '../widgets/stream_selector.dart';
@@ -52,8 +53,9 @@ class _ViewerScreenState extends State<ViewerScreen>
   bool _splitView = false;
   String? _splitLeftStreamKey;
   String? _splitRightStreamKey;
-  GuardRecordingStatus? _recordingStatus;
+  RemoteRecordingStatus? _recordingStatus;
   bool _recordingActionInFlight = false;
+  bool _captureActionInFlight = false;
   int _handledReconnectToken = 0;
   late final AnimationController _roiAlertBlinkController;
   late final Animation<double> _roiAlertOpacity;
@@ -893,6 +895,10 @@ class _ViewerScreenState extends State<ViewerScreen>
 
     final colorScheme = Theme.of(context).colorScheme;
     final splitViewEnabled = remoteDeviceKind == RemoteDeviceKind.pick;
+    final captureControlsEnabled = remoteDeviceKind == RemoteDeviceKind.capture;
+    final recordingControlsEnabled =
+        remoteDeviceKind == RemoteDeviceKind.guard ||
+        remoteDeviceKind == RemoteDeviceKind.capture;
     final showRoiAlertOff =
         remoteDeviceKind == RemoteDeviceKind.guard &&
         receiver.connected &&
@@ -992,6 +998,16 @@ class _ViewerScreenState extends State<ViewerScreen>
             _buildRoiAlertOffBadge(),
             const SizedBox(width: 8),
           ],
+          if (captureControlsEnabled && receiver.connected) ...[
+            FilledButton.icon(
+              icon: const Icon(Icons.camera_alt_outlined, size: 16),
+              label: const Text('Capture'),
+              onPressed: _captureActionInFlight
+                  ? null
+                  : () => _requestCapture(settings),
+            ),
+            const SizedBox(width: 8),
+          ],
           if (splitViewEnabled &&
               !isPhone &&
               receiver.connected &&
@@ -1029,8 +1045,7 @@ class _ViewerScreenState extends State<ViewerScreen>
               ),
             const SizedBox(width: 8),
           ],
-          if (remoteDeviceKind == RemoteDeviceKind.guard &&
-              receiver.connected) ...[
+          if (recordingControlsEnabled && receiver.connected) ...[
             _buildRecordingControls(settings),
             const SizedBox(width: 8),
           ],
@@ -1050,6 +1065,10 @@ class _ViewerScreenState extends State<ViewerScreen>
   ) {
     final colorScheme = Theme.of(context).colorScheme;
     final splitViewEnabled = remoteDeviceKind == RemoteDeviceKind.pick;
+    final captureControlsEnabled = remoteDeviceKind == RemoteDeviceKind.capture;
+    final recordingControlsEnabled =
+        remoteDeviceKind == RemoteDeviceKind.guard ||
+        remoteDeviceKind == RemoteDeviceKind.capture;
     final showRoiAlertOff =
         remoteDeviceKind == RemoteDeviceKind.guard &&
         receiver.connected &&
@@ -1150,8 +1169,19 @@ class _ViewerScreenState extends State<ViewerScreen>
                       ),
                     ],
                   ],
-                  if (remoteDeviceKind == RemoteDeviceKind.guard &&
-                      receiver.connected) ...[
+                  if (captureControlsEnabled && receiver.connected) ...[
+                    const SizedBox(width: 4),
+                    Tooltip(
+                      message: 'Capture',
+                      child: IconButton.outlined(
+                        icon: const Icon(Icons.camera_alt_outlined, size: 20),
+                        onPressed: _captureActionInFlight
+                            ? null
+                            : () => _requestCapture(settings),
+                      ),
+                    ),
+                  ],
+                  if (recordingControlsEnabled && receiver.connected) ...[
                     const SizedBox(width: 4),
                     _buildPhoneRecordingControls(settings),
                   ],
@@ -1217,10 +1247,10 @@ class _ViewerScreenState extends State<ViewerScreen>
 
   Widget _buildPhoneRecordingControls(AppSettings settings) {
     final status = _recordingStatus;
-    final state = status?.state ?? GuardRecordingState.idle;
+    final state = status?.state ?? RemoteRecordingState.idle;
     final busy = _recordingActionInFlight;
 
-    if (state == GuardRecordingState.idle) {
+    if (state == RemoteRecordingState.idle) {
       return Tooltip(
         message: 'Record',
         child: IconButton.outlined(
@@ -1228,8 +1258,7 @@ class _ViewerScreenState extends State<ViewerScreen>
           color: Colors.redAccent,
           onPressed: busy
               ? null
-              : () =>
-                    _runRecordingAction((api) => api.startRecording(settings)),
+              : () => _runRecordingAction((api) => api.start(settings)),
         ),
       );
     }
@@ -1244,7 +1273,7 @@ class _ViewerScreenState extends State<ViewerScreen>
             onPressed: busy
                 ? null
                 : () => _runRecordingAction(
-                    (api) => api.saveRecording(settings),
+                    (api) => api.save(settings),
                     successMessage: (next) => next.savedPath.isEmpty
                         ? 'Recording saved'
                         : 'Recording saved: ${next.savedPath}',
@@ -1253,10 +1282,10 @@ class _ViewerScreenState extends State<ViewerScreen>
         ),
         const SizedBox(width: 4),
         Tooltip(
-          message: state == GuardRecordingState.paused ? 'Resume' : 'Pause',
+          message: state == RemoteRecordingState.paused ? 'Resume' : 'Pause',
           child: IconButton.outlined(
             icon: Icon(
-              state == GuardRecordingState.paused
+              state == RemoteRecordingState.paused
                   ? Icons.play_arrow
                   : Icons.pause,
               size: 20,
@@ -1264,9 +1293,9 @@ class _ViewerScreenState extends State<ViewerScreen>
             onPressed: busy
                 ? null
                 : () => _runRecordingAction(
-                    (api) => state == GuardRecordingState.paused
-                        ? api.resumeRecording(settings)
-                        : api.pauseRecording(settings),
+                    (api) => state == RemoteRecordingState.paused
+                        ? api.resume(settings)
+                        : api.pause(settings),
                   ),
           ),
         ),
@@ -1277,9 +1306,7 @@ class _ViewerScreenState extends State<ViewerScreen>
             icon: const Icon(Icons.close, size: 20),
             onPressed: busy
                 ? null
-                : () => _runRecordingAction(
-                    (api) => api.cancelRecording(settings),
-                  ),
+                : () => _runRecordingAction((api) => api.cancel(settings)),
           ),
         ),
       ],
@@ -1288,20 +1315,20 @@ class _ViewerScreenState extends State<ViewerScreen>
 
   Widget _buildRecordingControls(AppSettings settings) {
     final status = _recordingStatus;
-    final state = status?.state ?? GuardRecordingState.idle;
+    final state = status?.state ?? RemoteRecordingState.idle;
     final busy = _recordingActionInFlight;
 
-    if (state == GuardRecordingState.idle) {
+    if (state == RemoteRecordingState.idle) {
       return FilledButton.icon(
         icon: const Icon(Icons.fiber_manual_record, size: 16),
         label: const Text('Record'),
         onPressed: busy
             ? null
-            : () => _runRecordingAction((api) => api.startRecording(settings)),
+            : () => _runRecordingAction((api) => api.start(settings)),
       );
     }
 
-    final isPaused = state == GuardRecordingState.paused;
+    final isPaused = state == RemoteRecordingState.paused;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1311,7 +1338,7 @@ class _ViewerScreenState extends State<ViewerScreen>
           onPressed: busy
               ? null
               : () => _runRecordingAction(
-                  (api) => api.saveRecording(settings),
+                  (api) => api.save(settings),
                   successMessage: (next) => next.savedPath.isEmpty
                       ? 'Recording saved'
                       : 'Recording saved: ${next.savedPath}',
@@ -1324,9 +1351,8 @@ class _ViewerScreenState extends State<ViewerScreen>
           onPressed: busy
               ? null
               : () => _runRecordingAction(
-                  (api) => isPaused
-                      ? api.resumeRecording(settings)
-                      : api.pauseRecording(settings),
+                  (api) =>
+                      isPaused ? api.resume(settings) : api.pause(settings),
                 ),
         ),
         const SizedBox(width: 8),
@@ -1335,8 +1361,7 @@ class _ViewerScreenState extends State<ViewerScreen>
           label: const Text('Cancel'),
           onPressed: busy
               ? null
-              : () =>
-                    _runRecordingAction((api) => api.cancelRecording(settings)),
+              : () => _runRecordingAction((api) => api.cancel(settings)),
         ),
       ],
     );
@@ -1566,9 +1591,11 @@ class _ViewerScreenState extends State<ViewerScreen>
         remoteDeviceKind: deviceInfo.kind,
         personRoiAlertDisabled: deviceInfo.personRoiAlertDisabled,
       );
-      if (deviceInfo.kind == RemoteDeviceKind.guard) {
-        final recordingStatus = await RemoteGuardApiService()
-            .fetchRecordingStatus(settingsProvider.settings);
+      if (deviceInfo.kind == RemoteDeviceKind.guard ||
+          deviceInfo.kind == RemoteDeviceKind.capture) {
+        final recordingStatus = await RemoteRecordingApiService().fetchStatus(
+          settingsProvider.settings,
+        );
         if (context.mounted) {
           setState(() => _recordingStatus = recordingStatus);
         }
@@ -1588,12 +1615,13 @@ class _ViewerScreenState extends State<ViewerScreen>
   }
 
   Future<void> _runRecordingAction(
-    Future<GuardRecordingStatus> Function(RemoteGuardApiService api) action, {
-    String Function(GuardRecordingStatus status)? successMessage,
+    Future<RemoteRecordingStatus> Function(RemoteRecordingApiService api)
+    action, {
+    String Function(RemoteRecordingStatus status)? successMessage,
   }) async {
     setState(() => _recordingActionInFlight = true);
     try {
-      final next = await action(RemoteGuardApiService());
+      final next = await action(RemoteRecordingApiService());
       if (!mounted) return;
       setState(() {
         _recordingStatus = next;
@@ -1614,6 +1642,24 @@ class _ViewerScreenState extends State<ViewerScreen>
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Recording API failed: $e')));
+    }
+  }
+
+  Future<void> _requestCapture(AppSettings settings) async {
+    setState(() => _captureActionInFlight = true);
+    try {
+      await RemoteCaptureApiService().requestCapture(settings);
+      if (!mounted) return;
+      setState(() => _captureActionInFlight = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Capture requested')));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _captureActionInFlight = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Capture API failed: $e')));
     }
   }
 }
