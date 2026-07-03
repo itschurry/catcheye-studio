@@ -11,11 +11,29 @@ import 'providers/roi_config_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/camera_depth_calibration_screen.dart';
 import 'screens/camera_properties_screen.dart';
+import 'screens/capture_images_screen.dart';
 import 'screens/monitor_screen.dart';
 import 'screens/roi_editor_screen.dart';
 import 'screens/viewer_screen.dart';
 import 'models/app_settings.dart';
 import 'services/frame_receiver_service.dart';
+
+List<int> visibleAppItemIndexes(RemoteDeviceKind? kind, bool isPhone) {
+  if (isPhone) {
+    return switch (kind) {
+      RemoteDeviceKind.guard => const [0, 1, 2],
+      RemoteDeviceKind.pick => const [0, 2],
+      RemoteDeviceKind.capture => const [0, 5, 1],
+      null => const [0],
+    };
+  }
+  return switch (kind) {
+    RemoteDeviceKind.guard => const [0, 1, 2, 3],
+    RemoteDeviceKind.pick => const [0, 2, 4],
+    RemoteDeviceKind.capture => const [0, 5, 1, 3],
+    null => const [0],
+  };
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -161,6 +179,11 @@ class _AppShellState extends State<AppShell> {
       icon: Icons.threed_rotation_outlined,
       selectedIcon: Icons.threed_rotation,
     ),
+    _NavItem(
+      label: 'Images',
+      icon: Icons.photo_library_outlined,
+      selectedIcon: Icons.photo_library,
+    ),
   ];
 
   @override
@@ -219,25 +242,13 @@ class _AppShellState extends State<AppShell> {
       2 => RoiEditorScreen(isPhone: isPhone),
       3 => const CameraPropertiesScreen(),
       4 => const CameraDepthCalibrationScreen(),
+      5 => CaptureImagesScreen(isPhone: isPhone),
       _ => throw StateError('Unsupported screen index: $index'),
     };
   }
 
   List<int> _visibleItemIndexes(RemoteDeviceKind? kind, bool isPhone) {
-    if (isPhone) {
-      return switch (kind) {
-        RemoteDeviceKind.guard => const [0, 1, 2],
-        RemoteDeviceKind.pick => const [0, 2],
-        RemoteDeviceKind.capture => const [0, 1],
-        null => const [0],
-      };
-    }
-    return switch (kind) {
-      RemoteDeviceKind.guard => const [0, 1, 2, 3],
-      RemoteDeviceKind.pick => const [0, 2, 4],
-      RemoteDeviceKind.capture => const [0, 1, 3],
-      null => const [0],
-    };
+    return visibleAppItemIndexes(kind, isPhone);
   }
 
   void _onNavSelected(int index, int currentSelectedIndex) {

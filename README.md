@@ -22,13 +22,14 @@ flutter run -d macos
 | 화면 | 대상 | 설명 |
 | --- | --- | --- |
 | Viewer | Guard / Pick / Capture | RTSP 또는 WebSocket 영상 표시, Guard/Capture 녹화, Capture 수동 캡처 |
+| Images | Capture | 저장장치 용량/사용률, Capture JPEG 합계, 저장된 JPEG 날짜/목록 조회, 큰 이미지 preview, 확대/축소 |
 | Monitor | Guard / Capture | 여러 카메라 stream 동시 보기 |
 | ROI Editor | Guard / Pick | Person 또는 Pallet ROI 편집 |
 | Camera Properties | Guard / Capture | 카메라 runtime property 조절 |
 | Camera Geometry | Pick | 카메라 intrinsic과 로봇 base 기준 extrinsic 위치 관계 조회 |
 
 Pick 연결에서는 `Viewer`, `ROI Editor`, `Camera Geometry`만 보여준다.
-Capture 연결에서는 데스크톱에서 `Viewer`, `Monitor`, `Camera Properties`만 보여주고, 폰에서는 `Viewer`, `Monitor`만 보여준다. Capture Viewer에서는 `Capture` 버튼으로 `/api/capture/request`를 호출하고, `Record` 버튼으로 `/api/recording/*`를 호출한다.
+Capture 연결에서는 데스크톱에서 `Viewer`, `Images`, `Monitor`, `Camera Properties`만 보여주고, 폰에서는 `Viewer`, `Images`, `Monitor`만 보여준다. Capture Viewer에서는 `Capture` 버튼으로 `/api/capture/request`를 호출하고, `Record` 버튼으로 `/api/recording/*`를 호출한다. Images 화면은 `/api/captures/*`로 저장된 JPEG와 `capture_dir`가 올라간 저장장치 용량을 조회한다.
 
 ## Pick Viewer 스트림
 
@@ -97,6 +98,10 @@ API Base URL http://192.168.1.4:8090
 | GET | `/api/device-info` | 연결 대상 종류 조회 |
 | GET | `/api/capture/status` | 캡처 상태 조회 |
 | POST | `/api/capture/request` | 수동 캡처 요청 |
+| GET | `/api/captures/dates` | 저장된 JPEG 날짜 목록 조회 |
+| GET | `/api/captures?date=YYYY-MM-DD&limit=100&cursor=<filename>` | 저장된 JPEG 목록 조회 |
+| GET | `/api/captures/file/<date>/<filename>` | 저장된 JPEG 원본 조회 |
+| GET | `/api/captures/latest` | 최신 저장 JPEG metadata 조회 |
 | GET | `/api/recording` | 녹화 상태 조회 |
 | POST | `/api/recording/start` | 녹화 시작 |
 | POST | `/api/recording/pause` | 녹화 일시정지 |
