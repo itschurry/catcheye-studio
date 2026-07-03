@@ -228,12 +228,14 @@ class _AppShellState extends State<AppShell> {
       return switch (kind) {
         RemoteDeviceKind.guard => const [0, 1, 2],
         RemoteDeviceKind.pick => const [0, 2],
+        RemoteDeviceKind.capture => const [0, 1],
         null => const [0],
       };
     }
     return switch (kind) {
       RemoteDeviceKind.guard => const [0, 1, 2, 3],
       RemoteDeviceKind.pick => const [0, 2, 4],
+      RemoteDeviceKind.capture => const [0, 1, 3],
       null => const [0],
     };
   }

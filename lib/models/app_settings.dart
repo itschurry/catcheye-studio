@@ -1,6 +1,7 @@
 enum RemoteDeviceKind {
   guard('guard', 'Guard'),
-  pick('pick', 'Pick');
+  pick('pick', 'Pick'),
+  capture('capture', 'Capture');
 
   const RemoteDeviceKind(this.apiValue, this.label);
 

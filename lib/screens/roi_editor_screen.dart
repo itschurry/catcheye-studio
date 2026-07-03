@@ -349,6 +349,7 @@ class _RoiEditorScreenState extends State<RoiEditorScreen> {
         RoiConfigKind.pallet,
       ],
       RemoteDeviceKind.pick => const [RoiConfigKind.pallet],
+      RemoteDeviceKind.capture => const [RoiConfigKind.person],
       null => const [RoiConfigKind.person],
     };
   }

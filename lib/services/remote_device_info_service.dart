@@ -43,14 +43,12 @@ class RemoteDeviceInfoService {
       throw const FormatException('device kind string expected');
     }
     final personRoiAlertDisabled = decoded['person_roi_alert_disabled'];
-    if (personRoiAlertDisabled is! bool) {
-      throw const FormatException(
-        'person_roi_alert_disabled bool expected',
-      );
+    if (personRoiAlertDisabled != null && personRoiAlertDisabled is! bool) {
+      throw const FormatException('person_roi_alert_disabled bool expected');
     }
     return RemoteDeviceInfo(
       kind: RemoteDeviceKind.fromApiValue(kind),
-      personRoiAlertDisabled: personRoiAlertDisabled,
+      personRoiAlertDisabled: personRoiAlertDisabled == true,
     );
   }
 }

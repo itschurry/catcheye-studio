@@ -2,7 +2,7 @@
 
 CatchEye 장비의 영상 스트림을 확인하고 원격 설정을 조정하는 Flutter 데스크톱 앱.
 
-Studio는 연결 시 `GET /api/device-info`를 호출해서 Guard/Pick을 구분하고, 대상에 맞는 화면만 보여준다.
+Studio는 연결 시 `GET /api/device-info`를 호출해서 Guard/Pick/Capture를 구분하고, 대상에 맞는 화면만 보여준다.
 Guard 연결에서 `person_roi_alert_disabled`가 `true`면 Viewer 툴바와 영상 영역 위에 깜빡이는 `ROI Alert Off` 경고를 표시한다.
 
 ## 설치
@@ -21,13 +21,14 @@ flutter run -d macos
 
 | 화면 | 대상 | 설명 |
 | --- | --- | --- |
-| Viewer | Guard / Pick | RTSP 또는 WebSocket 영상 표시 |
-| Monitor | Guard | 여러 카메라 stream 동시 보기 |
+| Viewer | Guard / Pick / Capture | RTSP 또는 WebSocket 영상 표시 |
+| Monitor | Guard / Capture | 여러 카메라 stream 동시 보기 |
 | ROI Editor | Guard / Pick | Person 또는 Pallet ROI 편집 |
-| Camera Properties | Guard | 카메라 runtime property 조절 |
+| Camera Properties | Guard / Capture | 카메라 runtime property 조절 |
 | Camera Geometry | Pick | 카메라 intrinsic과 로봇 base 기준 extrinsic 위치 관계 조회 |
 
 Pick 연결에서는 `Viewer`, `ROI Editor`, `Camera Geometry`만 보여준다.
+Capture 연결에서는 데스크톱에서 `Viewer`, `Monitor`, `Camera Properties`만 보여주고, 폰에서는 `Viewer`, `Monitor`만 보여준다.
 
 ## Pick Viewer 스트림
 
@@ -82,14 +83,21 @@ API Base URL http://192.168.1.4:8090
 
 ```json
 {
-  "app": "catcheye-guard",
-  "kind": "guard",
-  "person_roi_alert_disabled": false,
-  "roi_alert_output_active": true
+  "app": "catcheye-capture",
+  "kind": "capture"
 }
 ```
 
-`kind`는 `guard` 또는 `pick`이어야 한다. `person_roi_alert_disabled`는 bool 필수값이고, `true`면 Person ROI 침범 감지 알림이 꺼진 상태로 보고 Viewer에 반투명 blink 경고를 띄운다.
+`kind`는 `guard`, `pick`, `capture` 중 하나여야 한다. Guard 응답에 `person_roi_alert_disabled` bool이 있으면 `true`일 때 Person ROI 침범 감지 알림이 꺼진 상태로 보고 Viewer에 반투명 blink 경고를 띄운다.
+
+## Capture API
+
+| Method | Path | 용도 |
+| --- | --- | --- |
+| GET | `/api/device-info` | 연결 대상 종류 조회 |
+| GET | `/api/capture/status` | 캡처 상태 조회 |
+| GET | `/api/rgb-camera/properties` | RGB 카메라 속성 조회 |
+| PUT | `/api/rgb-camera/properties/<key>` | RGB 카메라 속성 변경 |
 
 ## Pick API
 
