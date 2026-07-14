@@ -49,5 +49,6 @@ windows/
 linux/
 macos/
 ios/
-android/
+android/*
+!android/gradle.properties
 .metadata

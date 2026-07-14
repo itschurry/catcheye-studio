@@ -30,6 +30,8 @@ flutter create --platforms=android .
 flutter pub get
 ```
 
+Windows에서 프로젝트와 Pub 캐시가 서로 다른 드라이브에 있으면 Kotlin 증분 캐시가 실패할 수 있다. `android/gradle.properties`의 `kotlin.incremental=false` 설정을 유지한다.
+
 iOS/iPadOS:
 
 ```bash
@@ -208,6 +210,8 @@ API Base URL http://192.168.1.4:8090
 ├── assets/
 │   ├── app_icon.ico
 │   └── app_icon.png
+├── android/
+│   └── gradle.properties
 ├── launcher_icons_android.yaml
 ├── launcher_icons_ios.yaml
 ├── pubspec.yaml
