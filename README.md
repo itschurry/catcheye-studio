@@ -9,14 +9,42 @@ Guard 연결에서 `person_roi_alert_disabled`가 `true`면 Viewer 툴바와 영
 
 ## 설치
 
+macOS:
+
 ```bash
+flutter create --platforms=macos .
+flutter pub get
+```
+
+Windows:
+
+```bash
+flutter create --platforms=windows .
 flutter pub get
 ```
 
 ## 실행
 
+macOS:
+
 ```bash
+dart run flutter_launcher_icons
 flutter run -d macos
+flutter build macos --release
+```
+
+Windows:
+
+```bash
+dart run flutter_launcher_icons
+flutter run -d windows
+```
+
+Windows Release 빌드:
+
+```bash
+dart run flutter_launcher_icons
+flutter build windows --release
 ```
 
 ## 화면 구성
@@ -151,7 +179,9 @@ API Base URL http://192.168.1.4:8090
 │   ├── screens/
 │   ├── services/
 │   └── widgets/
-├── macos/
+├── assets/
+│   ├── app_icon.ico
+│   └── app_icon.png
 ├── pubspec.yaml
 └── README.md
 ```
