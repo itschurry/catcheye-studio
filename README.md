@@ -23,6 +23,20 @@ flutter create --platforms=windows .
 flutter pub get
 ```
 
+Android:
+
+```bash
+flutter create --platforms=android .
+flutter pub get
+```
+
+iOS/iPadOS:
+
+```bash
+flutter create --platforms=ios .
+flutter pub get
+```
+
 ## 실행
 
 macOS:
@@ -45,6 +59,18 @@ Windows Release 빌드:
 ```bash
 dart run flutter_launcher_icons
 flutter build windows --release
+```
+
+Android/iOS 아이콘 생성 및 빌드:
+
+```bash
+dart run flutter_launcher_icons -f launcher_icons_android.yaml
+flutter build apk --release
+```
+
+```bash
+dart run flutter_launcher_icons -f launcher_icons_ios.yaml
+flutter build ios --release
 ```
 
 ## 화면 구성
@@ -182,6 +208,8 @@ API Base URL http://192.168.1.4:8090
 ├── assets/
 │   ├── app_icon.ico
 │   └── app_icon.png
+├── launcher_icons_android.yaml
+├── launcher_icons_ios.yaml
 ├── pubspec.yaml
 └── README.md
 ```
