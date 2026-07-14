@@ -51,4 +51,11 @@ macos/
 ios/
 android/*
 !android/gradle.properties
+!android/app/
+android/app/*
+!android/app/src/
+android/app/src/*
+!android/app/src/main/
+android/app/src/main/*
+!android/app/src/main/AndroidManifest.xml
 .metadata

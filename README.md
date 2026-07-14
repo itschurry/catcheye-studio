@@ -32,6 +32,8 @@ flutter pub get
 
 Windows에서 프로젝트와 Pub 캐시가 서로 다른 드라이브에 있으면 Kotlin 증분 캐시가 실패할 수 있다. `android/gradle.properties`의 `kotlin.incremental=false` 설정을 유지한다.
 
+Android의 `android/app/src/main/AndroidManifest.xml`은 인터넷 권한과 로컬 장비의 `http://`, `ws://` 통신을 위해 `android.permission.INTERNET`과 `android:usesCleartextTraffic="true"`를 사용한다.
+
 iOS/iPadOS:
 
 ```bash
@@ -211,6 +213,7 @@ API Base URL http://192.168.1.4:8090
 │   ├── app_icon.ico
 │   └── app_icon.png
 ├── android/
+│   ├── app/src/main/AndroidManifest.xml
 │   └── gradle.properties
 ├── launcher_icons_android.yaml
 ├── launcher_icons_ios.yaml
