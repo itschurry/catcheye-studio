@@ -1,8 +1,7 @@
 // ROI data models — 1:1 mapping with catcheye-guard C++ models
 
 enum RoiConfigKind {
-  person(endpoint: 'roi', label: 'Person ROI'),
-  pallet(endpoint: 'pallet-roi', label: 'Pallet ROI');
+  person(endpoint: 'roi', label: 'Person ROI');
 
   const RoiConfigKind({required this.endpoint, required this.label});
 

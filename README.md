@@ -84,7 +84,7 @@ flutter build ios --release
 | Viewer | Guard / Pick / Capture | RTSP 또는 WebSocket 영상 표시, Guard/Capture 녹화, Capture 수동 캡처 |
 | Images | Capture | 저장장치 용량/사용률, Capture JPEG 합계, 저장된 JPEG 날짜/목록 조회, 큰 이미지 preview, 확대/축소 |
 | Monitor | Guard / Capture | 여러 카메라 stream 동시 보기 |
-| ROI Editor | Guard / Pick | Person 또는 Pallet ROI 편집 |
+| ROI Editor | Guard / Pick | Person ROI 편집 |
 | Camera Properties | Guard / Capture | 카메라 runtime property 조절 |
 | Camera Geometry | Pick | 카메라 intrinsic과 로봇 base 기준 extrinsic 위치 관계 조회 |
 
@@ -178,8 +178,6 @@ API Base URL http://192.168.1.4:8090
 | GET | `/api/device-info` | 연결 대상 종류 조회 |
 | GET | `/api/camera/intrinsics` | camera intrinsic 값 조회 |
 | GET | `/api/camera/extrinsics` | camera extrinsic transform 조회 |
-| GET | `/api/pallet-roi` | Pallet ROI 조회 |
-| PUT | `/api/pallet-roi` | Pallet ROI 저장 |
 | GET | `/api/robot-calibration` | robot calibration 조회 |
 | PUT | `/api/robot-calibration` | robot calibration 저장 |
 
@@ -190,8 +188,6 @@ API Base URL http://192.168.1.4:8090
 | GET | `/api/device-info` | 연결 대상 종류 조회 |
 | GET | `/api/roi` | Person ROI 조회 |
 | PUT | `/api/roi` | Person ROI 저장 |
-| GET | `/api/pallet-roi` | Pallet ROI 조회 |
-| PUT | `/api/pallet-roi` | Pallet ROI 저장 |
 | GET | `/api/recording` | 녹화 상태 조회 |
 | POST | `/api/recording/start` | 녹화 시작 |
 | POST | `/api/recording/pause` | 녹화 일시정지 |
