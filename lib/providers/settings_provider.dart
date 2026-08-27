@@ -8,6 +8,7 @@ class SettingsProvider extends ChangeNotifier {
   static const _streamPathKey = 'settings.streamPath';
   static const _apiBasePathKey = 'settings.apiBasePath';
   static const _remoteDeviceKindKey = 'settings.remoteDeviceKind';
+  static const _legacyGuardDeviceKind = 'guard';
   static const _cubeEyeFramerateKey = 'settings.cubeEye.framerate';
   static const _cubeEyeAutoExposureKey = 'settings.cubeEye.autoExposure';
   static const _cubeEyeIlluminationKey = 'settings.cubeEye.illumination';
@@ -29,6 +30,14 @@ class SettingsProvider extends ChangeNotifier {
 
   static Future<SettingsProvider> load() async {
     final prefs = await SharedPreferences.getInstance();
+    final storedRemoteDeviceKind = prefs.getString(_remoteDeviceKindKey);
+    final remoteDeviceKind = _remoteDeviceKindFromPrefs(storedRemoteDeviceKind);
+    if (storedRemoteDeviceKind == _legacyGuardDeviceKind) {
+      await prefs.setString(
+        _remoteDeviceKindKey,
+        RemoteDeviceKind.hss.apiValue,
+      );
+    }
     return SettingsProvider(
       initialSettings: AppSettings(
         detectorBaseUrl:
@@ -38,9 +47,7 @@ class SettingsProvider extends ChangeNotifier {
             prefs.getString(_streamPathKey) ?? AppSettings.defaultStreamPath,
         apiBasePath:
             prefs.getString(_apiBasePathKey) ?? AppSettings.defaultApiBasePath,
-        remoteDeviceKind: _remoteDeviceKindFromPrefs(
-          prefs.getString(_remoteDeviceKindKey),
-        ),
+        remoteDeviceKind: remoteDeviceKind,
         cubeEyeFramerate:
             prefs.getInt(_cubeEyeFramerateKey) ??
             AppSettings.defaultCubeEyeFramerate,
@@ -224,6 +231,9 @@ class SettingsProvider extends ChangeNotifier {
   static RemoteDeviceKind? _remoteDeviceKindFromPrefs(String? value) {
     if (value == null) {
       return null;
+    }
+    if (value == _legacyGuardDeviceKind) {
+      return RemoteDeviceKind.hss;
     }
     return RemoteDeviceKind.fromApiValue(value);
   }

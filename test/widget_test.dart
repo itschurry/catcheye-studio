@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:catcheye_studio/main.dart' as app;
 import 'package:catcheye_studio/models/app_settings.dart';
+import 'package:catcheye_studio/providers/settings_provider.dart';
 import 'package:catcheye_studio/services/remote_capture_image_api_service.dart';
 import 'package:catcheye_studio/services/remote_pick_api_service.dart';
 
@@ -16,6 +18,19 @@ void main() {
     expect(RemoteDeviceKind.fromApiValue('capture'), RemoteDeviceKind.capture);
     expect(RemoteDeviceKind.capture.apiValue, 'capture');
     expect(RemoteDeviceKind.capture.label, 'Capture');
+  });
+
+  test('legacy guard setting migrates to hss', () async {
+    SharedPreferences.setMockInitialValues(const {
+      'settings.remoteDeviceKind': 'guard',
+    });
+
+    final provider = await SettingsProvider.load();
+    final prefs = await SharedPreferences.getInstance();
+
+    expect(provider.settings.remoteDeviceKind, RemoteDeviceKind.hss);
+    expect(prefs.getString('settings.remoteDeviceKind'), 'hss');
+    expect(() => RemoteDeviceKind.fromApiValue('guard'), throwsFormatException);
   });
 
   test('capture images navigation is capture only', () {
