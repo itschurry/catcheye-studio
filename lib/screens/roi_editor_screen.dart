@@ -277,6 +277,12 @@ class _RoiEditorScreenState extends State<RoiEditorScreen> {
                   label: Text('Person ROI'),
                   icon: Icon(Icons.person_outline),
                 ),
+              if (allowedKinds.contains(RoiConfigKind.pallet))
+                const ButtonSegment(
+                  value: RoiConfigKind.pallet,
+                  label: Text('Pallet ROI'),
+                  icon: Icon(Icons.inventory_2_outlined),
+                ),
             ],
             selected: {
               allowedKinds.contains(provider.selectedKind)
@@ -338,8 +344,11 @@ class _RoiEditorScreenState extends State<RoiEditorScreen> {
 
   List<RoiConfigKind> _allowedKinds(RemoteDeviceKind? deviceKind) {
     return switch (deviceKind) {
-      RemoteDeviceKind.guard => const [RoiConfigKind.person],
-      RemoteDeviceKind.pick => const [RoiConfigKind.person],
+      RemoteDeviceKind.guard => const [
+        RoiConfigKind.person,
+        RoiConfigKind.pallet,
+      ],
+      RemoteDeviceKind.pick => const [RoiConfigKind.pallet],
       RemoteDeviceKind.capture => const [RoiConfigKind.person],
       null => const [RoiConfigKind.person],
     };
