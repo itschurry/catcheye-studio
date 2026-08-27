@@ -6,6 +6,12 @@ import 'package:catcheye_studio/services/remote_capture_image_api_service.dart';
 import 'package:catcheye_studio/services/remote_pick_api_service.dart';
 
 void main() {
+  test('remote device kind parses hss', () {
+    expect(RemoteDeviceKind.fromApiValue('hss'), RemoteDeviceKind.hss);
+    expect(RemoteDeviceKind.hss.apiValue, 'hss');
+    expect(RemoteDeviceKind.hss.label, 'HSS');
+  });
+
   test('remote device kind parses capture', () {
     expect(RemoteDeviceKind.fromApiValue('capture'), RemoteDeviceKind.capture);
     expect(RemoteDeviceKind.capture.apiValue, 'capture');
@@ -25,7 +31,7 @@ void main() {
       1,
     ]);
     expect(
-      app.visibleAppItemIndexes(RemoteDeviceKind.guard, false).contains(5),
+      app.visibleAppItemIndexes(RemoteDeviceKind.hss, false).contains(5),
       isFalse,
     );
     expect(

@@ -9,7 +9,7 @@ import '../models/roi_config.dart';
 import '../providers/roi_config_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/frame_receiver_service.dart';
-import '../services/remote_guard_api_service.dart';
+import '../services/remote_hss_api_service.dart';
 import '../widgets/roi_editor_canvas.dart';
 import '../widgets/zone_list_panel.dart';
 
@@ -344,7 +344,7 @@ class _RoiEditorScreenState extends State<RoiEditorScreen> {
 
   List<RoiConfigKind> _allowedKinds(RemoteDeviceKind? deviceKind) {
     return switch (deviceKind) {
-      RemoteDeviceKind.guard => const [
+      RemoteDeviceKind.hss => const [
         RoiConfigKind.person,
         RoiConfigKind.pallet,
       ],
@@ -410,7 +410,7 @@ class _RoiEditorScreenState extends State<RoiEditorScreen> {
     RoiConfigProvider provider,
   ) async {
     final settings = context.read<SettingsProvider>().settings;
-    final api = RemoteGuardApiService();
+    final api = RemoteHssApiService();
     final kind = provider.selectedKind;
 
     try {
@@ -439,7 +439,7 @@ class _RoiEditorScreenState extends State<RoiEditorScreen> {
     RoiConfigProvider provider,
   ) async {
     final settings = context.read<SettingsProvider>().settings;
-    final api = RemoteGuardApiService();
+    final api = RemoteHssApiService();
     final kind = provider.selectedKind;
 
     try {

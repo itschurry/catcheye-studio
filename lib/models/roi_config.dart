@@ -1,4 +1,4 @@
-// ROI data models — 1:1 mapping with catcheye-guard C++ models
+// ROI data models — 1:1 mapping with catcheye-hss C++ models
 
 enum RoiConfigKind {
   person(endpoint: 'roi', label: 'Person ROI'),

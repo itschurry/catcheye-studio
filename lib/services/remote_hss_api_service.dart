@@ -5,7 +5,7 @@ import '../models/app_settings.dart';
 import '../models/roi_config.dart';
 import 'roi_config_service.dart';
 
-class RemoteGuardApiService {
+class RemoteHssApiService {
   final HttpClient _client = HttpClient();
 
   Future<CameraRoiConfig> fetchRoi(

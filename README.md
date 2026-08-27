@@ -4,8 +4,8 @@ CatchEye 장비의 영상 스트림을 확인하고 원격 설정을 조정하�
 
 현재 버전: `v1.2.0`
 
-Studio는 연결 시 `GET /api/device-info`를 호출해서 Guard/Pick/Capture를 구분하고, 대상에 맞는 화면만 보여준다.
-Guard 연결에서 `person_roi_alert_disabled`가 `true`면 Viewer 툴바와 영상 영역 위에 깜빡이는 `ROI Alert Off` 경고를 표시한다.
+Studio는 연결 시 `GET /api/device-info`를 호출해서 HSS/Pick/Capture를 구분하고, 대상에 맞는 화면만 보여준다.
+HSS 연결에서 `person_roi_alert_disabled`가 `true`면 Viewer 툴바와 영상 영역 위에 깜빡이는 `ROI Alert Off` 경고를 표시한다.
 
 ## 설치
 
@@ -81,11 +81,11 @@ flutter build ios --release
 
 | 화면 | 대상 | 설명 |
 | --- | --- | --- |
-| Viewer | Guard / Pick / Capture | RTSP 또는 WebSocket 영상 표시, Guard/Capture 녹화, Capture 수동 캡처 |
+| Viewer | HSS / Pick / Capture | RTSP 또는 WebSocket 영상 표시, HSS/Capture 녹화, Capture 수동 캡처 |
 | Images | Capture | 저장장치 용량/사용률, Capture JPEG 합계, 저장된 JPEG 날짜/목록 조회, 큰 이미지 preview, 확대/축소 |
-| Monitor | Guard / Capture | 여러 카메라 stream 동시 보기 |
-| ROI Editor | Guard / Pick | Person 또는 Pallet ROI 편집 |
-| Camera Properties | Guard / Capture | 카메라 runtime property 조절 |
+| Monitor | HSS / Capture | 여러 카메라 stream 동시 보기 |
+| ROI Editor | HSS / Pick | Person 또는 Pallet ROI 편집 |
+| Camera Properties | HSS / Capture | 카메라 runtime property 조절 |
 | Camera Geometry | Pick | 카메라 intrinsic과 로봇 base 기준 extrinsic 위치 관계 조회 |
 
 Pick 연결에서는 `Viewer`, `ROI Editor`, `Camera Geometry`만 보여준다.
@@ -149,7 +149,7 @@ API Base URL http://192.168.1.4:8090
 }
 ```
 
-`kind`는 `guard`, `pick`, `capture` 중 하나여야 한다. Guard 응답에 `person_roi_alert_disabled` bool이 있으면 `true`일 때 Person ROI 침범 감지 알림이 꺼진 상태로 보고 Viewer에 반투명 blink 경고를 띄운다.
+`kind`는 `hss`, `pick`, `capture` 중 하나여야 한다. HSS 응답에 `person_roi_alert_disabled` bool이 있으면 `true`일 때 Person ROI 침범 감지 알림이 꺼진 상태로 보고 Viewer에 반투명 blink 경고를 띄운다.
 
 ## Capture API
 
@@ -183,7 +183,7 @@ API Base URL http://192.168.1.4:8090
 | GET | `/api/robot-calibration` | robot calibration 조회 |
 | PUT | `/api/robot-calibration` | robot calibration 저장 |
 
-## Guard API
+## HSS API
 
 | Method | Path | 용도 |
 | --- | --- | --- |

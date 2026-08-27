@@ -209,7 +209,7 @@ class RoiConfigProvider extends ChangeNotifier {
 
   Future<void> tryLoadDefault() async {
     final candidates = [
-      '/mnt/d/workspace-windows/catcheye-guard/models/roi_cam_default.json',
+      '/mnt/d/workspace-windows/catcheye-hss/models/roi_cam_default.json',
     ];
     for (final path in candidates) {
       if (await File(path).exists()) {

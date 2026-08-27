@@ -136,7 +136,7 @@ class _ViewerScreenState extends State<ViewerScreen>
         final settings = settingsProvider.settings;
         final remoteDeviceKind = settings.remoteDeviceKind;
         final showRoiAlertOff =
-            remoteDeviceKind == RemoteDeviceKind.guard &&
+            remoteDeviceKind == RemoteDeviceKind.hss &&
             receiver.connected &&
             settings.personRoiAlertDisabled;
         return Column(
@@ -897,10 +897,10 @@ class _ViewerScreenState extends State<ViewerScreen>
     final splitViewEnabled = remoteDeviceKind == RemoteDeviceKind.pick;
     final captureControlsEnabled = remoteDeviceKind == RemoteDeviceKind.capture;
     final recordingControlsEnabled =
-        remoteDeviceKind == RemoteDeviceKind.guard ||
+        remoteDeviceKind == RemoteDeviceKind.hss ||
         remoteDeviceKind == RemoteDeviceKind.capture;
     final showRoiAlertOff =
-        remoteDeviceKind == RemoteDeviceKind.guard &&
+        remoteDeviceKind == RemoteDeviceKind.hss &&
         receiver.connected &&
         settings.personRoiAlertDisabled;
 
@@ -1067,10 +1067,10 @@ class _ViewerScreenState extends State<ViewerScreen>
     final splitViewEnabled = remoteDeviceKind == RemoteDeviceKind.pick;
     final captureControlsEnabled = remoteDeviceKind == RemoteDeviceKind.capture;
     final recordingControlsEnabled =
-        remoteDeviceKind == RemoteDeviceKind.guard ||
+        remoteDeviceKind == RemoteDeviceKind.hss ||
         remoteDeviceKind == RemoteDeviceKind.capture;
     final showRoiAlertOff =
-        remoteDeviceKind == RemoteDeviceKind.guard &&
+        remoteDeviceKind == RemoteDeviceKind.hss &&
         receiver.connected &&
         settings.personRoiAlertDisabled;
 
@@ -1591,7 +1591,7 @@ class _ViewerScreenState extends State<ViewerScreen>
         remoteDeviceKind: deviceInfo.kind,
         personRoiAlertDisabled: deviceInfo.personRoiAlertDisabled,
       );
-      if (deviceInfo.kind == RemoteDeviceKind.guard ||
+      if (deviceInfo.kind == RemoteDeviceKind.hss ||
           deviceInfo.kind == RemoteDeviceKind.capture) {
         final recordingStatus = await RemoteRecordingApiService().fetchStatus(
           settingsProvider.settings,

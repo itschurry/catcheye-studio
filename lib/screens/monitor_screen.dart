@@ -28,7 +28,7 @@ class _MonitorScreenState extends State<MonitorScreen> {
     }
     _loaded = true;
     final settings = context.read<SettingsProvider>().settings;
-    _replaceCameras(settings.guardMonitorStreams, connect: true);
+    _replaceCameras(settings.hssMonitorStreams, connect: true);
   }
 
   @override
@@ -95,7 +95,7 @@ class _MonitorScreenState extends State<MonitorScreen> {
           Icon(Icons.grid_view, size: 20, color: colorScheme.secondary),
           const SizedBox(width: 8),
           const Text(
-            'Guard Monitor',
+            'HSS Monitor',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const Spacer(),
@@ -249,7 +249,7 @@ class _MonitorScreenState extends State<MonitorScreen> {
   }
 
   Future<void> _saveStreams() {
-    return context.read<SettingsProvider>().updateGuardMonitorStreams(
+    return context.read<SettingsProvider>().updateHssMonitorStreams(
       _cameras.map((camera) => camera.streamUrl).toList(growable: false),
     );
   }

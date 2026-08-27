@@ -1,5 +1,5 @@
 enum RemoteDeviceKind {
-  guard('guard', 'Guard'),
+  hss('hss', 'HSS'),
   pick('pick', 'Pick'),
   capture('capture', 'Capture');
 
@@ -30,7 +30,7 @@ class AppSettings {
   static const bool defaultPointCloudShowAxis = true;
   static const double defaultPointCloudAxisScale = 1.0;
   static const String defaultPointCloudPalette = 'depth';
-  static const List<String> defaultGuardMonitorStreams = [];
+  static const List<String> defaultHssMonitorStreams = [];
   static const bool defaultPersonRoiAlertDisabled = false;
 
   String detectorBaseUrl;
@@ -48,7 +48,7 @@ class AppSettings {
   String pointCloudPalette;
   double? pointCloudDepthMin;
   double? pointCloudDepthMax;
-  List<String> guardMonitorStreams;
+  List<String> hssMonitorStreams;
   bool personRoiAlertDisabled;
 
   AppSettings({
@@ -67,10 +67,10 @@ class AppSettings {
     this.pointCloudPalette = defaultPointCloudPalette,
     this.pointCloudDepthMin,
     this.pointCloudDepthMax,
-    List<String>? guardMonitorStreams,
+    List<String>? hssMonitorStreams,
     this.personRoiAlertDisabled = defaultPersonRoiAlertDisabled,
-  }) : guardMonitorStreams =
-           guardMonitorStreams ?? List.of(defaultGuardMonitorStreams);
+  }) : hssMonitorStreams =
+           hssMonitorStreams ?? List.of(defaultHssMonitorStreams);
 
   Uri get streamUri => _resolveUri(streamPath);
 
