@@ -8,6 +8,54 @@ import 'package:catcheye_studio/services/remote_capture_image_api_service.dart';
 import 'package:catcheye_studio/services/remote_pick_api_service.dart';
 
 void main() {
+  test('monitor camera switches API host and preserves API configuration', () {
+    final settings = AppSettings(
+      streamPath: 'ws://192.168.0.124:8080',
+      detectorBaseUrl: 'https://192.168.0.124:9090',
+      apiBasePath: '/custom/api',
+    );
+
+    expect(
+      settings.apiBaseUrlForStream('ws://192.168.0.125:8080/live?camera=2'),
+      'https://192.168.0.125:9090/',
+    );
+    expect(settings.streamPath, 'ws://192.168.0.124:8080');
+    expect(settings.detectorBaseUrl, 'https://192.168.0.124:9090');
+    expect(settings.apiBasePath, '/custom/api');
+  });
+
+  test('same camera host keeps a separately configured API server', () {
+    final settings = AppSettings(
+      streamPath: 'ws://camera.local:8080/front',
+      detectorBaseUrl: 'https://api.local:9090',
+    );
+
+    expect(
+      settings.apiBaseUrlForStream('ws://camera.local:8081/rear'),
+      'https://api.local:9090',
+    );
+  });
+
+  test('monitor API host resolution supports RTSP and IPv6 URLs', () {
+    final settings = AppSettings();
+
+    for (final stream in [
+      'rtsp://camera.local:8554/live',
+      'rtsps://camera.local:8555/live',
+      'camera.local:8554/live',
+    ]) {
+      expect(settings.apiBaseUrlForStream(stream), 'http://camera.local:8090/');
+    }
+    expect(
+      settings.apiBaseUrlForStream('wss://[2001:db8::2]:8080/live'),
+      'http://[2001:db8::2]:8090/',
+    );
+    expect(
+      () => settings.apiBaseUrlForStream('ws:///live'),
+      throwsFormatException,
+    );
+  });
+
   test('remote device kind parses hss', () {
     expect(RemoteDeviceKind.fromApiValue('hss'), RemoteDeviceKind.hss);
     expect(RemoteDeviceKind.hss.apiValue, 'hss');

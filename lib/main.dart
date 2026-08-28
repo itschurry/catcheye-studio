@@ -150,6 +150,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
   int _viewerReconnectToken = 0;
+  String? _viewerStreamUrl;
   static const _wideBreakpoint = 900.0;
   static const _phoneBreakpoint = 600.0;
 
@@ -237,8 +238,9 @@ class _AppShellState extends State<AppShell> {
       0 => ViewerScreen(
         reconnectToken: _viewerReconnectToken,
         isPhone: isPhone,
+        initialStreamUrl: _viewerStreamUrl,
       ),
-      1 => MonitorScreen(isPhone: isPhone),
+      1 => MonitorScreen(isPhone: isPhone, onOpenViewer: _openMonitorCamera),
       2 => RoiEditorScreen(isPhone: isPhone),
       3 => const CameraPropertiesScreen(),
       4 => const CameraDepthCalibrationScreen(),
@@ -251,6 +253,14 @@ class _AppShellState extends State<AppShell> {
     return visibleAppItemIndexes(kind, isPhone);
   }
 
+  void _openMonitorCamera(String streamUrl) {
+    setState(() {
+      _viewerStreamUrl = streamUrl;
+      _viewerReconnectToken += 1;
+      _selectedIndex = 0;
+    });
+  }
+
   void _onNavSelected(int index, int currentSelectedIndex) {
     if (index == currentSelectedIndex) {
       return;
@@ -261,6 +271,7 @@ class _AppShellState extends State<AppShell> {
         index != 0 &&
         (receiver.connected || receiver.connecting);
     if (index != 0) {
+      _viewerStreamUrl = null;
       if (shouldReconnectViewer) {
         _viewerReconnectToken += 1;
       }

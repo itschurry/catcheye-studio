@@ -74,6 +74,22 @@ class AppSettings {
 
   Uri get streamUri => _resolveUri(streamPath);
 
+  String apiBaseUrlForStream(String streamUrl) {
+    final trimmed = streamUrl.trim();
+    final target = Uri.parse(
+      trimmed.contains('://') ? trimmed : 'rtsp://$trimmed',
+    );
+    if (target.host.isEmpty) {
+      throw const FormatException('Stream URL must include a host');
+    }
+    if (target.host == streamUri.host) {
+      return detectorBaseUrl;
+    }
+    return _normalizeBaseUri(
+      detectorBaseUrl,
+    ).replace(host: target.host).toString();
+  }
+
   Uri buildApiUri(String endpoint) {
     final normalizedBase = apiBasePath.endsWith('/')
         ? apiBasePath.substring(0, apiBasePath.length - 1)

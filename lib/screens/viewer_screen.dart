@@ -23,10 +23,12 @@ class ViewerScreen extends StatefulWidget {
     super.key,
     required this.reconnectToken,
     required this.isPhone,
+    this.initialStreamUrl,
   });
 
   final int reconnectToken;
   final bool isPhone;
+  final String? initialStreamUrl;
 
   @override
   State<ViewerScreen> createState() => _ViewerScreenState();
@@ -122,8 +124,10 @@ class _ViewerScreenState extends State<ViewerScreen>
         _connect(
           context: context,
           receiver: receiver,
-          streamPath: settings.streamUri.toString(),
-          apiBaseUrl: settings.detectorBaseUrl,
+          streamPath: widget.initialStreamUrl ?? settings.streamUri.toString(),
+          apiBaseUrl: widget.initialStreamUrl == null
+              ? settings.detectorBaseUrl
+              : null,
         ),
       );
     });
@@ -1574,20 +1578,23 @@ class _ViewerScreenState extends State<ViewerScreen>
     required BuildContext context,
     required FrameReceiverService receiver,
     required String streamPath,
-    required String apiBaseUrl,
+    required String? apiBaseUrl,
   }) async {
     final settingsProvider = context.read<SettingsProvider>();
     try {
+      final targetApiBaseUrl =
+          apiBaseUrl ??
+          settingsProvider.settings.apiBaseUrlForStream(streamPath);
       final deviceInfo = await RemoteDeviceInfoService().fetchInfo(
         AppSettings(
-          detectorBaseUrl: apiBaseUrl,
+          detectorBaseUrl: targetApiBaseUrl,
           streamPath: streamPath,
           apiBasePath: settingsProvider.settings.apiBasePath,
         ),
       );
       await settingsProvider.updateConnectionUrls(
         streamPath: streamPath,
-        detectorBaseUrl: apiBaseUrl,
+        detectorBaseUrl: targetApiBaseUrl,
         remoteDeviceKind: deviceInfo.kind,
         personRoiAlertDisabled: deviceInfo.personRoiAlertDisabled,
       );

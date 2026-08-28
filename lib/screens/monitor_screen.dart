@@ -8,9 +8,14 @@ import '../services/frame_receiver_service.dart';
 import '../widgets/live_viewer.dart';
 
 class MonitorScreen extends StatefulWidget {
-  const MonitorScreen({super.key, this.isPhone = false});
+  const MonitorScreen({
+    super.key,
+    this.isPhone = false,
+    required this.onOpenViewer,
+  });
 
   final bool isPhone;
+  final ValueChanged<String> onOpenViewer;
 
   @override
   State<MonitorScreen> createState() => _MonitorScreenState();
@@ -71,6 +76,8 @@ class _MonitorScreenState extends State<MonitorScreen> {
                           onConnect: () => _connect(index),
                           onDisconnect: () => _disconnect(index),
                           onRemove: () => _removeCamera(index),
+                          onOpenViewer: () =>
+                              widget.onOpenViewer(_cameras[index].streamUrl),
                         );
                       },
                     );
@@ -290,6 +297,7 @@ class _MonitorCameraTile extends StatelessWidget {
     required this.onConnect,
     required this.onDisconnect,
     required this.onRemove,
+    required this.onOpenViewer,
   });
 
   final _MonitorCamera camera;
@@ -297,6 +305,7 @@ class _MonitorCameraTile extends StatelessWidget {
   final VoidCallback onConnect;
   final VoidCallback onDisconnect;
   final VoidCallback onRemove;
+  final VoidCallback onOpenViewer;
 
   @override
   Widget build(BuildContext context) {
@@ -324,14 +333,21 @@ class _MonitorCameraTile extends StatelessWidget {
                 onRemove: onRemove,
               ),
               Expanded(
-                child: LiveViewer(
-                  controller: receiver.videoController,
-                  connected: receiver.connected,
-                  isRtsp: receiver.isRtsp,
-                  frameData: frame?.isJpeg == true
-                      ? frame!.jpegBytes
-                      : receiver.currentFrame,
-                  fit: BoxFit.contain,
+                child: Tooltip(
+                  message: 'Double-click to open in Viewer',
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onDoubleTap: onOpenViewer,
+                    child: LiveViewer(
+                      controller: receiver.videoController,
+                      connected: receiver.connected,
+                      isRtsp: receiver.isRtsp,
+                      frameData: frame?.isJpeg == true
+                          ? frame!.jpegBytes
+                          : receiver.currentFrame,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
                 ),
               ),
               _TileFooter(receiver: receiver),

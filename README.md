@@ -84,13 +84,21 @@ flutter build ios --release
 | --- | --- | --- |
 | Viewer | HSS / Pick / Capture | RTSP 또는 WebSocket 영상 표시, HSS/Capture 녹화, Capture 수동 캡처 |
 | Images | Capture | 저장장치 용량/사용률, Capture JPEG 합계, 저장된 JPEG 날짜/목록 조회, 큰 이미지 preview, 확대/축소 |
-| Monitor | HSS / Capture | 여러 카메라 stream 동시 보기 |
+| Monitor | HSS / Capture | 여러 카메라 stream 동시 보기, 영상 더블클릭으로 해당 Viewer 이동 |
 | ROI Editor | HSS / Pick | Person 또는 Pallet ROI 편집 |
 | Camera Properties | HSS / Capture | 카메라 runtime property 조절 |
 | Camera Geometry | Pick | 카메라 intrinsic과 로봇 base 기준 extrinsic 위치 관계 조회 |
 
 Pick 연결에서는 `Viewer`, `ROI Editor`, `Camera Geometry`만 보여준다.
 Capture 연결에서는 데스크톱에서 `Viewer`, `Images`, `Monitor`, `Camera Properties`만 보여주고, 폰에서는 `Viewer`, `Images`, `Monitor`만 보여준다. Capture Viewer에서는 `Capture` 버튼으로 `/api/capture/request`를 호출하고, `Record` 버튼으로 `/api/recording/*`를 호출한다. Images 화면은 `/api/captures/*`로 저장된 JPEG와 `capture_dir`가 올라간 저장장치 용량을 조회한다.
+
+## Monitor에서 Viewer 열기
+
+- 카메라의 영상 영역을 더블클릭하면 Viewer로 이동하고 해당 스트림에 자동 연결한다. 모바일에서는 두 번 탭한다.
+- 연결/해제 및 삭제 버튼은 기존 동작을 유지한다. Monitor를 나가면 모니터 스트림 연결은 해제되고, 다시 들어오면 저장된 카메라 목록에 재연결한다.
+- 다른 호스트의 카메라를 열면 API Base URL의 호스트도 해당 카메라로 변경한다. 기존 API 프로토콜, 포트, API Base Path는 유지한다. 예: `ws://192.168.0.125:8080` → `http://192.168.0.125:8090`.
+- 현재 Viewer와 같은 호스트의 카메라는 기존 API Base URL을 그대로 사용한다. 카메라마다 API 포트가 다르거나 별도 API 서버를 사용하면 Viewer의 `Change URL`에서 직접 지정한다.
+- 기존 연결 절차대로 `/api/device-info`와 녹화 상태를 확인한 뒤 연결한다. API 조회 실패 시 오류를 표시하며 다른 카메라로 대신 연결하지 않는다.
 
 ## Pick Viewer 스트림
 
