@@ -1,3 +1,5 @@
+import 'station_viewer_layout.dart';
+
 enum RemoteDeviceKind {
   hss('hss', 'HSS'),
   pick('pick', 'Pick'),
@@ -33,6 +35,9 @@ class AppSettings {
   static const String defaultPointCloudPalette = 'depth';
   static const List<String> defaultHssMonitorStreams = [];
   static const bool defaultPersonRoiAlertDisabled = false;
+  static const StationViewerLayout defaultStationViewerLayout =
+      StationViewerLayout.oneByOne;
+  static const List<String> defaultStationViewerCameraSlots = [''];
 
   String detectorBaseUrl;
   String streamPath;
@@ -51,6 +56,8 @@ class AppSettings {
   double? pointCloudDepthMax;
   List<String> hssMonitorStreams;
   bool personRoiAlertDisabled;
+  StationViewerLayout stationViewerLayout;
+  List<String> stationViewerCameraSlots;
 
   AppSettings({
     this.detectorBaseUrl = defaultDetectorBaseUrl,
@@ -70,8 +77,12 @@ class AppSettings {
     this.pointCloudDepthMax,
     List<String>? hssMonitorStreams,
     this.personRoiAlertDisabled = defaultPersonRoiAlertDisabled,
+    this.stationViewerLayout = defaultStationViewerLayout,
+    List<String>? stationViewerCameraSlots,
   }) : hssMonitorStreams =
-           hssMonitorStreams ?? List.of(defaultHssMonitorStreams);
+           hssMonitorStreams ?? List.of(defaultHssMonitorStreams),
+       stationViewerCameraSlots =
+           stationViewerCameraSlots ?? List.of(defaultStationViewerCameraSlots);
 
   Uri get streamUri => _resolveUri(streamPath);
 

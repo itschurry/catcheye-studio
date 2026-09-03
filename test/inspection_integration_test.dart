@@ -1,10 +1,15 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:catcheye_studio/models/app_settings.dart';
+import 'package:catcheye_studio/models/station_viewer_layout.dart';
+import 'package:catcheye_studio/providers/settings_provider.dart';
 import 'package:catcheye_studio/services/remote_capture_api_service.dart';
+import 'package:catcheye_studio/services/frame_receiver_service.dart';
 
 void main() {
   test(
@@ -132,6 +137,131 @@ void main() {
       'artifact_error': '',
     });
     expect(result.presentationStatus, 'RECHECK');
+  });
+
+  test('viewer source accepts legacy singular and multi-camera responses', () {
+    final legacy = StationViewerSource.fromJson(const {
+      'camera_id': 'bolt_head_camera',
+      'cameras': ['bolt_head_camera', 'nut_camera'],
+    });
+    expect(legacy.cameraIds, ['bolt_head_camera']);
+
+    final multi = StationViewerSource.fromJson(const {
+      'camera_id': 'ignored_legacy_value',
+      'camera_ids': ['bolt_head_camera', 'nut_camera'],
+      'cameras': ['bolt_head_camera', 'nut_camera'],
+    });
+    expect(multi.cameraIds, ['bolt_head_camera', 'nut_camera']);
+    expect(
+      () => StationViewerSource.fromJson(const {
+        'camera_ids': ['nut_camera', 'nut_camera'],
+        'cameras': ['nut_camera'],
+      }),
+      throwsFormatException,
+    );
+  });
+
+  test('station stream key keeps camera identity for grid placement', () {
+    final frame = ViewerStreamFrame.fromPayload(
+      name: 'nut_camera',
+      kind: 'camera',
+      encoding: ViewerStreamEncoding.jpeg,
+      payloadIndex: 1,
+      payloadBytes: Uint8List.fromList(const [0xff, 0xd8, 0xff, 0xd9]),
+      pointCount: 0,
+      stride: 1,
+      streamKey: 'nut_camera',
+    );
+    expect(frame.key, 'nut_camera');
+    expect(frame.name, 'nut_camera');
+    expect(frame.receivedAt.isAfter(DateTime(2020)), isTrue);
+  });
+
+  test('station layout keeps sparse camera slot positions', () {
+    final slots = reconcileStationCameraSlots(
+      layout: StationViewerLayout.twoByTwo,
+      preferredSlots: const ['bolt_head_camera', '', 'nut_camera', ''],
+      activeCameraIds: const ['bolt_head_camera', 'nut_camera'],
+    );
+
+    expect(slots, const ['bolt_head_camera', '', 'nut_camera', '']);
+  });
+
+  test('station layout survives reconnect with fewer active cameras', () {
+    const selectedLayout = StationViewerLayout.twoByTwo;
+    final reconnectLayout = selectedLayout.accommodate(2);
+    final slots = reconcileStationCameraSlots(
+      layout: reconnectLayout,
+      preferredSlots: const ['bolt_head_camera', '', 'nut_camera', ''],
+      activeCameraIds: const ['nut_camera', 'bolt_head_camera'],
+    );
+
+    expect(reconnectLayout, StationViewerLayout.twoByTwo);
+    expect(slots, const ['bolt_head_camera', '', 'nut_camera', '']);
+  });
+
+  test('station layout expands when runtime activates more cameras', () {
+    final layout = StationViewerLayout.oneByOne.accommodate(3);
+    final slots = reconcileStationCameraSlots(
+      layout: layout,
+      preferredSlots: const ['bolt_head_camera'],
+      activeCameraIds: const ['bolt_head_camera', 'nut_camera', 'stud_camera'],
+    );
+
+    expect(layout, StationViewerLayout.twoByTwo);
+    expect(slots, const ['bolt_head_camera', 'nut_camera', 'stud_camera', '']);
+  });
+
+  test('station layout and sparse slots persist across app reloads', () async {
+    SharedPreferences.setMockInitialValues(const {});
+    final provider = SettingsProvider();
+    await provider.updateStationViewerLayout(
+      layout: StationViewerLayout.twoByTwo,
+      cameraSlots: const ['bolt_head_camera', '', 'nut_camera', ''],
+    );
+
+    final reloaded = await SettingsProvider.load();
+
+    expect(reloaded.settings.stationViewerLayout, StationViewerLayout.twoByTwo);
+    expect(reloaded.settings.stationViewerCameraSlots, const [
+      'bolt_head_camera',
+      '',
+      'nut_camera',
+      '',
+    ]);
+  });
+
+  test('multi-camera source selection sends ordered camera_ids', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    final subscription = server.listen((request) async {
+      expect(request.method, 'POST');
+      expect(request.uri.path, '/api/viewer/source');
+      final body = await utf8.decoder.bind(request).join();
+      expect(jsonDecode(body), const {
+        'camera_ids': ['bolt_head_camera', 'nut_camera'],
+      });
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(
+        jsonEncode({
+          'camera_ids': ['bolt_head_camera', 'nut_camera'],
+          'cameras': ['bolt_head_camera', 'nut_camera'],
+        }),
+      );
+      await request.response.close();
+    });
+    addTearDown(subscription.cancel);
+    final service = RemoteCaptureApiService();
+    addTearDown(service.close);
+    final settings = AppSettings(
+      detectorBaseUrl: 'http://${server.address.host}:${server.port}',
+    );
+
+    final source = await service.setViewerSources(settings, const [
+      'bolt_head_camera',
+      'nut_camera',
+    ]);
+    expect(source.cameraIds, ['bolt_head_camera', 'nut_camera']);
   });
 
   test('station POST is not replayed after queue-full response', () async {

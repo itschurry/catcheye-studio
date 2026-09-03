@@ -174,18 +174,36 @@ class StationCaptureStatus {
 }
 
 class StationViewerSource {
-  final String cameraId;
+  final List<String> cameraIds;
   final List<String> cameras;
 
-  const StationViewerSource({required this.cameraId, required this.cameras});
+  const StationViewerSource({required this.cameraIds, required this.cameras});
+
+  String get cameraId => cameraIds.isEmpty ? '' : cameraIds.first;
 
   factory StationViewerSource.fromJson(Map<String, dynamic> json) {
     final rawCameras = json['cameras'];
     if (rawCameras is! List || rawCameras.any((value) => value is! String)) {
       throw const FormatException('camera string list expected');
     }
+    final rawCameraIds = json['camera_ids'];
+    if (rawCameraIds != null &&
+        (rawCameraIds is! List ||
+            rawCameraIds.any((value) => value is! String))) {
+      throw const FormatException('camera_ids string list expected');
+    }
+    final cameraIds = rawCameraIds is List
+        ? rawCameraIds.cast<String>()
+        : <String>[
+            if (_optionalString(json, 'camera_id').isNotEmpty)
+              _optionalString(json, 'camera_id'),
+          ];
+    if (cameraIds.length != cameraIds.toSet().length ||
+        cameraIds.any((cameraId) => cameraId.isEmpty)) {
+      throw const FormatException('camera_ids must be unique and nonempty');
+    }
     return StationViewerSource(
-      cameraId: _optionalString(json, 'camera_id'),
+      cameraIds: List.unmodifiable(cameraIds),
       cameras: List.unmodifiable(rawCameras.cast<String>()),
     );
   }
@@ -466,18 +484,43 @@ class RemoteCaptureApiService {
   Future<StationViewerSource> setViewerSource(
     AppSettings settings,
     String cameraId,
+  ) => setViewerSources(
+    settings,
+    cameraId.trim().isEmpty ? const [] : [cameraId.trim()],
+  );
+
+  Future<StationViewerSource> setViewerSources(
+    AppSettings settings,
+    List<String> cameraIds,
   ) async {
+    final normalized = cameraIds
+        .map((cameraId) => cameraId.trim())
+        .where((cameraId) => cameraId.isNotEmpty)
+        .toList(growable: false);
+    if (normalized.length > 4 ||
+        normalized.length != normalized.toSet().length) {
+      throw const FormatException(
+        'camera_ids must contain up to four unique camera IDs',
+      );
+    }
     final json = await _requestJson(
       'POST',
       settings.buildApiUri('viewer/source'),
-      body: {'camera_id': cameraId.trim()},
+      body: normalized.length <= 1
+          ? {'camera_id': normalized.isEmpty ? '' : normalized.first}
+          : {'camera_ids': normalized},
     );
     // The station may acknowledge the POST without repeating the discovery
     // list. Read the authoritative global selection without replaying POST.
-    if (json['cameras'] is! List) {
-      return fetchViewerSource(settings);
+    final source = json['cameras'] is! List
+        ? await fetchViewerSource(settings)
+        : StationViewerSource.fromJson(json);
+    if (normalized.length > 1 && !normalized.every(source.cameraIds.contains)) {
+      throw const FormatException(
+        'station runtime did not retain the multi-stream camera selection',
+      );
     }
-    return StationViewerSource.fromJson(json);
+    return source;
   }
 
   Future<Map<String, dynamic>> _requestJson(

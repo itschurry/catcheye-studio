@@ -254,28 +254,62 @@ When saving is configured, `artifacts` names files relative to the cycle directo
 device. No artifact-download endpoint is implemented. `artifact_error` indicates a save
 failure and forces aggregate `EQUIPMENT_ERROR`; per-inspection detection results may still exist.
 
-### Preview source
+### Multi-camera preview source and layouts
 
-Add a camera selector to the station Viewer. Populate it from:
+Add `1x1`, `1x2`, and `2x2` layouts to the station Viewer. Each slot has a
+camera selector populated from:
 
 ```http
 GET /api/viewer/source
 ```
 
 ```json
-{"camera_id":"","cameras":["bolt_head_camera","bolt_body_camera","nut_camera","nut_hole_camera"]}
+{
+  "camera_ids":["bolt_head_camera","nut_camera"],
+  "cameras":["bolt_head_camera","bolt_body_camera","nut_camera","nut_hole_camera"]
+}
 ```
 
-Select a source using `POST /api/viewer/source` with `{"camera_id":"nut_camera"}`.
-An empty ID disables preview. This is a global device selection, not per-connection.
-Do not send IP addresses or allow this selector to modify the deployment YAML.
+Select up to four sources using `POST /api/viewer/source`:
 
-The existing WebSocket text-plus-JPEG framing is unchanged. `stream_name` is now the
-camera ID. `metadata` contains `runtime_mode: "station"`, `camera_id`, `frame_sequence`,
-`status: "PREVIEW"`, `annotated: false`, `app`, `kind`, and `set_id`. Frame dimensions come
-from each envelope and may change on source selection. Clear the previous displayed
-frame/result association on a switch, and discard buffered frames whose camera ID does
-not match the selected source. Show waiting/error state when no fresh preview arrives.
+```json
+{"camera_ids":["bolt_head_camera","nut_camera"]}
+```
+
+IDs must be nonempty, unique configured camera IDs. Their order is the Viewer
+slot order. An empty list disables preview. Unknown IDs, duplicates, invalid
+types, or more than four IDs return HTTP 400. The selection is global to the
+device, not per WebSocket connection. Do not send IP addresses or allow these
+selectors to modify the deployment YAML.
+
+For backward compatibility, the runtime and Studio continue accepting and
+returning singular `camera_id` for zero or one selected source. A response that
+contains `camera_ids` takes precedence over `camera_id`. Studio uses the
+singular request for `1x1`, so it remains compatible with older station
+runtimes; `1x2` and `2x2` require the multi-stream extension.
+
+For multiple sources, one WebSocket JSON text frame describes every JPEG that
+immediately follows it. Binary frames are ordered by `payload_index`:
+
+```json
+{
+  "type":"viewer_frame",
+  "metadata":{"app":"catcheye-inspect","kind":"inspection","runtime_mode":"station","set_id":"set_c"},
+  "streams":[
+    {"name":"bolt_head_camera","kind":"camera","encoding":"jpeg","payload_index":0,"width":1280,"height":800,"payload_size":100839,"source_timestamp_ms":123456},
+    {"name":"nut_camera","kind":"camera","encoding":"jpeg","payload_index":1,"width":1280,"height":800,"payload_size":98214,"source_timestamp_ms":123460}
+  ]
+}
+```
+
+The singular WebSocket text-plus-JPEG framing remains valid. In that form,
+`stream_name` is the camera ID and `metadata` contains `runtime_mode: "station"`,
+`camera_id`, `frame_sequence`, `status: "PREVIEW"`, `annotated: false`, `app`,
+`kind`, and `set_id`. Frame dimensions come from each envelope or stream
+descriptor and may differ by camera or change on selection. Clear previous
+displayed frames/result associations on a selection change, discard streams
+whose camera IDs are not selected, and show a per-slot waiting/error state when
+no fresh preview arrives.
 
 Station preview is raw live imagery, not a capture result or overlay. Do not draw
 capture detections on it: those detections belong to a different frozen frame. Show
@@ -285,7 +319,8 @@ with preview disabled and must not depend on receiving a new WebSocket frame.
 ### Station acceptance tests
 
 1. Discover station mode and retrieve available groups/cameras without changing YAML.
-2. Select each camera, verify identity/dimensions, and disable preview without blocking capture.
+2. Exercise `1x1`, `1x2`, and `2x2`; verify selected camera identity/dimensions in every
+   slot, then disable preview without blocking capture.
 3. Submit A then B while A runs. Verify distinct cycle IDs, FIFO completion and two results.
 4. Fill the pending queue and display HTTP 409 without automatic retries or lost accepted IDs.
 5. Verify NG, RECHECK, camera timeout, and storage-error presentation independently.
@@ -294,6 +329,8 @@ with preview disabled and must not depend on receiving a new WebSocket frame.
 8. Validate actual four-camera acquisition and unified-model results on the installation;
    the C++ synthetic tests do not establish synchronized exposure or production throughput.
 
-Studio source is not changed in this repository. The blocking-client transport deadline
-limitation described in `cpp/README.md` also needs resolution in the shared SDK before
-unattended deployment; Studio should close failed/abandoned HTTP and WebSocket connections.
+The station runtime must implement the multi-camera `/api/viewer/source` and
+`viewer_frame` extension above before multi-slot live preview can pass the acceptance
+tests. The blocking-client transport deadline limitation described in `cpp/README.md`
+also needs resolution in the shared SDK before unattended deployment; Studio should
+close failed/abandoned HTTP and WebSocket connections.
