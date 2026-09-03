@@ -37,6 +37,17 @@ flutter pub get
 
 Android:
 
+Windows 빌드 환경은 Flutter stable, JDK 17, Android SDK 36을 사용한다. Flutter와 Android SDK를 설치한 뒤 아래 항목이 모두 정상인지 먼저 확인한다.
+
+```powershell
+flutter config --android-sdk "C:\Android\Sdk"
+flutter config --jdk-dir "C:\Program Files\Eclipse Adoptium\jdk-17.0.19.10-hotspot"
+flutter doctor --android-licenses
+flutter doctor -v
+```
+
+JDK 설치 경로가 다르면 `--jdk-dir` 값만 실제 경로로 바꾼다. `flutter doctor -v`의 Android toolchain이 정상이어야 한다.
+
 ```bash
 flutter create --platforms=android .
 flutter pub get
@@ -90,6 +101,8 @@ Android/iOS 아이콘 생성 및 빌드:
 dart run flutter_launcher_icons -f launcher_icons_android.yaml
 flutter build apk --release
 ```
+
+Release APK는 `build/app/outputs/flutter-apk/app-release.apk`에 생성된다.
 
 ```bash
 dart run flutter_launcher_icons -f launcher_icons_ios.yaml
