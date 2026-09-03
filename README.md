@@ -30,6 +30,8 @@ flutter pub get
 
 Windows:
 
+Visual Studio Installer에서 C++ 데스크톱 빌드 도구와 설치된 MSVC 버전에 맞는 C++ ATL(x86 및 x64) 구성 요소를 설치한다. `flutter_secure_storage_windows` 빌드에 ATL이 필요하며, 누락되면 `atlstr.h`를 찾을 수 없다는 오류가 발생한다.
+
 ```bash
 flutter create --platforms=windows .
 flutter pub get
