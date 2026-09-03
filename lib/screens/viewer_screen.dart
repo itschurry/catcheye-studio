@@ -8,10 +8,12 @@ import 'package:provider/provider.dart';
 import '../models/app_settings.dart';
 import '../models/station_viewer_layout.dart';
 import '../providers/settings_provider.dart';
+import '../providers/reference_credential_provider.dart';
 import '../services/frame_receiver_service.dart';
 import '../services/remote_capture_api_service.dart';
 import '../services/remote_device_info_service.dart';
 import '../services/remote_recording_api_service.dart';
+import '../services/reference_credential_store.dart';
 import '../widgets/live_viewer.dart';
 import '../widgets/point_cloud_viewer.dart';
 import '../widgets/stream_selector.dart';
@@ -1033,6 +1035,16 @@ class _ViewerScreenState extends State<ViewerScreen>
               ),
             ),
           const Spacer(),
+          if (remoteDeviceKind == RemoteDeviceKind.inspection) ...[
+            Tooltip(
+              message: 'Management credentials',
+              child: IconButton.outlined(
+                icon: const Icon(Icons.admin_panel_settings_outlined, size: 20),
+                onPressed: _showManagementCredentialsDialog,
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
           if (showRoiAlertOff) ...[
             _buildRoiAlertOffBadge(),
             const SizedBox(width: 8),
@@ -1209,6 +1221,19 @@ class _ViewerScreenState extends State<ViewerScreen>
                         ),
                       ),
                     ],
+                  ],
+                  if (remoteDeviceKind == RemoteDeviceKind.inspection) ...[
+                    const SizedBox(width: 4),
+                    Tooltip(
+                      message: 'Management credentials',
+                      child: IconButton.outlined(
+                        icon: const Icon(
+                          Icons.admin_panel_settings_outlined,
+                          size: 20,
+                        ),
+                        onPressed: _showManagementCredentialsDialog,
+                      ),
+                    ),
                   ],
                   if (captureControlsEnabled && receiver.connected) ...[
                     const SizedBox(width: 4),
@@ -1951,6 +1976,123 @@ class _ViewerScreenState extends State<ViewerScreen>
 
   String _shortCycleId(String cycleId) =>
       cycleId.length <= 18 ? cycleId : '${cycleId.substring(0, 18)}…';
+
+  Future<void> _showManagementCredentialsDialog() async {
+    final settings = context.read<SettingsProvider>().settings;
+    final credentials = context.read<ReferenceCredentialProvider>();
+    String? existing;
+    try {
+      existing = await credentials.readToken(settings);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Credential storage is unavailable: $error')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    final controller = TextEditingController();
+    var hidden = true;
+    var enteredToken = '';
+    final action = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Management credentials'),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  existing == null
+                      ? 'No token is stored for this API server.'
+                      : 'A token is stored for this API server.',
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  obscureText: hidden,
+                  enableSuggestions: false,
+                  autocorrect: false,
+                  onChanged: (value) =>
+                      setDialogState(() => enteredToken = value.trim()),
+                  decoration: InputDecoration(
+                    labelText: 'Bearer token',
+                    hintText: existing == null
+                        ? 'Paste the device management token'
+                        : 'Leave blank to keep the stored token',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      tooltip: hidden ? 'Show token' : 'Hide token',
+                      onPressed: () => setDialogState(() => hidden = !hidden),
+                      icon: Icon(
+                        hidden
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Stored in the operating system credential store. Use a protected tunnel or TLS proxy for remote management.',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            if (existing != null)
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, 'clear'),
+                child: const Text('Remove token'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: existing != null || isValidReferenceToken(enteredToken)
+                  ? () => Navigator.pop(dialogContext, 'save')
+                  : null,
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    try {
+      if (action == 'clear') {
+        await credentials.clearToken(settings);
+      } else if (action == 'save' && controller.text.trim().isNotEmpty) {
+        await credentials.saveToken(settings, controller.text);
+      }
+      if (mounted && action != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              action == 'clear'
+                  ? 'Management token removed.'
+                  : controller.text.trim().isEmpty
+                  ? 'Stored management token kept.'
+                  : 'Management token saved.',
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update credentials: $error')),
+        );
+      }
+    } finally {
+      controller.dispose();
+    }
+  }
 
   void _showStationResultDetails(StationCaptureResult result) {
     final details = result.rawJson.isEmpty

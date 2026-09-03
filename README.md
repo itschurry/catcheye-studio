@@ -5,10 +5,21 @@ CatchEye 장비의 영상 스트림을 확인하고 원격 설정을 조정하�
 현재 버전: `v1.3.0`
 
 Studio는 연결 시 `GET /api/device-info`를 호출해서 HSS/Pick/Capture/Inspection을 구분하고, 대상에 맞는 화면만 보여준다.
+Inspect의 운영 통합 프로파일은 `fastener`이고 캡처 그룹은 `bolt_stud`와 `nut`이야. Studio는 서버의 `groups` 목록을 그대로 사용하며 이전 그룹 이름을 변환하는 호환 처리는 제공하지 않아.
 HSS 연결에서 `person_roi_alert_disabled`가 `true`면 Viewer 툴바와 영상 영역 위에 깜빡이는 `ROI Alert Off` 경고를 표시한다.
 기존 버전이 저장한 장비 종류 `guard`는 앱 시작 시 `hss`로 자동 변환한다.
 
 ## 설치
+
+Linux (Ubuntu/Debian):
+
+```bash
+sudo apt install libsecret-1-0 libsecret-1-dev
+flutter pub get
+```
+
+예시·모델 관리 Bearer 토큰은 Linux Secret Service, macOS Keychain,
+Windows Credential Manager 등 운영체제 자격 증명 저장소에 보관한다.
 
 macOS:
 
@@ -89,6 +100,7 @@ flutter build ios --release
 | Camera Properties | HSS / Capture | 카메라 runtime property 조절 |
 | Camera Geometry | Pick | 카메라 intrinsic과 로봇 base 기준 extrinsic 위치 관계 조회 |
 | Results | Inspection | 최근 촬영 cycle의 상태, 검사별 판정, 측정값과 원본 JSON 조회 |
+| References | Inspection | 원본 예시 촬영·박스 편집·리비전 저장, 모델 빌드·검증·명시적 적용·이전 모델 복구 |
 
 Pick 연결에서는 `Viewer`, `ROI Editor`, `Camera Geometry`만 보여준다.
 Capture 연결에서는 데스크톱에서 `Viewer`, `Images`, `Monitor`, `Camera Properties`만 보여주고, 폰에서는 `Viewer`, `Images`, `Monitor`만 보여준다. Capture Viewer에서는 `Capture` 버튼으로 `/api/capture/request`를 호출하고, `Record` 버튼으로 `/api/recording/*`를 호출한다. Images 화면은 `/api/captures/*`로 저장된 JPEG와 `capture_dir`가 올라간 저장장치 용량을 조회한다.
@@ -142,14 +154,33 @@ ID 중 하나를 선택한다. 선택 목록은 최대 4개이며 장비 전체�
 `1×1`은 기존 `{"camera_id":"..."}` 요청과 호환된다. 다중 레이아웃은
 `{"camera_ids":["camera_a","camera_b"]}` 요청과 WebSocket
 `viewer_frame` 다중 payload 지원이 필요하다. 각 stream의 `name`은 카메라
-ID이며 뒤따르는 JPEG binary frame은 `payload_index` 순서로 매칭된다.
+ID이며 뒤따르는 JPEG binary frame은 `payload_index` 순서로 매칭된다. 선택을
+바꾸더라도 수신 중인 묶음의 binary payload는 끝까지 소비한 뒤 현재 선택에
+없는 영상을 버린다. 카메라별 `frame_sequence`가 증가할 때만 영상 수신 시각을
+갱신하므로 다른 카메라 때문에 같은 JPEG가 재전송돼도 정지 영상을 정상으로
+표시하지 않는다.
 
 미리보기는 raw 영상이며 Capture 결과와 연결하지 않는다. Capture 결과는
 cycle ID로 별도 폴링하여 Viewer 상단 결과 행에 표시한다.
 
 Inspection의 `Results` 탭은 `GET /api/capture/results`에서 runtime이 보존한
-최근 cycle을 조회한다. 구형 runtime이 이 API를 제공하지 않으면
-`/api/capture/status`의 `last_result`만 표시한다.
+최근 cycle을 조회한다. Studio가 조회한 완료 cycle은 실행 중 자체 보관하며,
+runtime 재시작이나 서버 이력 제한으로 응답 목록에서 빠져도 제거하지 않는다.
+`last_result`는 다른 요청 결과일 수 있으므로 결과 목록의 대체값으로 사용하지
+않는다.
+
+예시 관리 옵션이 설치된 장비는 Viewer의 방패 아이콘에서 전달받은 관리
+토큰을 등록한다. Studio는 인증된 `GET /api/reference/status` 기능 플래그를
+확인한다. 상태 API의 404나 비활성 기능 플래그만 미지원으로 처리하고, 인증
+실패나 일시적인 연결 실패는 관리 화면을 유지한 채 오류로 표시한다. 같은 연결
+설정으로 다시 연결해도 기능을 다시 조회한다. 진행 중인 촬영·모델 빌드·적용
+상태와 요청 ID는 다른 탭으로 이동해도 유지하고 폴링을 계속한다. 모델 빌드와 적용은 검사를 잠시
+중단하므로 각각 별도 확인을 요구하며, 기술 검증 통과를 생산 품질 승인으로
+표시하지 않는다. HTTP 자체에는 TLS가 없으므로 원격 관리에는 SSH 터널이나
+TLS 프록시를 사용한다.
+
+모바일 `References` 도구 모음은 상태와 작업 전환 버튼을 여러 줄로 배치해서
+390px 너비에서도 가로 스크롤이나 오버플로 없이 동작한다.
 
 ## 연결 설정
 

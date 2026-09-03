@@ -7,6 +7,23 @@ import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/remote_capture_api_service.dart';
 
+List<StationCaptureResult> mergeStationResultArchive(
+  Iterable<StationCaptureResult> retained,
+  Iterable<StationCaptureResult> fetched,
+) {
+  final byCycleId = <String, StationCaptureResult>{
+    for (final result in retained)
+      if (result.state.isFinal) result.cycleId: result,
+  };
+  for (final result in fetched) {
+    byCycleId[result.cycleId] = result;
+  }
+  return byCycleId.values.toList(growable: false)..sort(
+    (left, right) =>
+        (right.requestedAtMs ?? 0).compareTo(left.requestedAtMs ?? 0),
+  );
+}
+
 class InspectionResultsScreen extends StatefulWidget {
   const InspectionResultsScreen({super.key});
 
@@ -52,34 +69,19 @@ class _InspectionResultsScreenState extends State<InspectionResultsScreen> {
     List<StationCaptureResult>? nextResults;
     String? nextError;
     try {
-      try {
-        nextResults = (await _api.fetchStationResults(settings)).results;
-      } on RemoteCaptureApiException catch (error) {
-        if (error.statusCode != 404) rethrow;
-        final status = await _api.fetchStationStatus(settings);
-        final lastResult = status.lastResult;
-        nextResults = lastResult == null
-            ? const []
-            : [StationCaptureResult.fromJson(lastResult)];
-      }
+      nextResults = (await _api.fetchStationResults(settings)).results;
     } catch (error) {
       nextError = 'Failed to load capture results: $error';
     } finally {
       _pollInFlight = false;
     }
     if (!mounted) return;
-    if (nextResults != null) {
-      nextResults = List.of(nextResults)
-        ..sort(
-          (left, right) =>
-              (right.requestedAtMs ?? 0).compareTo(left.requestedAtMs ?? 0),
-        );
-    }
     setState(() {
       if (nextResults != null) {
+        final merged = mergeStationResultArchive(_results, nextResults);
         _results
           ..clear()
-          ..addAll(nextResults);
+          ..addAll(merged);
         if (!_results.any((result) => result.cycleId == _selectedCycleId)) {
           _selectedCycleId = _results.isEmpty ? null : _results.first.cycleId;
         }

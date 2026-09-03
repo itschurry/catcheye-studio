@@ -28,6 +28,7 @@ class SettingsProvider extends ChangeNotifier {
       'settings.stationViewer.cameraSlots';
 
   final AppSettings _settings;
+  int _connectionRevision = 0;
 
   SettingsProvider({AppSettings? initialSettings})
     : _settings = initialSettings ?? AppSettings();
@@ -98,6 +99,7 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   AppSettings get settings => _settings;
+  int get connectionRevision => _connectionRevision;
 
   Future<void> updateDetectorBaseUrl(String value) async {
     _settings.detectorBaseUrl = value;
@@ -127,6 +129,7 @@ class SettingsProvider extends ChangeNotifier {
     _settings.detectorBaseUrl = detectorBaseUrl;
     _settings.remoteDeviceKind = remoteDeviceKind;
     _settings.personRoiAlertDisabled = personRoiAlertDisabled;
+    _connectionRevision++;
     await _save();
     notifyListeners();
   }

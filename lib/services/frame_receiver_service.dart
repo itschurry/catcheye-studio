@@ -158,6 +158,7 @@ class ViewerStreamFrame {
   final int pointCount;
   final int stride;
   final double? sourceTimestampMs;
+  final int? frameSequence;
   final DateTime receivedAt;
   final Uint8List payloadBytes;
   final PointCloudData? pointCloud;
@@ -176,6 +177,7 @@ class ViewerStreamFrame {
     this.width,
     this.height,
     this.sourceTimestampMs,
+    this.frameSequence,
     this.pointCloud,
     this.projectedDepth,
     this.streamKey,
@@ -192,6 +194,8 @@ class ViewerStreamFrame {
     int? width,
     int? height,
     double? sourceTimestampMs,
+    int? frameSequence,
+    DateTime? receivedAt,
     String? streamKey,
   }) {
     return ViewerStreamFrame(
@@ -204,7 +208,8 @@ class ViewerStreamFrame {
       pointCount: pointCount,
       stride: stride,
       sourceTimestampMs: sourceTimestampMs,
-      receivedAt: DateTime.now(),
+      frameSequence: frameSequence,
+      receivedAt: receivedAt ?? DateTime.now(),
       payloadBytes: payloadBytes,
       pointCloud: encoding == ViewerStreamEncoding.pointcloudXyzF32
           ? PointCloudData.parse(payloadBytes, pointCount)
@@ -291,6 +296,7 @@ class _PendingStreamInfo {
   final int pointCount;
   final int stride;
   final double? sourceTimestampMs;
+  final int? frameSequence;
 
   const _PendingStreamInfo({
     required this.name,
@@ -303,6 +309,7 @@ class _PendingStreamInfo {
     this.pointCount = 0,
     this.stride = 1,
     this.sourceTimestampMs,
+    this.frameSequence,
   });
 
   String get label {
@@ -619,6 +626,9 @@ class FrameReceiverService extends ChangeNotifier {
     }
   }
 
+  @visibleForTesting
+  void processWebSocketDataForTest(dynamic data) => _onWebSocketData(data);
+
   void _onWebSocketMetadata(String data) {
     try {
       final decoded = jsonDecode(data);
@@ -730,6 +740,15 @@ class FrameReceiverService extends ChangeNotifier {
         return;
       }
       try {
+        final streamKey = _streamKeyFor(stream);
+        final previous =
+            _streams[streamKey ??
+                (stream.kind.isEmpty ? stream.name : stream.kind)];
+        final receivedAt =
+            stream.frameSequence != null &&
+                previous?.frameSequence == stream.frameSequence
+            ? previous!.receivedAt
+            : DateTime.now();
         final frame = ViewerStreamFrame.fromPayload(
           name: stream.name,
           kind: stream.kind,
@@ -740,8 +759,10 @@ class FrameReceiverService extends ChangeNotifier {
           pointCount: stream.pointCount,
           stride: stream.stride,
           sourceTimestampMs: stream.sourceTimestampMs,
+          frameSequence: stream.frameSequence,
+          receivedAt: receivedAt,
           payloadBytes: jpegBytes,
-          streamKey: _streamKeyFor(stream),
+          streamKey: streamKey,
         );
         if (_streamMatchesExpected(stream)) {
           nextStreams[frame.key] = frame;
@@ -806,7 +827,7 @@ class FrameReceiverService extends ChangeNotifier {
         .toSet();
     if (_disposed || setEquals(_expectedCameraIds, next)) return;
     _expectedCameraIds = next;
-    _clearBufferedFrames();
+    _clearVisibleFrames();
     _notifyListeners();
   }
 
@@ -820,13 +841,10 @@ class FrameReceiverService extends ChangeNotifier {
     );
   }
 
-  void _clearBufferedFrames() {
+  void _clearVisibleFrames() {
     _currentFrame = null;
     _streams.clear();
     _selectedStreamKey = null;
-    _pendingStreams = null;
-    _pendingPayloads.clear();
-    _discardPendingFrame = false;
     _latestMetadata = null;
     _frameSize = null;
     _lastFrameReceivedAt = null;
@@ -882,6 +900,13 @@ class FrameReceiverService extends ChangeNotifier {
           height: _metadataInt(metadata['height']),
           payloadSize: _metadataInt(metadata['payload_size']),
           sourceTimestampMs: _metadataDouble(metadata['source_timestamp_ms']),
+          frameSequence:
+              _metadataInt(metadata['frame_sequence']) ??
+              (metadata['metadata'] is Map
+                  ? _metadataInt(
+                      (metadata['metadata'] as Map)['frame_sequence'],
+                    )
+                  : null),
         ),
       ];
     }
@@ -916,6 +941,7 @@ class FrameReceiverService extends ChangeNotifier {
           pointCount: _metadataInt(rawStream['point_count']) ?? 0,
           stride: _metadataInt(rawStream['stride']) ?? 1,
           sourceTimestampMs: _metadataDouble(rawStream['source_timestamp_ms']),
+          frameSequence: _metadataInt(rawStream['frame_sequence']),
         ),
       );
     }
