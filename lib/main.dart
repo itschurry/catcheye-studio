@@ -459,10 +459,10 @@ class _AppShellState extends State<AppShell> {
     }
     final receiver = context.read<FrameReceiverService>();
     final shouldReconnectViewer =
-        currentSelectedIndex == 0 &&
+        (currentSelectedIndex == 0 || currentSelectedIndex == 2) &&
         index != 0 &&
         (receiver.connected || receiver.connecting);
-    if (index != 0) {
+    if (index != 0 && index != 2) {
       _viewerStreamUrl = null;
       if (shouldReconnectViewer) {
         _viewerReconnectToken += 1;

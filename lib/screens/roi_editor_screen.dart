@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -25,19 +24,51 @@ class RoiEditorScreen extends StatefulWidget {
 }
 
 class _RoiEditorScreenState extends State<RoiEditorScreen> {
-  Uint8List? _snapshotBytes;
-  bool _capturingSnapshot = false;
-  String? _snapshotError;
+  FrameReceiverService? _receiver;
   bool _zonePanelExpanded = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        unawaited(_captureSnapshot());
+      if (!mounted) return;
+      final receiver = context.read<FrameReceiverService>();
+      _receiver = receiver;
+      receiver.addListener(_onFrameChanged);
+      _onFrameChanged();
+      final uri = context.read<SettingsProvider>().settings.streamUri;
+      if (uri.scheme == 'ws' || uri.scheme == 'wss') {
+        unawaited(receiver.connect(uri.toString()));
       }
     });
+  }
+
+  void _onFrameChanged() {
+    if (!mounted) return;
+    final size = _cameraFrame(_receiver!)?.size;
+    if (size != null) {
+      context.read<RoiConfigProvider>().syncImageSize(
+        size.width.round(),
+        size.height.round(),
+      );
+    }
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _receiver?.removeListener(_onFrameChanged);
+    super.dispose();
+  }
+
+  String get _streamStatus {
+    final uri = context.read<SettingsProvider>().settings.streamUri;
+    if (uri.scheme != 'ws' && uri.scheme != 'wss') return 'WebSocket required';
+    final receiver = _receiver;
+    if (receiver == null || receiver.connecting) return 'Connecting';
+    if (receiver.errorMessage != null) return receiver.errorMessage!;
+    if (!receiver.connected) return 'Disconnected';
+    return _cameraFrame(receiver) == null ? 'Waiting for camera' : 'Live';
   }
 
   @override
@@ -78,7 +109,9 @@ class _RoiEditorScreenState extends State<RoiEditorScreen> {
                                 child: Padding(
                                   padding: const EdgeInsets.all(16),
                                   child: RoiEditorCanvas(
-                                    backgroundImageBytes: _snapshotBytes,
+                                    backgroundImageBytes: _receiver == null
+                                        ? null
+                                        : _cameraFrame(_receiver!)?.jpegBytes,
                                   ),
                                 ),
                               ),
@@ -133,7 +166,9 @@ class _RoiEditorScreenState extends State<RoiEditorScreen> {
                                 child: Padding(
                                   padding: const EdgeInsets.all(16),
                                   child: RoiEditorCanvas(
-                                    backgroundImageBytes: _snapshotBytes,
+                                    backgroundImageBytes: _receiver == null
+                                        ? null
+                                        : _cameraFrame(_receiver!)?.jpegBytes,
                                   ),
                                 ),
                               ),
@@ -160,76 +195,7 @@ class _RoiEditorScreenState extends State<RoiEditorScreen> {
     );
   }
 
-  Future<void> _captureSnapshot() async {
-    final settings = context.read<SettingsProvider>().settings;
-    final streamUri = settings.streamUri;
-    if (streamUri.scheme != 'ws' && streamUri.scheme != 'wss') {
-      setState(() {
-        _snapshotBytes = null;
-        _capturingSnapshot = false;
-        _snapshotError = 'WebSocket only';
-      });
-      return;
-    }
-
-    setState(() {
-      _snapshotBytes = null;
-      _capturingSnapshot = true;
-      _snapshotError = null;
-    });
-
-    final receiver = context.read<FrameReceiverService>();
-    final completer = Completer<ViewerStreamFrame>();
-    late final VoidCallback listener;
-    listener = () {
-      final frame = _snapshotFrame(receiver);
-      if (frame != null && !completer.isCompleted) {
-        completer.complete(frame);
-        return;
-      }
-      final errorMessage = receiver.errorMessage;
-      if (errorMessage != null && !completer.isCompleted) {
-        completer.completeError(StateError(errorMessage));
-      }
-    };
-    receiver.addListener(listener);
-
-    try {
-      unawaited(receiver.connect(streamUri.toString()));
-      final frame = await completer.future.timeout(
-        const Duration(seconds: 3),
-        onTimeout: () {
-          throw TimeoutException('ROI snapshot frame timeout');
-        },
-      );
-      if (!mounted) return;
-      final size = frame.size;
-      if (size != null) {
-        context.read<RoiConfigProvider>().syncImageSize(
-          size.width.round(),
-          size.height.round(),
-        );
-      }
-      setState(() {
-        _snapshotBytes = Uint8List.fromList(frame.jpegBytes);
-        _capturingSnapshot = false;
-        _snapshotError = null;
-      });
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _snapshotBytes = null;
-          _capturingSnapshot = false;
-          _snapshotError = 'Failed';
-        });
-      }
-    } finally {
-      receiver.removeListener(listener);
-      unawaited(receiver.disconnect());
-    }
-  }
-
-  ViewerStreamFrame? _snapshotFrame(FrameReceiverService receiver) {
+  ViewerStreamFrame? _cameraFrame(FrameReceiverService receiver) {
     for (final frame in receiver.streams.values) {
       if (frame.isJpeg && _isCameraFrame(frame)) {
         return frame;
@@ -239,14 +205,17 @@ class _RoiEditorScreenState extends State<RoiEditorScreen> {
   }
 
   bool _isCameraFrame(ViewerStreamFrame frame) {
-    final name = frame.name.toLowerCase();
-    final kind = frame.kind.toLowerCase();
-    return kind == 'camera' ||
-        kind == 'rgb' ||
-        kind == 'rgb_camera' ||
-        name == 'camera' ||
-        name == 'rgb' ||
-        name == 'rgb_camera';
+    return [frame.key, frame.name, frame.kind]
+        .map((v) => v.toLowerCase())
+        .any(
+          (value) =>
+              value == 'camera' ||
+              value == 'color' ||
+              value == 'rgb' ||
+              value == 'rgb_camera' ||
+              value.contains('color') ||
+              value.contains('rgb'),
+        );
   }
 
   Widget _buildToolbar(
@@ -380,14 +349,7 @@ class _RoiEditorScreenState extends State<RoiEditorScreen> {
               value: '${provider.config.allowedZones.length}',
             ),
             const SizedBox(width: 16),
-            _InfoChip(
-              label: 'Snapshot',
-              value: _snapshotBytes != null
-                  ? 'Ready'
-                  : _capturingSnapshot
-                  ? 'Capturing'
-                  : _snapshotError ?? '-',
-            ),
+            _InfoChip(label: 'Stream', value: _streamStatus),
             const Spacer(),
             if (provider.errorMessage != null)
               Row(
