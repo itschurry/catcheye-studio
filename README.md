@@ -5,7 +5,7 @@ CatchEye 장비의 영상 스트림을 확인하고 원격 설정을 조정하�
 현재 버전: `v1.3.0`
 
 Studio는 연결 시 `GET /api/device-info`를 호출해서 HSS/Pick/Capture/Inspection을 구분하고, 대상에 맞는 화면만 보여준다.
-Inspect의 운영 통합 프로파일은 `fastener`이고 캡처 그룹은 `bolt_stud`와 `nut`이야. Studio는 서버의 `groups` 목록을 그대로 사용하며 이전 그룹 이름을 변환하는 호환 처리는 제공하지 않아.
+Inspect의 운영 통합 프로파일은 `fastener`이고 캡처 그룹은 `bolt_stud`와 `nut`이야. Studio는 `/api/capture/status`의 `set_id`로 촬영 버튼을 결정해. 이전 그룹·개별 검사 선택 드롭다운과 구버전 API 호환 처리는 없어.
 HSS 연결에서 `person_roi_alert_disabled`가 `true`면 Viewer 툴바와 영상 영역 위에 깜빡이는 `ROI Alert Off` 경고를 표시한다.
 기존 버전이 저장한 장비 종류 `guard`는 앱 시작 시 `hss`로 자동 변환한다.
 
@@ -55,6 +55,13 @@ flutter pub get
 
 ## 실행
 
+Linux:
+
+```bash
+flutter run -d linux
+flutter build linux --release
+```
+
 macOS:
 
 ```bash
@@ -88,6 +95,15 @@ flutter build apk --release
 dart run flutter_launcher_icons -f launcher_icons_ios.yaml
 flutter build ios --release
 ```
+
+## 검증
+
+```bash
+flutter analyze
+flutter test
+```
+
+촬영 API 테스트는 프로파일별 경로, 빈 본문, 409·503·404 처리와 재전송 방지를 확인해. 촬영 버튼 테스트는 320px·1280px에서 프로파일별 버튼 수·배치·클릭 대상과 비활성 상태를 확인해. 모의 서버·위젯 테스트이며 실카메라 촬영 검증과는 별도야.
 
 ## 화면 구성
 
@@ -147,6 +163,22 @@ Desktop에서는 Split View를 켜면 왼쪽은 color/RGB JPEG, 오른쪽은 dep
 
 ## Inspection Station Viewer
 
+Inspect는 `--station`으로 실행해. YAML의 `set_id`에 따라 아래 촬영 버튼을 보여줘.
+
+| 실행 프로파일 | 촬영 버튼 | POST 경로 | 검사 대상 |
+| --- | --- | --- | --- |
+| `fastener` | `Stud + Bolt Head` | `/api/capture/bolt-stud` | 스터드 `.101` + 볼트 머리 `.102` |
+| `fastener` | `Nut + Nut Hole` | `/api/capture/nut` | 너트 `.103` + 너트 홀 `.104` |
+| `fastener` | `All Cameras (4)` | `/api/capture/all` | 설정된 네 카메라 |
+| `bolt_stud` | `All Cameras (2)`만 표시 | `/api/capture/all` | 설정된 스터드·볼트 머리 |
+| `nut` | `All Cameras (2)`만 표시 | `/api/capture/all` | 설정된 너트·너트 홀 |
+
+POST 본문은 보내지 않아. `group`·`inspection_id`로 검사 대상을 덮어쓰지 않고, 버튼마다 정해진 경로만 호출해. 전체 카메라 수는 상태 응답의 `cameras` 항목 수이며 미리보기 선택이나 `open:true` 개수가 아니야. 카메라 획득 실패도 검사 결과에서 제외하지 않고 장비 오류로 표시해.
+
+`set_id`가 없거나 상태 조회가 실패하면 촬영 버튼을 표시하지 않고 오류를 보여줘. 연결 끊김·요청 전송 중·준비 안 됨·대기열 포화 상태에서는 버튼을 비활성화해. 버튼은 좁은 화면에서 여러 줄로 배치돼.
+
+**Inspect와 Studio를 함께 업데이트해야 해.** Inspect의 이전 `/api/capture/request`와 개별 프로파일의 그룹 경로는 404야. 오류가 나도 다른 경로로 자동 전환하거나 POST를 재전송하지 않아. Inspect 단일 검사 모드도 `/api/capture/all`을 사용하지만 선택된 검사 하나만 처리해. 별도 CatchEye Capture 앱은 기존 `/api/capture/request`를 그대로 사용해. GPIO 입력 연동은 이번 수정에 포함하지 않아.
+
 `kind: inspection`, `runtime_mode: station` 장비는 Viewer에서 `1×1`, `1×2`,
 `2×2` 레이아웃을 제공한다. 각 슬롯은 `/api/viewer/source`가 반환한 카메라
 ID 중 하나를 선택한다. 선택 목록은 최대 4개이며 장비 전체에 적용된다.
@@ -162,6 +194,8 @@ ID이며 뒤따르는 JPEG binary frame은 `payload_index` 순서로 매칭된�
 
 미리보기는 raw 영상이며 Capture 결과와 연결하지 않는다. Capture 결과는
 cycle ID로 별도 폴링하여 Viewer 상단 결과 행에 표시한다.
+
+Inspect의 결과 파일은 `outputs/{bolt_stud,nut,all}/YYYY-MM-DD/<cycle_id>/`에 저장돼. 결과 JSON의 `storage_path`는 저장 루트 기준 상대 경로이고, Studio의 조회는 계속 `cycle_id`를 사용해. 기존 archive 파일을 결과 API에서 다시 불러오지는 않아.
 
 Inspection의 `Results` 탭은 `GET /api/capture/results`에서 runtime이 보존한
 최근 cycle을 조회한다. Studio가 조회한 완료 cycle은 실행 중 자체 보관하며,
@@ -214,6 +248,8 @@ Inspection station은 `runtime_mode: "station"`을 함께 반환한다. HSS 응�
 알림이 꺼진 상태로 보고 Viewer에 반투명 blink 경고를 띄운다.
 
 ## Capture API
+
+아래 표는 별도 CatchEye Capture 앱의 API야. Inspect 촬영 경로는 위 스테이션 표를 따라.
 
 | Method | Path | 용도 |
 | --- | --- | --- |

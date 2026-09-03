@@ -18,25 +18,19 @@ import 'package:catcheye_studio/services/reference_credential_store.dart';
 void main() {
   setUpAll(MediaKit.ensureInitialized);
 
-  test(
-    'station selector omits empty selectors and sends exactly one selector',
-    () {
-      expect(const StationCaptureSelector.all().toJson(), isEmpty);
-      expect(StationCaptureSelector.group(' bolt_stud ').toJson(), const {
-        'group': 'bolt_stud',
-      });
-      expect(
-        StationCaptureSelector.inspection('nut_hole_alignment').toJson(),
-        const {'inspection_id': 'nut_hole_alignment'},
-      );
-      expect(() => StationCaptureSelector.group(''), throwsFormatException);
-    },
-  );
+  test('station targets use explicit capture endpoints', () {
+    expect(StationCaptureTarget.values.map((target) => target.path), [
+      'bolt-stud',
+      'nut',
+      'all',
+    ]);
+  });
 
   test(
     'station status and result preserve queue and measurement semantics',
     () {
       final status = StationCaptureStatus.fromJson(const {
+        'set_id': 'fastener',
         'ready': true,
         'busy': true,
         'pending_count': 1,
@@ -57,6 +51,8 @@ void main() {
         'last_error': '',
       });
       expect(status.pendingCount, 1);
+      expect(status.setId, 'fastener');
+      expect(status.captureTargets, StationCaptureTarget.values);
       expect(status.maxPendingCaptures, 3);
       expect(status.cameras['nut_hole_camera']?.open, isFalse);
 
@@ -411,9 +407,9 @@ void main() {
     final subscription = server.listen((request) async {
       requestCount++;
       expect(request.method, 'POST');
-      expect(request.uri.path, '/api/capture/request');
+      expect(request.uri.path, '/api/capture/bolt-stud');
       final body = await utf8.decoder.bind(request).join();
-      expect(jsonDecode(body), const {'group': 'bolt_stud'});
+      expect(body, isEmpty);
       request.response.statusCode = HttpStatus.conflict;
       request.response.headers.contentType = ContentType.json;
       request.response.write(jsonEncode({'error': 'queue full'}));
@@ -429,7 +425,7 @@ void main() {
     await expectLater(
       service.requestStationCapture(
         settings,
-        selector: StationCaptureSelector.group('bolt_stud'),
+        target: StationCaptureTarget.boltStud,
       ),
       throwsA(
         isA<RemoteCaptureApiException>().having(
@@ -441,6 +437,117 @@ void main() {
     );
     expect(requestCount, 1);
   });
+
+  test(
+    'each station target posts once to its fixed route without a selector',
+    () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => server.close(force: true));
+      final paths = <String>[];
+      final subscription = server.listen((request) async {
+        paths.add(request.uri.path);
+        expect(request.method, 'POST');
+        expect(await utf8.decoder.bind(request).join(), isEmpty);
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(
+          jsonEncode({
+            'accepted': true,
+            'cycle_id': 'cycle-${paths.length}',
+            'error': '',
+          }),
+        );
+        await request.response.close();
+      });
+      addTearDown(subscription.cancel);
+      final service = RemoteCaptureApiService();
+      addTearDown(service.close);
+      final settings = AppSettings(
+        detectorBaseUrl: 'http://${server.address.host}:${server.port}',
+      );
+      for (final target in StationCaptureTarget.values) {
+        final accepted = await service.requestStationCapture(
+          settings,
+          target: target,
+        );
+        expect(accepted.accepted, isTrue);
+        expect(accepted.cycleId, 'cycle-${paths.length}');
+      }
+      expect(paths, [
+        '/api/capture/bolt-stud',
+        '/api/capture/nut',
+        '/api/capture/all',
+      ]);
+    },
+  );
+
+  test(
+    'Capture app keeps its endpoint while single Inspect uses all',
+    () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => server.close(force: true));
+      final paths = <String>[];
+      final subscription = server.listen((request) async {
+        paths.add(request.uri.path);
+        expect(request.method, 'POST');
+        expect(await utf8.decoder.bind(request).join(), isEmpty);
+        request.response.headers.contentType = ContentType.json;
+        request.response.write('{}');
+        await request.response.close();
+      });
+      addTearDown(subscription.cancel);
+      final service = RemoteCaptureApiService();
+      addTearDown(service.close);
+      for (final kind in [
+        RemoteDeviceKind.capture,
+        RemoteDeviceKind.inspection,
+      ]) {
+        await service.requestCapture(
+          AppSettings(
+            detectorBaseUrl: 'http://${server.address.host}:${server.port}',
+            remoteDeviceKind: kind,
+          ),
+        );
+      }
+      expect(paths, ['/api/capture/request', '/api/capture/all']);
+    },
+  );
+
+  for (final code in [HttpStatus.notFound, HttpStatus.serviceUnavailable]) {
+    test(
+      'station HTTP $code does not retry a different capture route',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        addTearDown(() => server.close(force: true));
+        final paths = <String>[];
+        final subscription = server.listen((request) async {
+          paths.add(request.uri.path);
+          await request.drain<void>();
+          request.response.statusCode = code;
+          request.response.write('{}');
+          await request.response.close();
+        });
+        addTearDown(subscription.cancel);
+        final service = RemoteCaptureApiService();
+        addTearDown(service.close);
+        await expectLater(
+          service.requestStationCapture(
+            AppSettings(
+              detectorBaseUrl: 'http://${server.address.host}:${server.port}',
+            ),
+            target: StationCaptureTarget.nut,
+          ),
+          throwsA(
+            isA<RemoteCaptureApiException>().having(
+              (error) => error.statusCode,
+              'statusCode',
+              code,
+            ),
+          ),
+        );
+        expect(paths, ['/api/capture/nut']);
+      },
+    );
+  }
 
   test('reference status parses capabilities and camera class mapping', () {
     final status = ReferenceApiStatus.fromJson(const {

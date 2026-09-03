@@ -17,6 +17,7 @@ import '../services/reference_credential_store.dart';
 import '../widgets/live_viewer.dart';
 import '../widgets/point_cloud_viewer.dart';
 import '../widgets/stream_selector.dart';
+import '../widgets/station_capture_actions.dart';
 
 /// Live preview viewer screen — connects to the remote detector RTSP or WebSocket stream.
 
@@ -70,7 +71,6 @@ class _ViewerScreenState extends State<ViewerScreen>
   List<String> _stationCameraSlots = const [''];
   final Map<String, StationCaptureResult> _stationCycles = {};
   String? _selectedStationCycleId;
-  String _stationCaptureTarget = 'all';
   String? _stationError;
   bool _stationSourceActionInFlight = false;
   bool _stationPollInFlight = false;
@@ -1702,20 +1702,6 @@ class _ViewerScreenState extends State<ViewerScreen>
       ...?status?.cameras.keys,
       ...?source?.cameraIds,
     }.where((cameraId) => cameraId.isNotEmpty).toList(growable: false)..sort();
-    final targetItems = <DropdownMenuItem<String>>[
-      const DropdownMenuItem(value: 'all', child: Text('All inspections')),
-      for (final group in status?.groups.keys ?? const <String>[])
-        DropdownMenuItem(value: 'group:$group', child: Text('Group: $group')),
-      for (final inspectionId in _stationInspectionIds(status))
-        DropdownMenuItem(
-          value: 'inspection:$inspectionId',
-          child: Text('Inspection: $inspectionId'),
-        ),
-    ];
-    final targetValues = targetItems.map((item) => item.value).toSet();
-    final selectedTarget = targetValues.contains(_stationCaptureTarget)
-        ? _stationCaptureTarget
-        : 'all';
     final selectedCycleId = _stationCycles.containsKey(_selectedStationCycleId)
         ? _selectedStationCycleId
         : _stationCycles.isEmpty
@@ -1742,9 +1728,11 @@ class _ViewerScreenState extends State<ViewerScreen>
               spacing: 10,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                const Text(
-                  'Inspection Station',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                Text(
+                  status == null
+                      ? 'Inspection Station'
+                      : 'Inspection Station: ${status.setId}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 SegmentedButton<StationViewerLayout>(
                   segments: [
@@ -1810,35 +1798,6 @@ class _ViewerScreenState extends State<ViewerScreen>
                             },
                     ),
                   ),
-                SizedBox(
-                  width: 230,
-                  child: DropdownButtonFormField<String>(
-                    key: ValueKey('station-target-$selectedTarget'),
-                    initialValue: selectedTarget,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Capture target',
-                      isDense: true,
-                      border: OutlineInputBorder(),
-                    ),
-                    items: targetItems,
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _stationCaptureTarget = value);
-                      }
-                    },
-                  ),
-                ),
-                FilledButton.icon(
-                  icon: const Icon(Icons.camera_alt_outlined, size: 16),
-                  label: const Text('Capture'),
-                  onPressed:
-                      !receiver.connected ||
-                          _captureActionInFlight ||
-                          status?.ready == false
-                      ? null
-                      : () => _requestCapture(settings),
-                ),
                 Text(queueText, style: const TextStyle(fontSize: 12)),
                 if (status != null)
                   Text(
@@ -1865,6 +1824,14 @@ class _ViewerScreenState extends State<ViewerScreen>
                   ),
               ],
             ),
+          ),
+          const SizedBox(height: 8),
+          StationCaptureActions(
+            status: status,
+            connected: receiver.connected,
+            inFlight: _captureActionInFlight,
+            onCapture: (target) =>
+                _requestCapture(settings, stationTarget: target),
           ),
           if (_stationCycles.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -1940,15 +1907,6 @@ class _ViewerScreenState extends State<ViewerScreen>
         ],
       ),
     );
-  }
-
-  List<String> _stationInspectionIds(StationCaptureStatus? status) {
-    final ids = <String>{};
-    for (final group in status?.groups.values ?? const <List<String>>[]) {
-      ids.addAll(group);
-    }
-    final result = ids.toList(growable: false)..sort();
-    return result;
   }
 
   Widget _stationResultChip(String text, Color color) {
@@ -2197,7 +2155,6 @@ class _ViewerScreenState extends State<ViewerScreen>
     if (!sameDevice) {
       _stationCycles.clear();
       _selectedStationCycleId = null;
-      _stationCaptureTarget = 'all';
     }
     _stationApiBaseUrl = settings.detectorBaseUrl;
     _isInspectionStation = true;
@@ -2223,7 +2180,6 @@ class _ViewerScreenState extends State<ViewerScreen>
       }(),
     ]);
     if (!mounted || session != _stationSession) return;
-    nextStatus ??= sameDevice ? _stationStatus : null;
     nextSource ??= sameDevice ? _stationViewerSource : null;
     final sourceCameraIds = nextSource?.cameraIds ?? const <String>[];
     final nextLayout = _stationViewerLayout.accommodate(sourceCameraIds.length);
@@ -2315,7 +2271,7 @@ class _ViewerScreenState extends State<ViewerScreen>
       return;
     }
     setState(() {
-      if (nextStatus != null) _stationStatus = nextStatus;
+      _stationStatus = nextStatus;
       _stationCycles.addAll(nextResults);
       _stationError = nextError;
       _trimStationHistory();
@@ -2469,23 +2425,22 @@ class _ViewerScreenState extends State<ViewerScreen>
     );
   }
 
-  Future<void> _requestStationCapture(AppSettings settings) async {
-    StationCaptureSelector selector;
-    if (_stationCaptureTarget.startsWith('group:')) {
-      selector = StationCaptureSelector.group(
-        _stationCaptureTarget.substring('group:'.length),
+  Future<void> _requestStationCapture(
+    AppSettings settings,
+    StationCaptureTarget target,
+  ) async {
+    final status = _stationStatus;
+    if (status == null ||
+        !status.ready ||
+        !status.captureTargets.contains(target)) {
+      throw StateError(
+        'Capture target is not available for the current station',
       );
-    } else if (_stationCaptureTarget.startsWith('inspection:')) {
-      selector = StationCaptureSelector.inspection(
-        _stationCaptureTarget.substring('inspection:'.length),
-      );
-    } else {
-      selector = const StationCaptureSelector.all();
     }
 
     final accepted = await _captureApi.requestStationCapture(
       settings,
-      selector: selector,
+      target: target,
     );
     if (!accepted.accepted || accepted.cycleId.isEmpty) {
       throw StateError(
@@ -2599,11 +2554,18 @@ class _ViewerScreenState extends State<ViewerScreen>
     }
   }
 
-  Future<void> _requestCapture(AppSettings settings) async {
+  Future<void> _requestCapture(
+    AppSettings settings, {
+    StationCaptureTarget? stationTarget,
+  }) async {
+    if (_captureActionInFlight) return;
     setState(() => _captureActionInFlight = true);
     try {
       if (_isInspectionStation) {
-        await _requestStationCapture(settings);
+        if (stationTarget == null) {
+          throw StateError('Station capture target is required');
+        }
+        await _requestStationCapture(settings, stationTarget);
       } else {
         await _captureApi.requestCapture(settings);
       }

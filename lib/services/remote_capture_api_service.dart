@@ -22,34 +22,15 @@ class RemoteCaptureApiException implements Exception {
       'RemoteCaptureApiException: $method $uri failed ($statusCode): $message';
 }
 
-class StationCaptureSelector {
-  final String? group;
-  final String? inspectionId;
+enum StationCaptureTarget {
+  boltStud('bolt-stud', 'Stud + Bolt Head'),
+  nut('nut', 'Nut + Nut Hole'),
+  all('all', 'All Cameras');
 
-  const StationCaptureSelector._({this.group, this.inspectionId});
+  const StationCaptureTarget(this.path, this.label);
 
-  const StationCaptureSelector.all() : this._();
-
-  factory StationCaptureSelector.group(String group) {
-    final value = group.trim();
-    if (value.isEmpty) {
-      throw const FormatException('group must not be empty');
-    }
-    return StationCaptureSelector._(group: value);
-  }
-
-  factory StationCaptureSelector.inspection(String inspectionId) {
-    final value = inspectionId.trim();
-    if (value.isEmpty) {
-      throw const FormatException('inspection_id must not be empty');
-    }
-    return StationCaptureSelector._(inspectionId: value);
-  }
-
-  Map<String, String> toJson() => {
-    'group': ?group,
-    'inspection_id': ?inspectionId,
-  };
+  final String path;
+  final String label;
 }
 
 class StationCaptureAccepted {
@@ -93,6 +74,9 @@ class StationCameraStatus {
 }
 
 class StationCaptureStatus {
+  static const supportedSetIds = {'fastener', 'bolt_stud', 'nut'};
+
+  final String setId;
   final bool ready;
   final bool busy;
   final int pendingCount;
@@ -105,6 +89,7 @@ class StationCaptureStatus {
   final String lastError;
 
   const StationCaptureStatus({
+    required this.setId,
     required this.ready,
     required this.busy,
     required this.pendingCount,
@@ -116,6 +101,12 @@ class StationCaptureStatus {
     required this.lastResult,
     required this.lastError,
   });
+
+  List<StationCaptureTarget> get captureTargets => switch (setId) {
+    'fastener' => StationCaptureTarget.values,
+    'bolt_stud' || 'nut' => const [StationCaptureTarget.all],
+    _ => throw StateError('unsupported station set_id: $setId'),
+  };
 
   factory StationCaptureStatus.fromJson(Map<String, dynamic> json) {
     final rawGroups = json['groups'];
@@ -156,7 +147,13 @@ class StationCaptureStatus {
       throw const FormatException('last_result object expected');
     }
 
+    final setId = _requiredString(json, 'set_id');
+    if (setId.isEmpty) throw const FormatException('set_id must not be empty');
+    if (!supportedSetIds.contains(setId)) {
+      throw FormatException('unsupported station set_id: $setId');
+    }
     return StationCaptureStatus(
+      setId: setId,
       ready: _requiredBool(json, 'ready'),
       busy: _requiredBool(json, 'busy'),
       pendingCount: _optionalInt(json, 'pending_count') ?? 0,
@@ -460,17 +457,23 @@ class RemoteCaptureApiService {
   void close() => _client.close(force: true);
 
   Future<void> requestCapture(AppSettings settings) async {
-    await _requestJson('POST', settings.buildApiUri('capture/request'));
+    await _requestJson(
+      'POST',
+      settings.buildApiUri(
+        settings.remoteDeviceKind == RemoteDeviceKind.inspection
+            ? 'capture/all'
+            : 'capture/request',
+      ),
+    );
   }
 
   Future<StationCaptureAccepted> requestStationCapture(
     AppSettings settings, {
-    StationCaptureSelector selector = const StationCaptureSelector.all(),
+    required StationCaptureTarget target,
   }) async {
     final json = await _requestJson(
       'POST',
-      settings.buildApiUri('capture/request'),
-      body: selector.toJson(),
+      settings.buildApiUri('capture/${target.path}'),
     );
     return StationCaptureAccepted.fromJson(json);
   }
