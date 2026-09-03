@@ -12,6 +12,7 @@ import 'providers/settings_provider.dart';
 import 'screens/camera_depth_calibration_screen.dart';
 import 'screens/camera_properties_screen.dart';
 import 'screens/capture_images_screen.dart';
+import 'screens/inspection_results_screen.dart';
 import 'screens/monitor_screen.dart';
 import 'screens/roi_editor_screen.dart';
 import 'screens/viewer_screen.dart';
@@ -24,7 +25,7 @@ List<int> visibleAppItemIndexes(RemoteDeviceKind? kind, bool isPhone) {
       RemoteDeviceKind.hss => const [0, 1, 2],
       RemoteDeviceKind.pick => const [0, 2],
       RemoteDeviceKind.capture => const [0, 5, 1],
-      RemoteDeviceKind.inspection => const [0],
+      RemoteDeviceKind.inspection => const [0, 6],
       null => const [0],
     };
   }
@@ -32,7 +33,7 @@ List<int> visibleAppItemIndexes(RemoteDeviceKind? kind, bool isPhone) {
     RemoteDeviceKind.hss => const [0, 1, 2, 3],
     RemoteDeviceKind.pick => const [0, 2, 4],
     RemoteDeviceKind.capture => const [0, 5, 1, 3],
-    RemoteDeviceKind.inspection => const [0],
+    RemoteDeviceKind.inspection => const [0, 6],
     null => const [0],
   };
 }
@@ -187,6 +188,11 @@ class _AppShellState extends State<AppShell> {
       icon: Icons.photo_library_outlined,
       selectedIcon: Icons.photo_library,
     ),
+    _NavItem(
+      label: 'Results',
+      icon: Icons.fact_check_outlined,
+      selectedIcon: Icons.fact_check,
+    ),
   ];
 
   @override
@@ -247,6 +253,7 @@ class _AppShellState extends State<AppShell> {
       3 => const CameraPropertiesScreen(),
       4 => const CameraDepthCalibrationScreen(),
       5 => CaptureImagesScreen(isPhone: isPhone),
+      6 => const InspectionResultsScreen(),
       _ => throw StateError('Unsupported screen index: $index'),
     };
   }

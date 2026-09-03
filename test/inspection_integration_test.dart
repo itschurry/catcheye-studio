@@ -231,6 +231,32 @@ void main() {
     ]);
   });
 
+  test('station result list parses retained cycles', () {
+    final list = StationCaptureResultList.fromJson(const {
+      'results': [
+        {
+          'cycle_id': 'cycle-2',
+          'state': 'RUNNING',
+          'inspection_ids': ['presence'],
+        },
+        {
+          'cycle_id': 'cycle-1',
+          'state': 'COMPLETED',
+          'status': 'OK',
+          'inspection_ids': [],
+          'inspections': {},
+        },
+      ],
+    });
+
+    expect(list.results.map((result) => result.cycleId), [
+      'cycle-2',
+      'cycle-1',
+    ]);
+    expect(list.results.first.state, StationCycleState.running);
+    expect(list.results.last.presentationStatus, 'OK');
+  });
+
   test('multi-camera source selection sends ordered camera_ids', () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     addTearDown(() => server.close(force: true));

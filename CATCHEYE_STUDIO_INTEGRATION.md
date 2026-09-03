@@ -250,6 +250,10 @@ Capture happens when a queued cycle starts executing, not when its POST was acce
 Completed history is bounded (32 by default) and lost on restart; unknown/evicted IDs
 return HTTP 404. Retain the completed result in Studio after polling it. `last_result`
 can belong to another request, so it is not sufficient to correlate simultaneous callers.
+The Inspection Results tab reads the retained history using `GET /api/capture/results`.
+That route returns `{"results":[...]}` newest first and includes queued, running,
+completed, and cancelled cycles still held by the runtime. With an older runtime that
+does not expose the list route, Studio falls back to showing only `last_result`.
 When saving is configured, `artifacts` names files relative to the cycle directory on the
 device. No artifact-download endpoint is implemented. `artifact_error` indicates a save
 failure and forces aggregate `EQUIPMENT_ERROR`; per-inspection detection results may still exist.

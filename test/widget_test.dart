@@ -69,7 +69,7 @@ void main() {
     expect(RemoteDeviceKind.capture.label, 'Capture');
   });
 
-  test('inspection discovery and navigation expose only Viewer', () {
+  test('inspection discovery and navigation expose Viewer and Results', () {
     expect(
       RemoteDeviceKind.fromApiValue('inspection'),
       RemoteDeviceKind.inspection,
@@ -90,10 +90,11 @@ void main() {
     );
     expect(
       app.visibleAppItemIndexes(RemoteDeviceKind.inspection, false),
-      const [0],
+      const [0, 6],
     );
     expect(app.visibleAppItemIndexes(RemoteDeviceKind.inspection, true), const [
       0,
+      6,
     ]);
   });
 

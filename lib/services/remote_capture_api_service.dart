@@ -426,6 +426,29 @@ class StationCaptureResult {
   }
 }
 
+class StationCaptureResultList {
+  final List<StationCaptureResult> results;
+
+  const StationCaptureResultList({required this.results});
+
+  factory StationCaptureResultList.fromJson(Map<String, dynamic> json) {
+    final rawResults = json['results'];
+    if (rawResults is! List) {
+      throw const FormatException('results list expected');
+    }
+    final results = <StationCaptureResult>[];
+    for (final value in rawResults) {
+      if (value is! Map) {
+        throw const FormatException('invalid station capture result');
+      }
+      results.add(
+        StationCaptureResult.fromJson(Map<String, dynamic>.from(value)),
+      );
+    }
+    return StationCaptureResultList(results: List.unmodifiable(results));
+  }
+}
+
 class RemoteCaptureApiService {
   RemoteCaptureApiService({
     Duration requestTimeout = const Duration(seconds: 10),
@@ -471,6 +494,16 @@ class RemoteCaptureApiService {
       settings.buildApiUri('capture/results/${Uri.encodeComponent(id)}'),
     );
     return StationCaptureResult.fromJson(json);
+  }
+
+  Future<StationCaptureResultList> fetchStationResults(
+    AppSettings settings,
+  ) async {
+    final json = await _requestJson(
+      'GET',
+      settings.buildApiUri('capture/results'),
+    );
+    return StationCaptureResultList.fromJson(json);
   }
 
   Future<StationViewerSource> fetchViewerSource(AppSettings settings) async {

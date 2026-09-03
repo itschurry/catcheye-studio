@@ -88,6 +88,7 @@ flutter build ios --release
 | ROI Editor | HSS / Pick | Person 또는 Pallet ROI 편집 |
 | Camera Properties | HSS / Capture | 카메라 runtime property 조절 |
 | Camera Geometry | Pick | 카메라 intrinsic과 로봇 base 기준 extrinsic 위치 관계 조회 |
+| Results | Inspection | 최근 촬영 cycle의 상태, 검사별 판정, 측정값과 원본 JSON 조회 |
 
 Pick 연결에서는 `Viewer`, `ROI Editor`, `Camera Geometry`만 보여준다.
 Capture 연결에서는 데스크톱에서 `Viewer`, `Images`, `Monitor`, `Camera Properties`만 보여주고, 폰에서는 `Viewer`, `Images`, `Monitor`만 보여준다. Capture Viewer에서는 `Capture` 버튼으로 `/api/capture/request`를 호출하고, `Record` 버튼으로 `/api/recording/*`를 호출한다. Images 화면은 `/api/captures/*`로 저장된 JPEG와 `capture_dir`가 올라간 저장장치 용량을 조회한다.
@@ -145,6 +146,10 @@ ID이며 뒤따르는 JPEG binary frame은 `payload_index` 순서로 매칭된�
 
 미리보기는 raw 영상이며 Capture 결과와 연결하지 않는다. Capture 결과는
 cycle ID로 별도 폴링하여 Viewer 상단 결과 행에 표시한다.
+
+Inspection의 `Results` 탭은 `GET /api/capture/results`에서 runtime이 보존한
+최근 cycle을 조회한다. 구형 runtime이 이 API를 제공하지 않으면
+`/api/capture/status`의 `last_result`만 표시한다.
 
 ## 연결 설정
 
