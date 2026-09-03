@@ -2,7 +2,7 @@
 
 CatchEye 장비의 영상 스트림을 확인하고 원격 설정을 조정하는 Flutter 데스크톱 앱.
 
-현재 버전: `v1.3.0`
+현재 버전: `v1.4.0`
 
 Studio는 연결 시 `GET /api/device-info`를 호출해서 HSS/Pick/Capture/Inspection을 구분하고, 대상에 맞는 화면만 보여준다.
 Inspect의 운영 통합 프로파일은 `fastener`이고 캡처 그룹은 `bolt_stud`와 `nut`이야. Studio는 `/api/capture/status`의 `set_id`로 촬영 버튼을 결정해. 이전 그룹·개별 검사 선택 드롭다운과 구버전 API 호환 처리는 없어.
