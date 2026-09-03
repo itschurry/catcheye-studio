@@ -158,9 +158,11 @@ class ViewerStreamFrame {
   final int pointCount;
   final int stride;
   final double? sourceTimestampMs;
+  final DateTime receivedAt;
   final Uint8List payloadBytes;
   final PointCloudData? pointCloud;
   final ProjectedDepthData? projectedDepth;
+  final String? streamKey;
 
   const ViewerStreamFrame({
     required this.name,
@@ -168,6 +170,7 @@ class ViewerStreamFrame {
     required this.encoding,
     required this.payloadIndex,
     required this.payloadBytes,
+    required this.receivedAt,
     this.pointCount = 0,
     this.stride = 1,
     this.width,
@@ -175,6 +178,7 @@ class ViewerStreamFrame {
     this.sourceTimestampMs,
     this.pointCloud,
     this.projectedDepth,
+    this.streamKey,
   });
 
   factory ViewerStreamFrame.fromPayload({
@@ -188,6 +192,7 @@ class ViewerStreamFrame {
     int? width,
     int? height,
     double? sourceTimestampMs,
+    String? streamKey,
   }) {
     return ViewerStreamFrame(
       name: name,
@@ -199,6 +204,7 @@ class ViewerStreamFrame {
       pointCount: pointCount,
       stride: stride,
       sourceTimestampMs: sourceTimestampMs,
+      receivedAt: DateTime.now(),
       payloadBytes: payloadBytes,
       pointCloud: encoding == ViewerStreamEncoding.pointcloudXyzF32
           ? PointCloudData.parse(payloadBytes, pointCount)
@@ -206,10 +212,11 @@ class ViewerStreamFrame {
       projectedDepth: encoding == ViewerStreamEncoding.projectedDepthXyDepthF32
           ? ProjectedDepthData.parse(payloadBytes, pointCount)
           : null,
+      streamKey: streamKey,
     );
   }
 
-  String get key => kind.isEmpty ? name : kind;
+  String get key => streamKey ?? (kind.isEmpty ? name : kind);
 
   Uint8List get jpegBytes => payloadBytes;
 
@@ -323,7 +330,10 @@ class FrameReceiverService extends ChangeNotifier {
   String? _selectedStreamKey;
   List<_PendingStreamInfo>? _pendingStreams;
   final Map<int, Uint8List> _pendingPayloads = {};
+  bool _discardPendingFrame = false;
+  Set<String>? _expectedCameraIds;
   Map<String, dynamic>? _latestMetadata;
+  DateTime? _lastFrameReceivedAt;
   int _frameCount = 0;
   double _fps = 0;
   double? _previousSourceTimestampMs;
@@ -347,6 +357,9 @@ class FrameReceiverService extends ChangeNotifier {
 
   bool get hasMultiStream => _streams.length > 1;
   Map<String, dynamic>? get latestMetadata => _latestMetadata;
+  Set<String>? get expectedCameraIds =>
+      _expectedCameraIds == null ? null : Set.unmodifiable(_expectedCameraIds!);
+  DateTime? get lastFrameReceivedAt => _lastFrameReceivedAt;
   List<DetectionPosition> get detectionPositions =>
       _parseDetectionPositions(_latestMetadata);
   double? get inferenceMs {
@@ -523,7 +536,9 @@ class FrameReceiverService extends ChangeNotifier {
     _selectedStreamKey = null;
     _pendingStreams = null;
     _pendingPayloads.clear();
+    _discardPendingFrame = false;
     _latestMetadata = null;
+    _lastFrameReceivedAt = null;
     _frameCount = 0;
     _fps = 0;
     _previousSourceTimestampMs = null;
@@ -609,14 +624,18 @@ class FrameReceiverService extends ChangeNotifier {
       final decoded = jsonDecode(data);
       if (decoded is! Map<String, dynamic>) return;
       _failIncompletePendingFrame();
-      _latestMetadata = decoded;
-      _updateFpsFromMetadata(decoded);
       _pendingStreams = _parsePendingStreams(decoded);
       _pendingPayloads.clear();
+      _discardPendingFrame = !_matchesExpectedCameras(decoded);
+      if (!_discardPendingFrame) {
+        _latestMetadata = decoded;
+        _updateFpsFromMetadata(decoded);
+      }
     } catch (e) {
       _errorMessage = 'Invalid WebSocket metadata: $e';
       _pendingStreams = null;
       _pendingPayloads.clear();
+      _discardPendingFrame = false;
     }
     _notifyListeners();
   }
@@ -640,6 +659,30 @@ class FrameReceiverService extends ChangeNotifier {
 
   void _onWebSocketPayload(Uint8List payload) {
     final pendingStreams = _pendingStreams;
+    if (_discardPendingFrame) {
+      if (pendingStreams == null) {
+        _discardPendingFrame = false;
+        return;
+      }
+      final streamInfo = pendingStreams.firstWhere(
+        (stream) => !_pendingPayloads.containsKey(stream.payloadIndex),
+        orElse: () => const _PendingStreamInfo(
+          name: '',
+          kind: '',
+          encoding: ViewerStreamEncoding.unknown,
+          payloadIndex: -1,
+        ),
+      );
+      if (streamInfo.payloadIndex >= 0) {
+        _pendingPayloads[streamInfo.payloadIndex] = Uint8List(0);
+      }
+      if (_pendingPayloads.length == pendingStreams.length) {
+        _pendingStreams = null;
+        _pendingPayloads.clear();
+        _discardPendingFrame = false;
+      }
+      return;
+    }
     if (pendingStreams == null) {
       _setSingleFrame(payload);
       _notifyListeners();
@@ -698,8 +741,11 @@ class FrameReceiverService extends ChangeNotifier {
           stride: stream.stride,
           sourceTimestampMs: stream.sourceTimestampMs,
           payloadBytes: jpegBytes,
+          streamKey: _streamKeyFor(stream),
         );
-        nextStreams[frame.key] = frame;
+        if (_streamMatchesExpected(stream)) {
+          nextStreams[frame.key] = frame;
+        }
       } catch (e) {
         _errorMessage = 'Invalid ${stream.label} payload: $e';
         _pendingStreams = null;
@@ -709,11 +755,17 @@ class FrameReceiverService extends ChangeNotifier {
       }
     }
 
+    if (nextStreams.isEmpty) {
+      _pendingStreams = null;
+      _pendingPayloads.clear();
+      return;
+    }
     _streams.addAll(nextStreams);
     _selectedStreamKey = _selectNextStreamKey();
     _syncSelectedFrameState();
     _errorMessage = null;
     _frameCount++;
+    _lastFrameReceivedAt = DateTime.now();
     _pendingStreams = null;
     _pendingPayloads.clear();
     _notifyListeners();
@@ -730,6 +782,7 @@ class FrameReceiverService extends ChangeNotifier {
       payloadIndex: 0,
       width: detectedSize?.width.toInt(),
       height: detectedSize?.height.toInt(),
+      receivedAt: DateTime.now(),
       payloadBytes: payload,
     );
     _streams
@@ -739,11 +792,99 @@ class FrameReceiverService extends ChangeNotifier {
     _syncSelectedFrameState();
     _errorMessage = null;
     _frameCount++;
+    _lastFrameReceivedAt = DateTime.now();
+  }
+
+  /// Restricts station preview frames to the globally selected cameras.
+  ///
+  /// `null` disables filtering for non-station streams, while an empty set
+  /// represents an explicitly disabled station preview.
+  void setExpectedCameraIds(Iterable<String>? cameraIds) {
+    final next = cameraIds
+        ?.map((cameraId) => cameraId.trim())
+        .where((cameraId) => cameraId.isNotEmpty)
+        .toSet();
+    if (_disposed || setEquals(_expectedCameraIds, next)) return;
+    _expectedCameraIds = next;
+    _clearBufferedFrames();
+    _notifyListeners();
+  }
+
+  void setExpectedCameraId(String? cameraId) {
+    setExpectedCameraIds(
+      cameraId == null
+          ? null
+          : cameraId.trim().isEmpty
+          ? const <String>[]
+          : [cameraId],
+    );
+  }
+
+  void _clearBufferedFrames() {
+    _currentFrame = null;
+    _streams.clear();
+    _selectedStreamKey = null;
+    _pendingStreams = null;
+    _pendingPayloads.clear();
+    _discardPendingFrame = false;
+    _latestMetadata = null;
+    _frameSize = null;
+    _lastFrameReceivedAt = null;
+  }
+
+  bool _matchesExpectedCameras(Map<String, dynamic> metadataFrame) {
+    final expected = _expectedCameraIds;
+    if (expected == null) return true;
+    if (expected.isEmpty) return false;
+
+    final metadata = metadataFrame['metadata'];
+    final nestedCameraId = metadata is Map ? metadata['camera_id'] : null;
+    final nestedCameraIds = metadata is Map ? metadata['camera_ids'] : null;
+    final streamName = metadataFrame['stream_name'];
+    final rawStreams = metadataFrame['streams'];
+    final actual = <String>{
+      if (nestedCameraId is String && nestedCameraId.isNotEmpty) nestedCameraId,
+      if (nestedCameraIds is List) ...nestedCameraIds.whereType<String>(),
+      if (streamName is String && streamName.isNotEmpty) streamName,
+      if (rawStreams is List)
+        for (final stream in rawStreams)
+          if (stream is Map && stream['name'] is String)
+            stream['name'] as String,
+    };
+    return actual.any(expected.contains);
+  }
+
+  bool _streamMatchesExpected(_PendingStreamInfo stream) {
+    final expected = _expectedCameraIds;
+    if (expected == null) return true;
+    return expected.contains(stream.name) || expected.contains(stream.kind);
+  }
+
+  String? _streamKeyFor(_PendingStreamInfo stream) {
+    final expected = _expectedCameraIds;
+    if (expected != null && expected.contains(stream.name)) return stream.name;
+    return null;
   }
 
   List<_PendingStreamInfo>? _parsePendingStreams(
     Map<String, dynamic> metadata,
   ) {
+    if (metadata['type'] == 'frame') {
+      return [
+        _PendingStreamInfo(
+          name: _metadataString(metadata['stream_name']),
+          kind: _metadataString(metadata['stream_name']),
+          encoding: ViewerStreamEncoding.parse(
+            _metadataString(metadata['payload_encoding'], defaultValue: 'jpeg'),
+          ),
+          payloadIndex: 0,
+          width: _metadataInt(metadata['width']),
+          height: _metadataInt(metadata['height']),
+          payloadSize: _metadataInt(metadata['payload_size']),
+          sourceTimestampMs: _metadataDouble(metadata['source_timestamp_ms']),
+        ),
+      ];
+    }
     if (metadata['type'] != 'viewer_frame') return null;
     final rawStreams = metadata['streams'];
     if (rawStreams is! List || rawStreams.isEmpty) return null;

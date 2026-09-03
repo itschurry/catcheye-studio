@@ -2,9 +2,9 @@
 
 CatchEye 장비의 영상 스트림을 확인하고 원격 설정을 조정하는 Flutter 데스크톱 앱.
 
-현재 버전: `v1.2.0`
+현재 버전: `v1.3.0`
 
-Studio는 연결 시 `GET /api/device-info`를 호출해서 HSS/Pick/Capture를 구분하고, 대상에 맞는 화면만 보여준다.
+Studio는 연결 시 `GET /api/device-info`를 호출해서 HSS/Pick/Capture/Inspection을 구분하고, 대상에 맞는 화면만 보여준다.
 HSS 연결에서 `person_roi_alert_disabled`가 `true`면 Viewer 툴바와 영상 영역 위에 깜빡이는 `ROI Alert Off` 경고를 표시한다.
 기존 버전이 저장한 장비 종류 `guard`는 앱 시작 시 `hss`로 자동 변환한다.
 
@@ -82,7 +82,7 @@ flutter build ios --release
 
 | 화면 | 대상 | 설명 |
 | --- | --- | --- |
-| Viewer | HSS / Pick / Capture | RTSP 또는 WebSocket 영상 표시, HSS/Capture 녹화, Capture 수동 캡처 |
+| Viewer | HSS / Pick / Capture / Inspection | RTSP 또는 WebSocket 영상 표시, HSS/Capture 녹화, Capture/Inspection 수동 캡처 |
 | Images | Capture | 저장장치 용량/사용률, Capture JPEG 합계, 저장된 JPEG 날짜/목록 조회, 큰 이미지 preview, 확대/축소 |
 | Monitor | HSS / Capture | 여러 카메라 stream 동시 보기, 영상 더블클릭으로 해당 Viewer 이동 |
 | ROI Editor | HSS / Pick | Person 또는 Pallet ROI 편집 |
@@ -132,6 +132,20 @@ Desktop에서는 Split View를 켜면 왼쪽은 color/RGB JPEG, 오른쪽은 dep
 }
 ```
 
+## Inspection Station Viewer
+
+`kind: inspection`, `runtime_mode: station` 장비는 Viewer에서 `1×1`, `1×2`,
+`2×2` 레이아웃을 제공한다. 각 슬롯은 `/api/viewer/source`가 반환한 카메라
+ID 중 하나를 선택한다. 선택 목록은 최대 4개이며 장비 전체에 적용된다.
+
+`1×1`은 기존 `{"camera_id":"..."}` 요청과 호환된다. 다중 레이아웃은
+`{"camera_ids":["camera_a","camera_b"]}` 요청과 WebSocket
+`viewer_frame` 다중 payload 지원이 필요하다. 각 stream의 `name`은 카메라
+ID이며 뒤따르는 JPEG binary frame은 `payload_index` 순서로 매칭된다.
+
+미리보기는 raw 영상이며 Capture 결과와 연결하지 않는다. Capture 결과는
+cycle ID로 별도 폴링하여 Viewer 상단 결과 행에 표시한다.
+
 ## 연결 설정
 
 Viewer의 URL 설정에서 아래 값을 지정한다.
@@ -158,7 +172,10 @@ API Base URL http://192.168.1.4:8090
 }
 ```
 
-`kind`는 `hss`, `pick`, `capture` 중 하나여야 한다. HSS 응답에 `person_roi_alert_disabled` bool이 있으면 `true`일 때 Person ROI 침범 감지 알림이 꺼진 상태로 보고 Viewer에 반투명 blink 경고를 띄운다.
+`kind`는 `hss`, `pick`, `capture`, `inspection` 중 하나여야 한다.
+Inspection station은 `runtime_mode: "station"`을 함께 반환한다. HSS 응답에
+`person_roi_alert_disabled` bool이 있으면 `true`일 때 Person ROI 침범 감지
+알림이 꺼진 상태로 보고 Viewer에 반투명 blink 경고를 띄운다.
 
 ## Capture API
 

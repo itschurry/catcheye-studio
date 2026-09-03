@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/app_settings.dart';
+import '../models/station_viewer_layout.dart';
 
 class SettingsProvider extends ChangeNotifier {
   static const _detectorBaseUrlKey = 'settings.detectorBaseUrl';
@@ -22,6 +23,9 @@ class SettingsProvider extends ChangeNotifier {
   static const _pointCloudDepthMaxKey = 'settings.pointCloud.depthMax';
   static const _hssMonitorStreamsKey = 'settings.hssMonitor.streams';
   static const _personRoiAlertDisabledKey = 'settings.personRoiAlertDisabled';
+  static const _stationViewerLayoutKey = 'settings.stationViewer.layout';
+  static const _stationViewerCameraSlotsKey =
+      'settings.stationViewer.cameraSlots';
 
   final AppSettings _settings;
 
@@ -83,6 +87,12 @@ class SettingsProvider extends ChangeNotifier {
         personRoiAlertDisabled:
             prefs.getBool(_personRoiAlertDisabledKey) ??
             AppSettings.defaultPersonRoiAlertDisabled,
+        stationViewerLayout: StationViewerLayout.fromName(
+          prefs.getString(_stationViewerLayoutKey),
+        ),
+        stationViewerCameraSlots:
+            prefs.getStringList(_stationViewerCameraSlotsKey) ??
+            AppSettings.defaultStationViewerCameraSlots,
       ),
     );
   }
@@ -170,6 +180,16 @@ class SettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateStationViewerLayout({
+    required StationViewerLayout layout,
+    required List<String> cameraSlots,
+  }) async {
+    _settings.stationViewerLayout = layout;
+    _settings.stationViewerCameraSlots = List.of(cameraSlots);
+    await _save();
+    notifyListeners();
+  }
+
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_detectorBaseUrlKey, _settings.detectorBaseUrl);
@@ -225,6 +245,14 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.setBool(
       _personRoiAlertDisabledKey,
       _settings.personRoiAlertDisabled,
+    );
+    await prefs.setString(
+      _stationViewerLayoutKey,
+      _settings.stationViewerLayout.name,
+    );
+    await prefs.setStringList(
+      _stationViewerCameraSlotsKey,
+      _settings.stationViewerCameraSlots,
     );
   }
 

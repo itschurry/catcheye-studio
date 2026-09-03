@@ -5,6 +5,7 @@ import 'package:catcheye_studio/main.dart' as app;
 import 'package:catcheye_studio/models/app_settings.dart';
 import 'package:catcheye_studio/providers/settings_provider.dart';
 import 'package:catcheye_studio/services/remote_capture_image_api_service.dart';
+import 'package:catcheye_studio/services/remote_device_info_service.dart';
 import 'package:catcheye_studio/services/remote_pick_api_service.dart';
 
 void main() {
@@ -66,6 +67,34 @@ void main() {
     expect(RemoteDeviceKind.fromApiValue('capture'), RemoteDeviceKind.capture);
     expect(RemoteDeviceKind.capture.apiValue, 'capture');
     expect(RemoteDeviceKind.capture.label, 'Capture');
+  });
+
+  test('inspection discovery and navigation expose only Viewer', () {
+    expect(
+      RemoteDeviceKind.fromApiValue('inspection'),
+      RemoteDeviceKind.inspection,
+    );
+    expect(RemoteDeviceKind.inspection.label, 'Inspection');
+    expect(
+      RemoteDeviceInfo.fromJson(const {
+        'kind': 'inspection',
+        'runtime_mode': 'station',
+      }).isInspectionStation,
+      isTrue,
+    );
+    expect(
+      RemoteDeviceInfo.fromJson(const {
+        'kind': 'inspection',
+      }).isInspectionStation,
+      isFalse,
+    );
+    expect(
+      app.visibleAppItemIndexes(RemoteDeviceKind.inspection, false),
+      const [0],
+    );
+    expect(app.visibleAppItemIndexes(RemoteDeviceKind.inspection, true), const [
+      0,
+    ]);
   });
 
   test('legacy guard setting migrates to hss', () async {
