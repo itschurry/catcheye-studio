@@ -2,7 +2,7 @@
 
 CatchEye 장비의 영상 스트림을 확인하고 원격 설정을 조정하는 Flutter 데스크톱 앱.
 
-현재 버전: `v1.2.0`
+현재 버전: `v1.3.0`
 
 Studio는 연결 시 `GET /api/device-info`를 호출해서 HSS/Pick/Capture/Inspection을 구분하고, 대상에 맞는 화면만 보여준다.
 HSS 연결에서 `person_roi_alert_disabled`가 `true`면 Viewer 툴바와 영상 영역 위에 깜빡이는 `ROI Alert Off` 경고를 표시한다.
