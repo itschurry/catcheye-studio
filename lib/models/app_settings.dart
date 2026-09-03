@@ -1,7 +1,8 @@
 enum RemoteDeviceKind {
   hss('hss', 'HSS'),
   pick('pick', 'Pick'),
-  capture('capture', 'Capture');
+  capture('capture', 'Capture'),
+  inspection('inspection', 'Inspection');
 
   const RemoteDeviceKind(this.apiValue, this.label);
 

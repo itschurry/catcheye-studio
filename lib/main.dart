@@ -24,6 +24,7 @@ List<int> visibleAppItemIndexes(RemoteDeviceKind? kind, bool isPhone) {
       RemoteDeviceKind.hss => const [0, 1, 2],
       RemoteDeviceKind.pick => const [0, 2],
       RemoteDeviceKind.capture => const [0, 5, 1],
+      RemoteDeviceKind.inspection => const [0],
       null => const [0],
     };
   }
@@ -31,6 +32,7 @@ List<int> visibleAppItemIndexes(RemoteDeviceKind? kind, bool isPhone) {
     RemoteDeviceKind.hss => const [0, 1, 2, 3],
     RemoteDeviceKind.pick => const [0, 2, 4],
     RemoteDeviceKind.capture => const [0, 5, 1, 3],
+    RemoteDeviceKind.inspection => const [0],
     null => const [0],
   };
 }
