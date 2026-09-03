@@ -69,7 +69,7 @@ void main() {
     expect(RemoteDeviceKind.capture.label, 'Capture');
   });
 
-  test('inspection discovery and navigation expose only Viewer', () {
+  test('inspection discovery and navigation expose Viewer and Results', () {
     expect(
       RemoteDeviceKind.fromApiValue('inspection'),
       RemoteDeviceKind.inspection,
@@ -90,11 +90,20 @@ void main() {
     );
     expect(
       app.visibleAppItemIndexes(RemoteDeviceKind.inspection, false),
-      const [0],
+      const [0, 6],
     );
     expect(app.visibleAppItemIndexes(RemoteDeviceKind.inspection, true), const [
       0,
+      6,
     ]);
+    expect(
+      app.visibleAppItemIndexes(
+        RemoteDeviceKind.inspection,
+        false,
+        referenceManagementAvailable: true,
+      ),
+      const [0, 6, 7],
+    );
   });
 
   test('legacy guard setting migrates to hss', () async {
@@ -108,6 +117,29 @@ void main() {
     expect(provider.settings.remoteDeviceKind, RemoteDeviceKind.hss);
     expect(prefs.getString('settings.remoteDeviceKind'), 'hss');
     expect(() => RemoteDeviceKind.fromApiValue('guard'), throwsFormatException);
+  });
+
+  test('same connection settings still advance reconnect revision', () async {
+    SharedPreferences.setMockInitialValues(const {});
+    final provider = SettingsProvider();
+    final settings = provider.settings;
+
+    await provider.updateConnectionUrls(
+      streamPath: settings.streamPath,
+      detectorBaseUrl: settings.detectorBaseUrl,
+      remoteDeviceKind: RemoteDeviceKind.inspection,
+      personRoiAlertDisabled: settings.personRoiAlertDisabled,
+    );
+    final firstRevision = provider.connectionRevision;
+    await provider.updateConnectionUrls(
+      streamPath: settings.streamPath,
+      detectorBaseUrl: settings.detectorBaseUrl,
+      remoteDeviceKind: RemoteDeviceKind.inspection,
+      personRoiAlertDisabled: settings.personRoiAlertDisabled,
+    );
+
+    expect(firstRevision, 1);
+    expect(provider.connectionRevision, 2);
   });
 
   test('capture images navigation is capture only', () {

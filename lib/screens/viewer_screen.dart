@@ -8,13 +8,16 @@ import 'package:provider/provider.dart';
 import '../models/app_settings.dart';
 import '../models/station_viewer_layout.dart';
 import '../providers/settings_provider.dart';
+import '../providers/reference_credential_provider.dart';
 import '../services/frame_receiver_service.dart';
 import '../services/remote_capture_api_service.dart';
 import '../services/remote_device_info_service.dart';
 import '../services/remote_recording_api_service.dart';
+import '../services/reference_credential_store.dart';
 import '../widgets/live_viewer.dart';
 import '../widgets/point_cloud_viewer.dart';
 import '../widgets/stream_selector.dart';
+import '../widgets/station_capture_actions.dart';
 
 /// Live preview viewer screen — connects to the remote detector RTSP or WebSocket stream.
 
@@ -68,7 +71,6 @@ class _ViewerScreenState extends State<ViewerScreen>
   List<String> _stationCameraSlots = const [''];
   final Map<String, StationCaptureResult> _stationCycles = {};
   String? _selectedStationCycleId;
-  String _stationCaptureTarget = 'all';
   String? _stationError;
   bool _stationSourceActionInFlight = false;
   bool _stationPollInFlight = false;
@@ -1033,6 +1035,16 @@ class _ViewerScreenState extends State<ViewerScreen>
               ),
             ),
           const Spacer(),
+          if (remoteDeviceKind == RemoteDeviceKind.inspection) ...[
+            Tooltip(
+              message: 'Management credentials',
+              child: IconButton.outlined(
+                icon: const Icon(Icons.admin_panel_settings_outlined, size: 20),
+                onPressed: _showManagementCredentialsDialog,
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
           if (showRoiAlertOff) ...[
             _buildRoiAlertOffBadge(),
             const SizedBox(width: 8),
@@ -1209,6 +1221,19 @@ class _ViewerScreenState extends State<ViewerScreen>
                         ),
                       ),
                     ],
+                  ],
+                  if (remoteDeviceKind == RemoteDeviceKind.inspection) ...[
+                    const SizedBox(width: 4),
+                    Tooltip(
+                      message: 'Management credentials',
+                      child: IconButton.outlined(
+                        icon: const Icon(
+                          Icons.admin_panel_settings_outlined,
+                          size: 20,
+                        ),
+                        onPressed: _showManagementCredentialsDialog,
+                      ),
+                    ),
                   ],
                   if (captureControlsEnabled && receiver.connected) ...[
                     const SizedBox(width: 4),
@@ -1677,20 +1702,6 @@ class _ViewerScreenState extends State<ViewerScreen>
       ...?status?.cameras.keys,
       ...?source?.cameraIds,
     }.where((cameraId) => cameraId.isNotEmpty).toList(growable: false)..sort();
-    final targetItems = <DropdownMenuItem<String>>[
-      const DropdownMenuItem(value: 'all', child: Text('All inspections')),
-      for (final group in status?.groups.keys ?? const <String>[])
-        DropdownMenuItem(value: 'group:$group', child: Text('Group: $group')),
-      for (final inspectionId in _stationInspectionIds(status))
-        DropdownMenuItem(
-          value: 'inspection:$inspectionId',
-          child: Text('Inspection: $inspectionId'),
-        ),
-    ];
-    final targetValues = targetItems.map((item) => item.value).toSet();
-    final selectedTarget = targetValues.contains(_stationCaptureTarget)
-        ? _stationCaptureTarget
-        : 'all';
     final selectedCycleId = _stationCycles.containsKey(_selectedStationCycleId)
         ? _selectedStationCycleId
         : _stationCycles.isEmpty
@@ -1717,9 +1728,11 @@ class _ViewerScreenState extends State<ViewerScreen>
               spacing: 10,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                const Text(
-                  'Inspection Station',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                Text(
+                  status == null
+                      ? 'Inspection Station'
+                      : 'Inspection Station: ${status.setId}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 SegmentedButton<StationViewerLayout>(
                   segments: [
@@ -1785,35 +1798,6 @@ class _ViewerScreenState extends State<ViewerScreen>
                             },
                     ),
                   ),
-                SizedBox(
-                  width: 230,
-                  child: DropdownButtonFormField<String>(
-                    key: ValueKey('station-target-$selectedTarget'),
-                    initialValue: selectedTarget,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Capture target',
-                      isDense: true,
-                      border: OutlineInputBorder(),
-                    ),
-                    items: targetItems,
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _stationCaptureTarget = value);
-                      }
-                    },
-                  ),
-                ),
-                FilledButton.icon(
-                  icon: const Icon(Icons.camera_alt_outlined, size: 16),
-                  label: const Text('Capture'),
-                  onPressed:
-                      !receiver.connected ||
-                          _captureActionInFlight ||
-                          status?.ready == false
-                      ? null
-                      : () => _requestCapture(settings),
-                ),
                 Text(queueText, style: const TextStyle(fontSize: 12)),
                 if (status != null)
                   Text(
@@ -1840,6 +1824,14 @@ class _ViewerScreenState extends State<ViewerScreen>
                   ),
               ],
             ),
+          ),
+          const SizedBox(height: 8),
+          StationCaptureActions(
+            status: status,
+            connected: receiver.connected,
+            inFlight: _captureActionInFlight,
+            onCapture: (target) =>
+                _requestCapture(settings, stationTarget: target),
           ),
           if (_stationCycles.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -1917,15 +1909,6 @@ class _ViewerScreenState extends State<ViewerScreen>
     );
   }
 
-  List<String> _stationInspectionIds(StationCaptureStatus? status) {
-    final ids = <String>{};
-    for (final group in status?.groups.values ?? const <List<String>>[]) {
-      ids.addAll(group);
-    }
-    final result = ids.toList(growable: false)..sort();
-    return result;
-  }
-
   Widget _stationResultChip(String text, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
@@ -1951,6 +1934,123 @@ class _ViewerScreenState extends State<ViewerScreen>
 
   String _shortCycleId(String cycleId) =>
       cycleId.length <= 18 ? cycleId : '${cycleId.substring(0, 18)}…';
+
+  Future<void> _showManagementCredentialsDialog() async {
+    final settings = context.read<SettingsProvider>().settings;
+    final credentials = context.read<ReferenceCredentialProvider>();
+    String? existing;
+    try {
+      existing = await credentials.readToken(settings);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Credential storage is unavailable: $error')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    final controller = TextEditingController();
+    var hidden = true;
+    var enteredToken = '';
+    final action = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Management credentials'),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  existing == null
+                      ? 'No token is stored for this API server.'
+                      : 'A token is stored for this API server.',
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  obscureText: hidden,
+                  enableSuggestions: false,
+                  autocorrect: false,
+                  onChanged: (value) =>
+                      setDialogState(() => enteredToken = value.trim()),
+                  decoration: InputDecoration(
+                    labelText: 'Bearer token',
+                    hintText: existing == null
+                        ? 'Paste the device management token'
+                        : 'Leave blank to keep the stored token',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      tooltip: hidden ? 'Show token' : 'Hide token',
+                      onPressed: () => setDialogState(() => hidden = !hidden),
+                      icon: Icon(
+                        hidden
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Stored in the operating system credential store. Use a protected tunnel or TLS proxy for remote management.',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            if (existing != null)
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, 'clear'),
+                child: const Text('Remove token'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: existing != null || isValidReferenceToken(enteredToken)
+                  ? () => Navigator.pop(dialogContext, 'save')
+                  : null,
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    try {
+      if (action == 'clear') {
+        await credentials.clearToken(settings);
+      } else if (action == 'save' && controller.text.trim().isNotEmpty) {
+        await credentials.saveToken(settings, controller.text);
+      }
+      if (mounted && action != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              action == 'clear'
+                  ? 'Management token removed.'
+                  : controller.text.trim().isEmpty
+                  ? 'Stored management token kept.'
+                  : 'Management token saved.',
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update credentials: $error')),
+        );
+      }
+    } finally {
+      controller.dispose();
+    }
+  }
 
   void _showStationResultDetails(StationCaptureResult result) {
     final details = result.rawJson.isEmpty
@@ -2055,7 +2155,6 @@ class _ViewerScreenState extends State<ViewerScreen>
     if (!sameDevice) {
       _stationCycles.clear();
       _selectedStationCycleId = null;
-      _stationCaptureTarget = 'all';
     }
     _stationApiBaseUrl = settings.detectorBaseUrl;
     _isInspectionStation = true;
@@ -2081,7 +2180,6 @@ class _ViewerScreenState extends State<ViewerScreen>
       }(),
     ]);
     if (!mounted || session != _stationSession) return;
-    nextStatus ??= sameDevice ? _stationStatus : null;
     nextSource ??= sameDevice ? _stationViewerSource : null;
     final sourceCameraIds = nextSource?.cameraIds ?? const <String>[];
     final nextLayout = _stationViewerLayout.accommodate(sourceCameraIds.length);
@@ -2173,7 +2271,7 @@ class _ViewerScreenState extends State<ViewerScreen>
       return;
     }
     setState(() {
-      if (nextStatus != null) _stationStatus = nextStatus;
+      _stationStatus = nextStatus;
       _stationCycles.addAll(nextResults);
       _stationError = nextError;
       _trimStationHistory();
@@ -2327,23 +2425,22 @@ class _ViewerScreenState extends State<ViewerScreen>
     );
   }
 
-  Future<void> _requestStationCapture(AppSettings settings) async {
-    StationCaptureSelector selector;
-    if (_stationCaptureTarget.startsWith('group:')) {
-      selector = StationCaptureSelector.group(
-        _stationCaptureTarget.substring('group:'.length),
+  Future<void> _requestStationCapture(
+    AppSettings settings,
+    StationCaptureTarget target,
+  ) async {
+    final status = _stationStatus;
+    if (status == null ||
+        !status.ready ||
+        !status.captureTargets.contains(target)) {
+      throw StateError(
+        'Capture target is not available for the current station',
       );
-    } else if (_stationCaptureTarget.startsWith('inspection:')) {
-      selector = StationCaptureSelector.inspection(
-        _stationCaptureTarget.substring('inspection:'.length),
-      );
-    } else {
-      selector = const StationCaptureSelector.all();
     }
 
     final accepted = await _captureApi.requestStationCapture(
       settings,
-      selector: selector,
+      target: target,
     );
     if (!accepted.accepted || accepted.cycleId.isEmpty) {
       throw StateError(
@@ -2457,11 +2554,18 @@ class _ViewerScreenState extends State<ViewerScreen>
     }
   }
 
-  Future<void> _requestCapture(AppSettings settings) async {
+  Future<void> _requestCapture(
+    AppSettings settings, {
+    StationCaptureTarget? stationTarget,
+  }) async {
+    if (_captureActionInFlight) return;
     setState(() => _captureActionInFlight = true);
     try {
       if (_isInspectionStation) {
-        await _requestStationCapture(settings);
+        if (stationTarget == null) {
+          throw StateError('Station capture target is required');
+        }
+        await _requestStationCapture(settings, stationTarget);
       } else {
         await _captureApi.requestCapture(settings);
       }

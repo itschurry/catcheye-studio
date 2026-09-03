@@ -8,23 +8,32 @@ import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'providers/roi_config_provider.dart';
+import 'providers/reference_credential_provider.dart';
 import 'providers/settings_provider.dart';
 import 'screens/camera_depth_calibration_screen.dart';
 import 'screens/camera_properties_screen.dart';
 import 'screens/capture_images_screen.dart';
+import 'screens/inspection_results_screen.dart';
 import 'screens/monitor_screen.dart';
+import 'screens/reference_images_screen.dart';
 import 'screens/roi_editor_screen.dart';
 import 'screens/viewer_screen.dart';
 import 'models/app_settings.dart';
 import 'services/frame_receiver_service.dart';
+import 'services/remote_reference_api_service.dart';
 
-List<int> visibleAppItemIndexes(RemoteDeviceKind? kind, bool isPhone) {
+List<int> visibleAppItemIndexes(
+  RemoteDeviceKind? kind,
+  bool isPhone, {
+  bool referenceManagementAvailable = false,
+}) {
   if (isPhone) {
     return switch (kind) {
       RemoteDeviceKind.hss => const [0, 1, 2],
       RemoteDeviceKind.pick => const [0, 2],
       RemoteDeviceKind.capture => const [0, 5, 1],
-      RemoteDeviceKind.inspection => const [0],
+      RemoteDeviceKind.inspection =>
+        referenceManagementAvailable ? const [0, 6, 7] : const [0, 6],
       null => const [0],
     };
   }
@@ -32,7 +41,8 @@ List<int> visibleAppItemIndexes(RemoteDeviceKind? kind, bool isPhone) {
     RemoteDeviceKind.hss => const [0, 1, 2, 3],
     RemoteDeviceKind.pick => const [0, 2, 4],
     RemoteDeviceKind.capture => const [0, 5, 1, 3],
-    RemoteDeviceKind.inspection => const [0],
+    RemoteDeviceKind.inspection =>
+      referenceManagementAvailable ? const [0, 6, 7] : const [0, 6],
     null => const [0],
   };
 }
@@ -85,6 +95,7 @@ class CatchEyeStudioApp extends StatelessWidget {
           create: (_) => RoiConfigProvider()..tryLoadDefault(),
         ),
         ChangeNotifierProvider.value(value: settingsProvider),
+        ChangeNotifierProvider(create: (_) => ReferenceCredentialProvider()),
         ChangeNotifierProvider(create: (_) => FrameReceiverService()),
       ],
       child: MaterialApp(
@@ -149,10 +160,22 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
+enum _ReferenceDiscoveryState { idle, loading, available, unsupported, failed }
+
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
   int _viewerReconnectToken = 0;
   String? _viewerStreamUrl;
+  final RemoteReferenceApiService _referenceApi = RemoteReferenceApiService(
+    requestTimeout: const Duration(seconds: 3),
+  );
+  String? _referenceDiscoveryKey;
+  String? _referenceEndpointKey;
+  ReferenceApiStatus? _referenceStatus;
+  _ReferenceDiscoveryState _referenceDiscoveryState =
+      _ReferenceDiscoveryState.idle;
+  bool _resultsMounted = false;
+  bool _referenceMounted = false;
   static const _wideBreakpoint = 900.0;
   static const _phoneBreakpoint = 600.0;
 
@@ -187,18 +210,57 @@ class _AppShellState extends State<AppShell> {
       icon: Icons.photo_library_outlined,
       selectedIcon: Icons.photo_library,
     ),
+    _NavItem(
+      label: 'Results',
+      icon: Icons.fact_check_outlined,
+      selectedIcon: Icons.fact_check,
+    ),
+    _NavItem(
+      label: 'References',
+      icon: Icons.collections_bookmark_outlined,
+      selectedIcon: Icons.collections_bookmark,
+    ),
   ];
 
   @override
+  void dispose() {
+    _referenceApi.close();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final remoteDeviceKind = context
+    final settings = context.watch<SettingsProvider>().settings;
+    final connectionRevision = context
         .watch<SettingsProvider>()
-        .settings
-        .remoteDeviceKind;
+        .connectionRevision;
+    final credentialRevision = context
+        .watch<ReferenceCredentialProvider>()
+        .revision;
+    final remoteDeviceKind = settings.remoteDeviceKind;
+    _discoverReferenceCapabilities(
+      settings,
+      credentialRevision,
+      connectionRevision,
+    );
     final width = MediaQuery.of(context).size.width;
     final isWide = width >= _wideBreakpoint;
     final isPhone = width < _phoneBreakpoint;
-    final visibleItemIndexes = _visibleItemIndexes(remoteDeviceKind, isPhone);
+    final referenceManagementAvailable =
+        remoteDeviceKind == RemoteDeviceKind.inspection &&
+        switch (_referenceDiscoveryState) {
+          _ReferenceDiscoveryState.available ||
+          _ReferenceDiscoveryState.failed => true,
+          _ReferenceDiscoveryState.loading =>
+            _referenceStatus?.capabilities.hasReferenceManagement == true,
+          _ReferenceDiscoveryState.idle ||
+          _ReferenceDiscoveryState.unsupported => false,
+        };
+    final visibleItemIndexes = _visibleItemIndexes(
+      remoteDeviceKind,
+      isPhone,
+      referenceManagementAvailable: referenceManagementAvailable,
+    );
     final selectedIndex = visibleItemIndexes.contains(_selectedIndex)
         ? _selectedIndex
         : 0;
@@ -217,11 +279,20 @@ class _AppShellState extends State<AppShell> {
                   ),
                   const VerticalDivider(thickness: 1, width: 1),
                   Expanded(
-                    child: _screenForIndex(selectedIndex, isPhone: isPhone),
+                    child: _buildScreenArea(
+                      selectedIndex,
+                      isPhone: isPhone,
+                      referenceManagementAvailable:
+                          referenceManagementAvailable,
+                    ),
                   ),
                 ],
               )
-            : _screenForIndex(selectedIndex, isPhone: isPhone),
+            : _buildScreenArea(
+                selectedIndex,
+                isPhone: isPhone,
+                referenceManagementAvailable: referenceManagementAvailable,
+              ),
       ),
       bottomNavigationBar: isWide
           ? null
@@ -232,6 +303,40 @@ class _AppShellState extends State<AppShell> {
               isPhone: isPhone,
               onSelected: (index) => _onNavSelected(index, selectedIndex),
             ),
+    );
+  }
+
+  Widget _buildScreenArea(
+    int selectedIndex, {
+    required bool isPhone,
+    required bool referenceManagementAvailable,
+  }) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (selectedIndex != 6 && selectedIndex != 7)
+          _screenForIndex(selectedIndex, isPhone: isPhone),
+        if (_resultsMounted)
+          Offstage(
+            offstage: selectedIndex != 6,
+            child: TickerMode(
+              enabled: selectedIndex == 6,
+              child: const InspectionResultsScreen(),
+            ),
+          ),
+        if (_referenceMounted && referenceManagementAvailable)
+          Offstage(
+            offstage: selectedIndex != 7,
+            child: TickerMode(
+              enabled: selectedIndex == 7,
+              child: ReferenceImagesScreen(
+                isPhone: isPhone,
+                initialStatus: _referenceStatus,
+                refreshKey: _referenceDiscoveryKey,
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -247,12 +352,97 @@ class _AppShellState extends State<AppShell> {
       3 => const CameraPropertiesScreen(),
       4 => const CameraDepthCalibrationScreen(),
       5 => CaptureImagesScreen(isPhone: isPhone),
+      6 => const InspectionResultsScreen(),
+      7 => ReferenceImagesScreen(
+        isPhone: isPhone,
+        initialStatus: _referenceStatus,
+        refreshKey: _referenceDiscoveryKey,
+      ),
       _ => throw StateError('Unsupported screen index: $index'),
     };
   }
 
-  List<int> _visibleItemIndexes(RemoteDeviceKind? kind, bool isPhone) {
-    return visibleAppItemIndexes(kind, isPhone);
+  List<int> _visibleItemIndexes(
+    RemoteDeviceKind? kind,
+    bool isPhone, {
+    required bool referenceManagementAvailable,
+  }) {
+    return visibleAppItemIndexes(
+      kind,
+      isPhone,
+      referenceManagementAvailable: referenceManagementAvailable,
+    );
+  }
+
+  void _discoverReferenceCapabilities(
+    AppSettings settings,
+    int credentialRevision,
+    int connectionRevision,
+  ) {
+    final isInspection =
+        settings.remoteDeviceKind == RemoteDeviceKind.inspection;
+    final endpointKey = isInspection
+        ? '${settings.detectorBaseUrl}|${settings.apiBasePath}'
+        : null;
+    final key = endpointKey == null
+        ? null
+        : '$endpointKey|$credentialRevision|$connectionRevision';
+    if (_referenceDiscoveryKey == key) return;
+    final endpointChanged = _referenceEndpointKey != endpointKey;
+    _referenceDiscoveryKey = key;
+    _referenceEndpointKey = endpointKey;
+    if (endpointChanged) _referenceStatus = null;
+    if (key == null) {
+      _referenceDiscoveryState = _ReferenceDiscoveryState.idle;
+      return;
+    }
+    _referenceDiscoveryState = _ReferenceDiscoveryState.loading;
+    unawaited(_loadReferenceCapabilities(settings, key));
+  }
+
+  Future<void> _loadReferenceCapabilities(
+    AppSettings settings,
+    String discoveryKey,
+  ) async {
+    try {
+      final token = await context.read<ReferenceCredentialProvider>().readToken(
+        settings,
+      );
+      if (token == null || token.isEmpty) {
+        if (!mounted || _referenceDiscoveryKey != discoveryKey) return;
+        setState(
+          () => _referenceDiscoveryState = _ReferenceDiscoveryState.failed,
+        );
+        return;
+      }
+      final status = await _referenceApi.fetchStatus(
+        settings,
+        bearerToken: token,
+      );
+      if (!mounted || _referenceDiscoveryKey != discoveryKey) return;
+      setState(() {
+        _referenceStatus = status;
+        _referenceDiscoveryState = status.capabilities.hasReferenceManagement
+            ? _ReferenceDiscoveryState.available
+            : _ReferenceDiscoveryState.unsupported;
+      });
+    } on RemoteReferenceApiException catch (error) {
+      if (!mounted || _referenceDiscoveryKey != discoveryKey) return;
+      final statusMissing =
+          error.statusCode == 404 &&
+          error.uri.path.endsWith('/reference/status');
+      setState(() {
+        if (statusMissing) _referenceStatus = null;
+        _referenceDiscoveryState = statusMissing
+            ? _ReferenceDiscoveryState.unsupported
+            : _ReferenceDiscoveryState.failed;
+      });
+    } catch (_) {
+      if (!mounted || _referenceDiscoveryKey != discoveryKey) return;
+      setState(
+        () => _referenceDiscoveryState = _ReferenceDiscoveryState.failed,
+      );
+    }
   }
 
   void _openMonitorCamera(String streamUrl) {
@@ -279,7 +469,11 @@ class _AppShellState extends State<AppShell> {
       }
       unawaited(receiver.disconnect());
     }
-    setState(() => _selectedIndex = index);
+    setState(() {
+      _selectedIndex = index;
+      if (index == 6) _resultsMounted = true;
+      if (index == 7) _referenceMounted = true;
+    });
   }
 }
 
