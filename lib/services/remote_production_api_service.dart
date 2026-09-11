@@ -90,6 +90,7 @@ class RemoteProductionApiService {
       settings.buildApiUri('production/$endpoint'),
       body: body,
       error: (status, body, _) => ProductionApiException(status, body),
+      maxRequestBytes: endpoint == 'camera-setup' ? 900000 : null,
     );
   }
 }

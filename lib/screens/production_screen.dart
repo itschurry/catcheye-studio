@@ -12,6 +12,7 @@ import '../services/remote_production_api_service.dart';
 import '../widgets/station_inspection_image.dart';
 import '../widgets/plc_settings_dialog.dart';
 import '../widgets/plc_debug_panel.dart';
+import '../widgets/camera_setup_dialog.dart';
 
 class ProductionScreen extends StatefulWidget {
   const ProductionScreen({super.key, this.api, this.active = true});
@@ -325,6 +326,34 @@ class _ProductionScreenState extends State<ProductionScreen>
       appBar: AppBar(
         title: const Text('검사 관리'),
         actions: [
+          IconButton(
+            tooltip: '카메라 설정',
+            icon: const Icon(Icons.camera_alt_outlined),
+            onPressed: _busy || !_fresh
+                ? null
+                : () async {
+                    final settings = _settings;
+                    final endpoint = _endpoint;
+                    await showDialog<bool>(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (_) => CameraSetupDialog(
+                        settings: settings,
+                        canSave: () =>
+                            mounted && _endpoint == endpoint && _canEditPlc,
+                        onPreview: (camera) => showDialog<void>(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (_) => _RecipePreview(
+                            settings: settings,
+                            camera: camera,
+                          ),
+                        ),
+                      ),
+                    );
+                    if (mounted && _endpoint == endpoint) await _poll();
+                  },
+          ),
           Tooltip(
             message: _fresh
                 ? '서버 상태 갱신 ${_time(_updatedAt)}'
