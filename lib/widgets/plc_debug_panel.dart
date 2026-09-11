@@ -15,7 +15,9 @@ class PlcDebugPanel extends StatefulWidget {
     required this.onDisconnect,
     required this.onCapture,
     required this.onConfigure,
+    this.onPreview,
   });
+  final ValueChanged<RecipePoint>? onPreview;
   final RecipeCatalog catalog;
   final ProductionStatus? status;
   final bool fresh, busy;
@@ -278,7 +280,13 @@ class _PlcDebugPanelState extends State<PlcDebugPanel> {
           if (points.isEmpty) const Text('적용된 촬영 포인트가 없습니다. 레시피를 먼저 저장·적용하세요.'),
           if (point != null)
             Text(
-              '적용 기준: ${inspectionLabels[point.inspectionId]} · 기대 ${point.expectedCount}개',
+              '적용 기준: ${inspectionLabels[point.inspectionId]} · 기대 ${point.expectedCount}개 · ${point.roi?.summary ?? '전체 프레임'}',
+            ),
+          if (point != null && widget.onPreview != null)
+            TextButton.icon(
+              onPressed: widget.busy ? null : () => widget.onPreview!(point),
+              icon: const Icon(Icons.center_focus_strong),
+              label: const Text('검사 영역 · 위치 확인'),
             ),
           if (point != null &&
               inspectionHardwareIds[point.inspectionId] != _hardware)

@@ -10,6 +10,7 @@ import '../services/frame_receiver_service.dart';
 import '../services/remote_capture_api_service.dart';
 import '../services/remote_production_api_service.dart';
 import '../widgets/station_inspection_image.dart';
+import '../widgets/inspection_roi_canvas.dart';
 import '../widgets/plc_settings_dialog.dart';
 import '../widgets/plc_debug_panel.dart';
 import '../widgets/camera_setup_panel.dart';
@@ -306,6 +307,7 @@ class _ProductionScreenState extends State<ProductionScreen>
       builder: (context) => _PointEditor(
         point: index == null ? null : _points[index],
         defaults: _catalog!.defaults,
+        editRoi: _editRoi,
       ),
     );
     if (!mounted || generation != _generation || point == null) return;
@@ -432,6 +434,7 @@ class _ProductionScreenState extends State<ProductionScreen>
                                 fresh: _fresh,
                                 busy: _busy,
                                 captureApi: _captureApi,
+                                onPreview: _preview,
                                 onConnect: (simulator) => _plcAction(
                                   simulator
                                       ? 'plc/simulator/connect'
@@ -545,7 +548,7 @@ class _ProductionScreenState extends State<ProductionScreen>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${inspectionLabels[_points[i].inspectionId]} · 기대 ${_points[i].expectedCount?.toString() ?? '미정'}개',
+                      '${inspectionLabels[_points[i].inspectionId]} · 기대 ${_points[i].expectedCount?.toString() ?? '미정'}개 · ${_points[i].roi?.summary ?? '전체 프레임'}',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
@@ -689,9 +692,9 @@ class _ProductionScreenState extends State<ProductionScreen>
         icon: const Icon(Icons.delete_outline),
       ),
       TextButton.icon(
-        onPressed: _busy ? null : () => _preview(_points[i].inspectionId),
+        onPressed: _busy ? null : () => _preview(_points[i]),
         icon: const Icon(Icons.videocam_outlined),
-        label: const Text('카메라 확인'),
+        label: const Text('검사 영역 · 위치 확인'),
       ),
     ],
   );
@@ -722,9 +725,16 @@ class _ProductionScreenState extends State<ProductionScreen>
             children: [
               for (var i = 0; i < (slot.active?.points.length ?? 0); i++)
                 ListTile(
+                  leading: IconButton(
+                    tooltip: '검사 영역 · 위치 확인',
+                    onPressed: _busy
+                        ? null
+                        : () => _preview(slot.active!.points[i]),
+                    icon: const Icon(Icons.center_focus_strong),
+                  ),
                   title: Text('${i + 1}. ${slot.active!.points[i].name}'),
                   subtitle: Text(
-                    '${inspectionLabels[slot.active!.points[i].inspectionId]} · 기대 ${slot.active!.points[i].expectedCount}개',
+                    '${inspectionLabels[slot.active!.points[i].inspectionId]} · 기대 ${slot.active!.points[i].expectedCount}개 · ${slot.active!.points[i].roi?.summary ?? '전체 프레임'}',
                   ),
                   trailing: FilledButton(
                     onPressed: enabled
@@ -1044,14 +1054,30 @@ class _ProductionScreenState extends State<ProductionScreen>
         PlcConnectionState.disconnected,
       }.contains(_status?.plc?.state);
 
-  Future<void> _preview(String inspectionId) async {
+  Future<_RoiSelection?> _editRoi(String inspectionId, InspectionRoi? roi) {
     final defaults = productionObject(_catalog!.defaults[inspectionId]);
-    final camera = defaults['camera_id'] as String;
-    final settings = _settings;
+    return showDialog<_RoiSelection>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _RecipePreview(
+        settings: _settings,
+        camera: defaults['camera_id'] as String,
+        roi: roi,
+        editRoi: true,
+      ),
+    );
+  }
+
+  Future<void> _preview(RecipePoint point) async {
+    final defaults = productionObject(_catalog!.defaults[point.inspectionId]);
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => _RecipePreview(settings: settings, camera: camera),
+      builder: (context) => _RecipePreview(
+        settings: _settings,
+        camera: defaults['camera_id'] as String,
+        roi: point.roi,
+      ),
     );
   }
 }
@@ -1063,7 +1089,12 @@ String _millis(Object? value) => value is int
     : '없음';
 
 class _PointEditor extends StatefulWidget {
-  const _PointEditor({this.point, required this.defaults});
+  const _PointEditor({
+    this.point,
+    required this.defaults,
+    required this.editRoi,
+  });
+  final Future<_RoiSelection?> Function(String, InspectionRoi?) editRoi;
   final RecipePoint? point;
   final Map<String, dynamic> defaults;
   @override
@@ -1078,6 +1109,7 @@ class _PointEditorState extends State<_PointEditor> {
   final _present = TextEditingController();
   final _geometry = <String, TextEditingController>{};
   late String _inspection;
+  InspectionRoi? _roi;
   static const geometryLabels = {
     'min_circularity': '최소 원형도',
     'min_axis_ratio': '최소 축 비율',
@@ -1089,6 +1121,7 @@ class _PointEditorState extends State<_PointEditor> {
     super.initState();
     _inspection = widget.point?.inspectionId ?? widget.defaults.keys.first;
     _name.text = widget.point?.name ?? '';
+    _roi = widget.point?.roi;
     _count.text = widget.point?.expectedCount?.toString() ?? '';
     for (final key in geometryLabels.keys) {
       _geometry[key] = TextEditingController();
@@ -1159,6 +1192,7 @@ class _PointEditorState extends State<_PointEditor> {
                 onChanged: (id) {
                   if (id != null) {
                     setState(() {
+                      if (_inspection != id) _roi = null;
                       _inspection = id;
                       _criteria(null);
                     });
@@ -1167,11 +1201,15 @@ class _PointEditorState extends State<_PointEditor> {
               ),
               TextFormField(
                 key: const ValueKey('expected-count'),
+                readOnly: _roi != null && _inspection == 'nut_hole_alignment',
                 controller: _count,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: '기대 개수',
-                  helperText: '미정이면 비워 두고 초안으로 저장해 주세요',
+                  helperText:
+                      _roi != null && _inspection == 'nut_hole_alignment'
+                      ? '너트 홀 ROI 검사는 한 번에 1개를 검사합니다'
+                      : '미정이면 비워 두고 초안으로 저장해 주세요',
                 ),
                 validator: (text) {
                   if (text == null || text.trim().isEmpty) return null;
@@ -1180,6 +1218,25 @@ class _PointEditorState extends State<_PointEditor> {
                       ? '1~100 사이 정수를 입력해 주세요'
                       : null;
                 },
+              ),
+              const SizedBox(height: 16),
+              Text(_roi?.summary ?? '전체 프레임'),
+              TextButton.icon(
+                icon: const Icon(Icons.crop),
+                label: const Text('검사 영역 설정 · 영상 확인'),
+                onPressed: () async {
+                  final result = await widget.editRoi(_inspection, _roi);
+                  if (!mounted || result == null) return;
+                  setState(() {
+                    _roi = result.roi;
+                    if (_roi != null && _inspection == 'nut_hole_alignment') {
+                      _count.text = '1';
+                    }
+                  });
+                },
+              ),
+              const Text(
+                '검사 항목을 바꾸면 ROI가 해제됩니다. 위치 가이드이며 수직 자세를 자동 판정하지 않습니다.',
               ),
               ExpansionTile(
                 title: const Text('상세 판정 기준'),
@@ -1229,6 +1286,7 @@ class _PointEditorState extends State<_PointEditor> {
           Navigator.pop(
             context,
             RecipePoint(
+              roi: _roi,
               name: _name.text.trim(),
               inspectionId: _inspection,
               expectedCount: _count.text.trim().isEmpty
@@ -1255,8 +1313,20 @@ class _PointEditorState extends State<_PointEditor> {
   );
 }
 
+class _RoiSelection {
+  const _RoiSelection(this.roi);
+  final InspectionRoi? roi;
+}
+
 class _RecipePreview extends StatefulWidget {
-  const _RecipePreview({required this.settings, required this.camera});
+  const _RecipePreview({
+    required this.settings,
+    required this.camera,
+    this.roi,
+    this.editRoi = false,
+  });
+  final InspectionRoi? roi;
+  final bool editRoi;
   final AppSettings settings;
   final String camera;
   @override
@@ -1264,6 +1334,7 @@ class _RecipePreview extends StatefulWidget {
 }
 
 class _RecipePreviewState extends State<_RecipePreview> {
+  InspectionRoi? _roi;
   final _api = RemoteCaptureApiService();
   late final FrameReceiverService _receiver;
   String? _error;
@@ -1272,6 +1343,7 @@ class _RecipePreviewState extends State<_RecipePreview> {
   @override
   void initState() {
     super.initState();
+    _roi = widget.roi;
     _receiver = FrameReceiverService();
     unawaited(_start());
   }
@@ -1312,7 +1384,11 @@ class _RecipePreviewState extends State<_RecipePreview> {
           children: [
             ListTile(
               title: Text('${widget.camera} 실시간 미리보기'),
-              subtitle: const Text('선택한 카메라가 뷰어 미리보기에도 적용됩니다.'),
+              subtitle: Text(
+                widget.editRoi
+                    ? '영상에서 드래그해 검사 영역을 지정하세요. 카메라 선택은 뷰어에도 적용됩니다.'
+                    : '대상을 영역 안에 맞추세요. 수직 자세는 로봇에서 맞춰야 합니다.',
+              ),
               trailing: TextButton(
                 onPressed: _starting ? null : _close,
                 child: const Text('닫기'),
@@ -1325,18 +1401,85 @@ class _RecipePreviewState extends State<_RecipePreview> {
                 animation: _receiver,
                 builder: (context, _) {
                   final frame = _receiver.currentFrame;
-                  return frame == null
-                      ? Center(
-                          child: Text(
-                            _receiver.errorMessage ??
-                                (_ready ? '카메라 프레임 대기 중' : '카메라 연결 중…'),
+                  final selected = _receiver.selectedFrame;
+                  final width = selected?.width;
+                  final height = selected?.height;
+                  if (frame == null ||
+                      !_receiver.connected ||
+                      _receiver.errorMessage != null) {
+                    return Center(
+                      child: Text(
+                        _receiver.errorMessage ??
+                            (_ready ? '카메라 프레임 대기 중' : '카메라 연결 중…'),
+                      ),
+                    );
+                  }
+                  if (width == null ||
+                      height == null ||
+                      width <= 0 ||
+                      height <= 0) {
+                    return const Center(
+                      child: Text('카메라 영상 크기가 없어 ROI를 표시할 수 없습니다'),
+                    );
+                  }
+                  return Column(
+                    children: [
+                      Expanded(
+                        child: InspectionRoiCanvas(
+                          image: Image.memory(
+                            frame,
+                            gaplessPlayback: true,
+                            fit: BoxFit.fill,
                           ),
-                        )
-                      : Image.memory(
-                          frame,
-                          gaplessPlayback: true,
-                          fit: BoxFit.contain,
-                        );
+                          imageSize: Size(width.toDouble(), height.toDouble()),
+                          roi: _roi,
+                          onChanged: widget.editRoi
+                              ? (roi) => setState(() => _roi = roi)
+                              : null,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          children: [
+                            Text(_roi?.summary ?? '전체 프레임'),
+                            const Text(
+                              '십자선은 영상 중앙입니다. 대상 전체와 측정 여백이 영역 안에 들어오도록 맞추세요.',
+                            ),
+                            if (widget.editRoi)
+                              Wrap(
+                                spacing: 12,
+                                children: [
+                                  TextButton(
+                                    onPressed: () => setState(
+                                      () => _roi = const InspectionRoi(
+                                        .25,
+                                        .25,
+                                        .5,
+                                        .5,
+                                      ),
+                                    ),
+                                    child: const Text('중앙 50%'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        setState(() => _roi = null),
+                                    child: const Text('전체 프레임'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () => Navigator.pop(
+                                      context,
+                                      _RoiSelection(_roi),
+                                    ),
+                                    child: const Text('영역 선택 완료'),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
                 },
               ),
             ),

@@ -21,6 +21,44 @@ Map<String, dynamic> productionObject(Object? value) {
   return value;
 }
 
+/// Rectangle in the rectified camera image, normalized to [0, 1].
+class InspectionRoi {
+  const InspectionRoi(this.x, this.y, this.width, this.height);
+  final double x, y, width, height;
+  bool get isValid =>
+      [x, y, width, height].every((v) => v.isFinite) &&
+      x >= 0 &&
+      y >= 0 &&
+      width > 0 &&
+      height > 0 &&
+      x + width <= 1 &&
+      y + height <= 1;
+
+  factory InspectionRoi.fromJson(Map<String, dynamic> json) {
+    const keys = {'x', 'y', 'width', 'height'};
+    if (json.length != 4 || !keys.every((key) => json[key] is num)) {
+      throw const FormatException('검사 영역의 x, y, width, height가 필요합니다');
+    }
+    final roi = InspectionRoi(
+      (json['x'] as num).toDouble(),
+      (json['y'] as num).toDouble(),
+      (json['width'] as num).toDouble(),
+      (json['height'] as num).toDouble(),
+    );
+    if (!roi.isValid) {
+      throw const FormatException('검사 영역은 영상 안의 크기가 있는 사각형이어야 합니다');
+    }
+    return roi;
+  }
+  Map<String, double> toJson() {
+    if (!isValid) throw const FormatException('유효하지 않은 검사 영역입니다');
+    return {'x': x, 'y': y, 'width': width, 'height': height};
+  }
+
+  String get summary =>
+      'ROI · 가로 ${(width * 100).toStringAsFixed(1)}% × 세로 ${(height * 100).toStringAsFixed(1)}%';
+}
+
 class RecipePoint {
   const RecipePoint({
     required this.name,
@@ -29,6 +67,7 @@ class RecipePoint {
     required this.candidateConfidence,
     required this.presentConfidence,
     required this.geometry,
+    this.roi,
   });
   final String name;
   final String inspectionId;
@@ -36,6 +75,7 @@ class RecipePoint {
   final double candidateConfidence;
   final double presentConfidence;
   final Map<String, double?>? geometry;
+  final InspectionRoi? roi;
 
   factory RecipePoint.fromJson(Map<String, dynamic> json) {
     final id = json['inspection_id'];
@@ -49,6 +89,9 @@ class RecipePoint {
     }
     final rawGeometry = json['geometry'];
     return RecipePoint(
+      roi: json['roi'] == null
+          ? null
+          : InspectionRoi.fromJson(productionObject(json['roi'])),
       name: json['name'] as String,
       inspectionId: id,
       expectedCount: json['expected_count'] as int?,
@@ -71,6 +114,7 @@ class RecipePoint {
     'candidate_confidence': candidateConfidence,
     'present_confidence': presentConfidence,
     'geometry': geometry,
+    'roi': roi?.toJson(),
   };
 }
 

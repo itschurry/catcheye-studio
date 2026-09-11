@@ -708,6 +708,10 @@ String _groupLabel(String group) => switch (group) {
   _ => group,
 };
 String _reasonLabel(String reason) => switch (reason) {
+  'ROI_BOUNDARY_TARGET' => '대상이 검사 영역 경계에 걸림',
+  'ROI_MEASUREMENT_MARGIN' => '홀 측정에 필요한 영역 여백 부족',
+  'INVALID_ROI' || 'ROI_TOO_SMALL_FOR_FRAME' => '검사 영역 설정 오류',
+  'NUT_HOLE_ROI_REQUIRES_ONE_TARGET' => '너트 홀 ROI 기대 개수는 1개여야 함',
   'TARGET_CONFIRMED' => '대상 검출',
   'NO_CANDIDATE' => '대상 미검출',
   'SHAPE_QUALITY_FAILED' => '형상 기준 미달',
@@ -720,6 +724,12 @@ String _reasonLabel(String reason) => switch (reason) {
   _ => reason,
 };
 String _checkLabel(String reason) => switch (reason) {
+  'ROI_BOUNDARY_TARGET' ||
+  'ROI_MEASUREMENT_MARGIN' => '로봇 위치를 조정해 대상과 측정 여백을 검사 영역 안에 넣어 주세요',
+  'INVALID_ROI' ||
+  'ROI_TOO_SMALL_FOR_FRAME' ||
+  'NUT_HOLE_ROI_REQUIRES_ONE_TARGET' =>
+    '제품 레시피의 해당 포인트에서 검사 영역과 기대 개수를 확인해 주세요',
   'TARGET_CONFIRMED' || 'SHAPE_QUALITY_OK' => '검출 위치가 실제 검사할 부품과 일치하는지 확인해 주세요',
   'NO_CANDIDATE' || 'NUT_HOLE_ABSENT' => '부품 유무·위치·가림을 먼저 확인하고 조명과 초점을 점검해 주세요',
   'SHAPE_QUALITY_FAILED' => '측정값과 기준을 비교하고 홀 형상·이물·초점을 점검해 주세요',

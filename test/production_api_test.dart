@@ -125,6 +125,12 @@ void main() {
       final body = jsonDecode(await utf8.decoder.bind(request).join()) as Map;
       expect(body['base_revision'], 0);
       expect((body['recipe'] as Map)['name'], '제품 A');
+      expect(body['recipe']['points'][0]['roi'], {
+        'x': .25,
+        'y': .25,
+        'width': .5,
+        'height': .5,
+      });
       request.response.headers.contentType = ContentType.json;
       request.response.write(
         jsonEncode({
@@ -143,10 +149,21 @@ void main() {
     final saved = await api.save(
       AppSettings(detectorBaseUrl: 'http://127.0.0.1:${server.port}'),
       RecipeCatalog.fromJson(catalogJson()).products.first,
-      const ProductRecipe('제품 A', []),
+      const ProductRecipe('제품 A', [
+        RecipePoint(
+          name: '중앙',
+          inspectionId: 'bolt_head',
+          expectedCount: 1,
+          candidateConfidence: .4,
+          presentConfidence: .5,
+          geometry: null,
+          roi: InspectionRoi(.25, .25, .5, .5),
+        ),
+      ]),
     );
     expect(saved.active, isNull);
     expect(saved.revision, 1);
+    expect(saved.draft.points.single.roi!.width, .5);
     expect(paths, ['/api/production/recipes/1']);
   });
 }
