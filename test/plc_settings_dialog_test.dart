@@ -217,8 +217,8 @@ void main() {
       final product = find.byKey(const ValueKey('auto-product-count'));
       final point = find.byKey(const ValueKey('auto-point-count'));
       for (final values in [
-        ('4', '5'),
-        ('5', '4'),
+        ('0', '5'),
+        ('5', '-1'),
         ('256', '5'),
         ('5', '201'),
         ('', '5'),
@@ -290,6 +290,42 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.saved!['config']['rx_words'], 14);
   });
+
+  testWidgets(
+    'one product and one point can be saved and reopened with a larger catalog',
+    (tester) async {
+      final api = SettingsApi();
+      await open(tester, api);
+      for (final key in ['auto-product-count', 'auto-point-count']) {
+        final count = find.byKey(ValueKey(key));
+        await tester.ensureVisible(count);
+        await tester.enterText(count, '1');
+      }
+      await generate(tester);
+      await tester.tap(find.text('저장 및 적용'));
+      await tester.pumpAndSettle();
+      final saved = api.saved!['config'] as Map;
+      expect(saved['rx_words'], 6);
+      expect(saved['tx_words'], 3);
+      expect(saved['rx'], {
+        'product_1': 0,
+        'point_1': 1,
+        for (var i = 0; i < 4; i++) 'hardware_$i': i + 2,
+      });
+      api.config = Map<String, dynamic>.from(saved);
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      for (final key in ['auto-product-count', 'auto-point-count']) {
+        expect(
+          tester.widget<TextField>(find.byKey(ValueKey(key))).controller!.text,
+          '1',
+        );
+      }
+      await tester.tap(find.text('저장 및 적용'));
+      await tester.pumpAndSettle();
+      expect(api.saved!['config'], api.config);
+    },
+  );
 
   testWidgets('hardware selection map is mandatory', (tester) async {
     final api = SettingsApi();

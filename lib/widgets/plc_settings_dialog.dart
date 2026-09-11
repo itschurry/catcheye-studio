@@ -33,8 +33,8 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
   final _productCount = TextEditingController();
   final _pointCount = TextEditingController();
   final _advanced = ExpansibleController();
-  int _requiredProducts = 0;
-  int _requiredPoints = 0;
+  int _recipeProducts = 0;
+  int _recipePoints = 0;
   bool _generated = false;
   String _selectionKind = 'product';
 
@@ -42,17 +42,15 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
   int? get _points => int.tryParse(_pointCount.text.trim());
   bool get _countsValid =>
       _products != null &&
-      _products! >= _requiredProducts &&
       _products! >= 1 &&
       _products! <= 255 &&
       _points != null &&
-      _points! >= _requiredPoints &&
       _points! >= 1 &&
       _points! <= 200;
 
   bool get _missingRecipeSignals => [
-    for (var i = 1; i <= _requiredProducts; i++) 'product_$i',
-    for (var i = 1; i <= _requiredPoints; i++) 'point_$i',
+    for (var i = 1; i <= _recipeProducts; i++) 'product_$i',
+    for (var i = 1; i <= _recipePoints; i++) 'point_$i',
   ].any((name) => int.tryParse(_fields['rx.$name']?.text ?? '') == null);
 
   void _generateSignals() {
@@ -164,11 +162,11 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
         'plc/config',
       );
       final catalog = await widget.api.recipes(widget.settings);
-      var requiredPoints = 0;
+      var recipePoints = 0;
       for (final product in catalog.products) {
         for (final recipe in [product.draft, product.active]) {
-          if (recipe != null && recipe.points.length > requiredPoints) {
-            requiredPoints = recipe.points.length;
+          if (recipe != null && recipe.points.length > recipePoints) {
+            recipePoints = recipe.points.length;
           }
         }
       }
@@ -223,16 +221,19 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
         }
       }
       setState(() {
-        _requiredProducts = catalog.products.length;
-        _requiredPoints = requiredPoints;
-        // Preserve reserved capacity in the suggestion; never renumber on load.
-        var products = _requiredProducts;
-        var points = _requiredPoints;
+        _recipeProducts = catalog.products.length;
+        _recipePoints = recipePoints;
+        // Keep explicitly mapped capacity, even when smaller than the catalog.
+        var products = 0;
+        var points = 0;
         for (final name in rx.keys) {
+          if (rx[name] is! int) continue;
           final id = int.parse(name.split('_').last);
           if (name.startsWith('product_') && id > products) products = id;
           if (name.startsWith('point_') && id > points) points = id;
         }
+        if (products == 0) products = _recipeProducts;
+        if (points == 0) points = _recipePoints;
         _productCount.text = '$products';
         _pointCount.text = points == 0 ? '' : '$points';
         _generated = false;
@@ -346,14 +347,16 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
     children: [
       Text('신호표 자동 생성', style: Theme.of(context).textTheme.titleMedium),
       const SizedBox(height: 8),
-      Text('저장된 레시피 기준: 제품 $_requiredProducts종 · 최대 $_requiredPoints포인트'),
+      Text('저장된 레시피 기준: 제품 $_recipeProducts종 · 최대 $_recipePoints포인트'),
       const Text(
-        '제품마다 포인트 수가 달라도 포인트 신호는 공통으로 사용합니다. 초안·적용 레시피의 최대 개수 이상으로 여유를 둘 수 있습니다.',
+        '제품마다 포인트 수가 달라도 포인트 신호는 공통으로 사용합니다. 레시피 개수와 관계없이 사용할 제품·포인트를 각각 1개부터 지정할 수 있습니다.',
       ),
       if (_missingRecipeSignals)
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 8),
-          child: Text('레시피에 필요한 선택 신호 위치가 부족합니다. 신호표를 생성하거나 고급 설정에서 추가하세요.'),
+          child: Text(
+            '현재 신호표에 포함되지 않은 제품·포인트가 있습니다. 해당 번호를 PLC에서 사용하려면 신호표에 추가하세요.',
+          ),
         ),
       const SizedBox(height: 12),
       Wrap(
@@ -361,18 +364,8 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
         runSpacing: 12,
         children: [
           for (final item in [
-            (
-              _productCount,
-              '제품 수',
-              'auto-product-count',
-              '$_requiredProducts~255',
-            ),
-            (
-              _pointCount,
-              '최대 촬영 포인트 수',
-              'auto-point-count',
-              '${_requiredPoints == 0 ? 1 : _requiredPoints}~200',
-            ),
+            (_productCount, '제품 수', 'auto-product-count', '1~255'),
+            (_pointCount, '최대 촬영 포인트 수', 'auto-point-count', '1~200'),
           ])
             SizedBox(
               width: 220,
@@ -425,7 +418,7 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
         ),
         Text('수신 ${_products! + _points! + 4}워드 · 송신 3워드 (1워드 = 2바이트)'),
       ] else
-        const Text('레시피에 필요한 개수 이상의 정수를 입력하세요. 제품은 최대 255종, 포인트는 1~200개입니다.'),
+        const Text('제품은 1~255종, 포인트는 1~200개의 정수를 입력하세요.'),
       const SizedBox(height: 12),
       const Text(
         '개수 입력만으로 기존 신호표가 바뀌지 않습니다. 생성하면 모든 수신·송신 위치와 워드 수를 위 표로 교체합니다. PLC 쪽 신호표도 함께 맞추세요.',
