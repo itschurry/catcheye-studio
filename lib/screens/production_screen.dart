@@ -10,6 +10,7 @@ import '../services/frame_receiver_service.dart';
 import '../services/remote_capture_api_service.dart';
 import '../services/remote_production_api_service.dart';
 import '../widgets/station_inspection_image.dart';
+import '../widgets/plc_settings_dialog.dart';
 
 class ProductionScreen extends StatefulWidget {
   const ProductionScreen({super.key, this.api});
@@ -745,9 +746,33 @@ class _ProductionScreenState extends State<ProductionScreen> {
           ),
         if ((_status?.error ?? '').isNotEmpty)
           SelectableText('Inspect 오류: ${_status!.error}'),
+        const Text('PLC 설정은 검사를 종료하고 연결을 해제한 상태에서 변경할 수 있습니다.'),
         Wrap(
           spacing: 8,
           children: [
+            OutlinedButton.icon(
+              icon: const Icon(Icons.settings),
+              label: const Text('PLC 설정'),
+              onPressed: !_busy && _canEditPlc
+                  ? () async {
+                      final settings = _settings;
+                      final endpoint = _endpoint;
+                      final saved = await showDialog<bool>(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (_) => PlcSettingsDialog(
+                          api: _api,
+                          settings: settings,
+                          canSave: () =>
+                              mounted && _endpoint == endpoint && _canEditPlc,
+                        ),
+                      );
+                      if (saved == true && mounted && _endpoint == endpoint) {
+                        await _poll();
+                      }
+                    }
+                  : null,
+            ),
             OutlinedButton(
               onPressed: !_busy && _fresh && plc?.canConnect == true
                   ? () => _act(() async {
@@ -804,6 +829,14 @@ class _ProductionScreenState extends State<ProductionScreen> {
     final value = _fresh ? plc?.word(direction, word) : null;
     return value == null ? '확인 안 됨' : '$value';
   }
+
+  bool get _canEditPlc =>
+      _fresh &&
+      !_active &&
+      {
+        PlcConnectionState.disabled,
+        PlcConnectionState.disconnected,
+      }.contains(_status?.plc?.state);
 
   Future<void> _preview(String inspectionId) async {
     final defaults = productionObject(_catalog!.defaults[inspectionId]);

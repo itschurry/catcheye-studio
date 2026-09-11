@@ -9,10 +9,17 @@ Inspect 뷰어의 **제품 레시피 · 생산 검사 · PLC 진단** 버튼에�
 - 미정 값은 초안 저장, 필수 기준 검증 후 운영 적용
 - 제품 검사 시작·순차 촬영·결과 수신 확인·종료와 회차별 이미지·판정 사유 조회
 - PLC 연결·실제 송수신 워드·요청 접수/거부·결과 송신·PLC 수신 확인 진단
+- **PLC 통신 진단 → PLC 설정**에서 IP·포트, 송수신 워드 수·바이트 순서·신호 위치 편집과 즉시 적용
 
 레시피는 연결된 Inspect의 `state/production`에 저장됩니다. 진행 중인 제품의 레시피는 고정됩니다.
 PLC 제어 회차를 Studio에서 촬영·종료하지 않고, 오류 회차의 명시적 중단만 지원합니다.
 상태 조회 실패 시 제어 버튼을 막고 응답이 불확실한 명령을 자동 반복하지 않습니다.
+
+PLC 설정은 검사 회차 종료(또는 중단) 및 연결 해제 후 저장할 수 있습니다.
+`PLC 사용`을 끄면 미완성 설정도 저장되며, 켤 때는 모든 필수 값을 검증합니다.
+신호 위치는 0부터 시작하는 16비트 워드 인덱스입니다. 저장 충돌이나 실패 시 편집 내용을 유지하며 자동 재전송하지 않습니다.
+운영 설정은 Inspect의 `state/production/plc_network.json`에 저장되고 재시작 없이 적용됩니다. 연결은 별도 버튼으로 실행합니다.
+`GET/PUT /api/production/plc/config`를 지원하는 Inspect가 필요합니다. PLC IP가 서버의 네트워크 허용 대역 밖이면 관리자 설정이 필요합니다.
 
 Inspect의 `/api/production/*` v1과 독립 촬영 `capture_api_version: 2`가 필요합니다.
 fastener의 기존 두 그룹 버튼은 볼트 머리·스터드·너트·너트 홀 네 개별 버튼으로 바뀌었습니다.
@@ -20,6 +27,7 @@ fastener의 기존 두 그룹 버튼은 볼트 머리·스터드·너트·너트
 
 생산 화면은 `lib/screens/production_screen.dart`, API는 `lib/services/remote_production_api_service.dart`, 응답 모델과 제어 조건은 `lib/models/production.dart`에서 관리합니다.
 화면 테스트와 API 테스트는 `test/production_screen_test.dart`, `test/production_api_test.dart`에 있습니다.
+PLC 설정 입력창과 회귀 테스트는 `lib/widgets/plc_settings_dialog.dart`, `test/plc_settings_dialog_test.dart`에 있습니다.
 
 ```bash
 flutter analyze --no-pub

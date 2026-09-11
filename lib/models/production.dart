@@ -314,6 +314,7 @@ class PlcStatus {
   final Map<String, int> rxMap, txMap;
   final List<int>? rxWords, txWords;
   bool get canDisconnect => {
+    PlcConnectionState.fault,
     PlcConnectionState.connected,
     PlcConnectionState.connecting,
     PlcConnectionState.waitingIdle,
