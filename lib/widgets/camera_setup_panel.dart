@@ -15,12 +15,12 @@ class _Camera {
       ip = json['ip'] as String,
       model = json['model'] as String,
       discovered = json['discovered'] as bool,
+      settings = Map.of(productionObject(json['settings'])),
       hardware = json['hardware_id'] as int?,
       enabled = json['undistortion_enabled'] as bool,
       calibrationName = json['calibration_name'] as String,
       error = json['last_error'] as String? {
-    if (serial.isEmpty ||
-        (hardware != null && (hardware! < 0 || hardware! > 3))) {
+    if (serial.isEmpty || (hardware != null && hardware! < 0)) {
       throw const FormatException('카메라 식별 정보가 올바르지 않습니다');
     }
   }
@@ -29,6 +29,8 @@ class _Camera {
   final bool discovered;
   int? hardware;
   bool enabled;
+  final Map<String, dynamic> settings;
+  bool clearCalibration = false;
   CalibrationUpload? upload;
 }
 
@@ -53,13 +55,14 @@ class CameraSetupPanel extends StatefulWidget {
 class _CameraSetupPanelState extends State<CameraSetupPanel> {
   late final _api =
       widget.api ??
-      RemoteProductionApiService(timeout: const Duration(seconds: 90));
+      RemoteProductionApiService(timeout: const Duration(minutes: 5));
   List<_Camera> _cameras = [];
   List<Map<String, dynamic>> _hardware = [];
+  List<Map<String, dynamic>> _fields = [];
+  int _editorGeneration = 0;
   int? _revision;
   bool _busy = false, _dirty = false, _mustReload = false, _saved = false;
   String? _error;
-  static const _labels = ['볼트 머리', '스터드', '너트', '너트 홀'];
   @override
   void initState() {
     super.initState();
@@ -76,19 +79,57 @@ class _CameraSetupPanelState extends State<CameraSetupPanel> {
     final revision = response['revision'];
     final rows = response['cameras'];
     final roles = response['hardware'];
+    final descriptors = response['settings_fields'];
     if (revision is! int ||
         revision < 0 ||
         rows is! List ||
         roles is! List ||
-        roles.length != 4) {
-      throw const FormatException('카메라 설정 API 응답이 올바르지 않습니다');
+        roles.isEmpty ||
+        descriptors is! List ||
+        descriptors.isEmpty) {
+      throw const FormatException(
+        '카메라 설정 API 응답이 올바르지 않습니다. Inspect를 함께 업데이트하세요.',
+      );
     }
-    final cameras = rows.map((row) => _Camera(productionObject(row))).toList();
+    final cameras = rows
+        .map(productionObject)
+        .where((row) => row['discovered'] == true)
+        .map(_Camera.new)
+        .toList();
     final hardware = roles.map(productionObject).toList();
-    for (var i = 0; i < 4; i++) {
-      if (hardware[i]['hardware_id'] != i ||
-          hardware[i]['camera_id'] is! String) {
+    final ids = <int>{};
+    for (final role in hardware) {
+      final id = role['hardware_id'];
+      if (id is! int ||
+          id < 0 ||
+          !ids.add(id) ||
+          role['camera_id'] is! String ||
+          role['label'] is! String) {
         throw const FormatException('하드웨어 카메라 매핑이 올바르지 않습니다');
+      }
+    }
+    final fields = descriptors.map(productionObject).toList();
+    final keys = <String>{};
+    for (final field in fields) {
+      final key = field['key'];
+      if (key is! String ||
+          !keys.add(key) ||
+          field['label'] is! String ||
+          field['nullable'] is! bool ||
+          !['string', 'integer', 'number', 'boolean'].contains(field['type']) ||
+          (field.containsKey('choices') &&
+              (field['choices'] is! List ||
+                  (field['choices'] as List).any((v) => v is! String)))) {
+        throw const FormatException(
+          '카메라 옵션 목록이 올바르지 않습니다. Inspect를 함께 업데이트하세요.',
+        );
+      }
+    }
+    for (final camera in cameras) {
+      if ((camera.hardware != null && !ids.contains(camera.hardware)) ||
+          camera.settings.keys.toSet().difference(keys).isNotEmpty ||
+          keys.difference(camera.settings.keys.toSet()).isNotEmpty) {
+        throw const FormatException('카메라 설정과 옵션 목록이 일치하지 않습니다');
       }
     }
     if (cameras.map((c) => c.serial).toSet().length != cameras.length) {
@@ -98,6 +139,8 @@ class _CameraSetupPanelState extends State<CameraSetupPanel> {
       _revision = revision;
       _cameras = cameras;
       _hardware = hardware;
+      _fields = fields;
+      _editorGeneration++;
       _dirty = false;
       _mustReload = false;
     });
@@ -157,6 +200,7 @@ class _CameraSetupPanelState extends State<CameraSetupPanel> {
       }
       setState(() {
         camera.upload = upload;
+        camera.clearCalibration = false;
         _dirty = true;
       });
     } catch (error) {
@@ -171,22 +215,24 @@ class _CameraSetupPanelState extends State<CameraSetupPanel> {
       setState(() => _error = '촬영 완료·PLC 연결 해제 후 적용하세요.');
       return;
     }
+    final values = <String, Map<String, dynamic>>{};
+    try {
+      for (final camera in _cameras) {
+        values[camera.serial] = _settingsValues(camera);
+      }
+    } catch (error) {
+      setState(() => _error = '$error');
+      return;
+    }
     final assigned = <int>{};
     for (final camera in _cameras) {
       if (camera.hardware != null && !assigned.add(camera.hardware!)) {
         setState(() => _error = '하드웨어마다 카메라 한 대만 배정할 수 있습니다.');
         return;
       }
-      if (camera.hardware != null && !camera.discovered) {
-        setState(
-          () => _error =
-              '${camera.serial}: 검색되지 않은 카메라입니다. 연결을 확인하거나 미사용으로 지정하세요.',
-        );
-        return;
-      }
       if (camera.enabled &&
           camera.upload == null &&
-          camera.calibrationName.isEmpty) {
+          (camera.clearCalibration || camera.calibrationName.isEmpty)) {
         setState(() => _error = '${camera.serial}: 왜곡 보정을 사용하려면 파일을 선택하세요.');
         return;
       }
@@ -208,6 +254,8 @@ class _CameraSetupPanelState extends State<CameraSetupPanel> {
                 'serial': camera.serial,
                 'hardware_id': camera.hardware,
                 'undistortion_enabled': camera.enabled,
+                'settings': values[camera.serial],
+                'clear_calibration': camera.clearCalibration,
                 if (camera.upload != null)
                   'calibration': {
                     'file_name': camera.upload!.name,
@@ -233,6 +281,97 @@ class _CameraSetupPanelState extends State<CameraSetupPanel> {
     }
   }
 
+  Map<String, dynamic> _settingsValues(_Camera camera) {
+    final result = <String, dynamic>{};
+    for (final field in _fields) {
+      final key = field['key'] as String;
+      final raw = camera.settings[key];
+      final text = raw?.toString().trim() ?? '';
+      dynamic value = raw;
+      if (text.isEmpty && field['nullable'] == true) {
+        value = null;
+      } else {
+        switch (field['type']) {
+          case 'integer':
+            value = int.tryParse(text);
+          case 'number':
+            value = double.tryParse(text);
+          case 'string':
+            value = text;
+          case 'boolean':
+            value = raw is bool ? raw : null;
+        }
+        if (value == null ||
+            (value is num && !value.isFinite) ||
+            (field['min'] is num && value is num && value < field['min']) ||
+            (field['max'] is num && value is num && value > field['max']) ||
+            (field['choices'] is List &&
+                !(field['choices'] as List).contains(value))) {
+          throw FormatException(
+            '${camera.serial}: ${field['label']} 값을 확인하세요.',
+          );
+        }
+      }
+      result[key] = value;
+    }
+    return result;
+  }
+
+  Widget _settingEditor(_Camera camera, Map<String, dynamic> field) {
+    final key = field['key'] as String;
+    final value = camera.settings[key];
+    final nullable = field['nullable'] == true;
+    final decoration = InputDecoration(
+      labelText: '${field['label']} ($key)',
+      helperText: nullable ? '비움: 장치 현재값 사용' : null,
+    );
+    void change(dynamic value) => setState(() {
+      camera.settings[key] = value;
+      _dirty = true;
+    });
+    if (field['type'] == 'boolean' || field['choices'] is List) {
+      final choices = field['type'] == 'boolean'
+          ? <dynamic>[true, false]
+          : field['choices'] as List;
+      return DropdownButtonFormField<String>(
+        key: ValueKey('option-${camera.serial}-$key-$_editorGeneration'),
+        initialValue: value?.toString() ?? '',
+        isExpanded: true,
+        decoration: decoration,
+        items: [
+          if (nullable)
+            const DropdownMenuItem(value: '', child: Text('장치 현재값')),
+          for (final option in choices)
+            DropdownMenuItem(
+              value: option.toString(),
+              child: Text(
+                option is bool ? (option ? '사용' : '사용 안 함') : option.toString(),
+              ),
+            ),
+        ],
+        onChanged: _busy || _mustReload
+            ? null
+            : (selected) => change(
+                selected == ''
+                    ? null
+                    : field['type'] == 'boolean'
+                    ? selected == 'true'
+                    : selected,
+              ),
+      );
+    }
+    return TextFormField(
+      key: ValueKey('option-${camera.serial}-$key-$_editorGeneration'),
+      initialValue: value?.toString() ?? '',
+      decoration: decoration,
+      enabled: !_busy && !_mustReload,
+      keyboardType: ['integer', 'number'].contains(field['type'])
+          ? const TextInputType.numberWithOptions(decimal: true, signed: true)
+          : TextInputType.text,
+      onChanged: change,
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,7 +384,7 @@ class _CameraSetupPanelState extends State<CameraSetupPanel> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Inspect 장비에서 검색한 카메라입니다. 시리얼로 식별하며 담당 하드웨어와 보정 파일을 지정합니다.',
+                '현재 연결된 카메라만 표시합니다. 새 카메라는 설정 후 저장하면 등록됩니다. 연결이 빠져도 저장한 설정은 유지됩니다.',
               ),
               const SizedBox(height: 8),
               const Text(
@@ -265,7 +404,7 @@ class _CameraSetupPanelState extends State<CameraSetupPanel> {
               if (_saved && !_dirty)
                 const Text('저장·적용 완료. 영상 확인으로 현재 출력 영상을 확인하세요.'),
               if (_revision != null && _cameras.isEmpty)
-                const Text('검색되거나 저장된 카메라가 없습니다. 연결을 확인하고 다시 검색하세요.'),
+                const Text('연결된 카메라가 없습니다. 연결을 확인하고 다시 검색하세요.'),
               for (final camera in _cameras)
                 Card(
                   child: Padding(
@@ -277,9 +416,7 @@ class _CameraSetupPanelState extends State<CameraSetupPanel> {
                           '시리얼 ${camera.serial}',
                           style: Theme.of(context).textTheme.titleSmall,
                         ),
-                        Text(
-                          '${camera.ip} · ${camera.model}\n${camera.discovered ? '검색됨' : '검색 안 됨 · 연결 확인 필요'}',
-                        ),
+                        Text('${camera.ip} · ${camera.model}'),
                         if (camera.error?.isNotEmpty == true)
                           Text(camera.error!),
                         const SizedBox(height: 12),
@@ -297,10 +434,12 @@ class _CameraSetupPanelState extends State<CameraSetupPanel> {
                               value: -1,
                               child: Text('미사용'),
                             ),
-                            for (var i = 0; i < 4; i++)
+                            for (final role in _hardware)
                               DropdownMenuItem(
-                                value: i,
-                                child: Text('${_labels[i]} ($i)'),
+                                value: role['hardware_id'] as int,
+                                child: Text(
+                                  '${role['label']} (${role['hardware_id']})',
+                                ),
                               ),
                           ],
                           onChanged: _busy || _mustReload
@@ -310,10 +449,38 @@ class _CameraSetupPanelState extends State<CameraSetupPanel> {
                                   _dirty = true;
                                 }),
                         ),
-                        if (camera.hardware != null)
-                          Text(
-                            '촬영 ${_hardware[camera.hardware!]['width']}×${_hardware[camera.hardware!]['height']} · ROI 시작 ${_hardware[camera.hardware!]['offset_x']}, ${_hardware[camera.hardware!]['offset_y']}',
+                        ExpansionTile(
+                          key: ValueKey(
+                            'settings-${camera.serial}-$_editorGeneration',
                           ),
+                          title: const Text('촬영 설정'),
+                          subtitle: const Text(
+                            '해상도 · ROI · 노출 · 게인 · 프레임 속도 · 트리거',
+                          ),
+                          tilePadding: EdgeInsets.zero,
+                          maintainState: true,
+                          children: [
+                            const Text(
+                              '선택 항목을 비우면 장치의 현재값을 사용합니다. 지원 범위는 저장 시 카메라에서 검증합니다. 시리얼·현재 IP는 검색한 장치의 식별값입니다.',
+                            ),
+                            LayoutBuilder(
+                              builder: (context, constraints) => Wrap(
+                                spacing: 12,
+                                runSpacing: 12,
+                                children: [
+                                  for (final field in _fields)
+                                    SizedBox(
+                                      width: constraints.maxWidth >= 640
+                                          ? (constraints.maxWidth - 12) / 2
+                                          : constraints.maxWidth,
+                                      child: _settingEditor(camera, field),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                        ),
                         SwitchListTile(
                           contentPadding: EdgeInsets.zero,
                           title: const Text('왜곡 보정 사용'),
@@ -327,7 +494,8 @@ class _CameraSetupPanelState extends State<CameraSetupPanel> {
                         ),
                         Text(
                           camera.upload?.name ??
-                              (camera.calibrationName.isEmpty
+                              (camera.clearCalibration ||
+                                      camera.calibrationName.isEmpty
                                   ? '보정 파일 미선택'
                                   : camera.calibrationName),
                         ),
@@ -342,6 +510,22 @@ class _CameraSetupPanelState extends State<CameraSetupPanel> {
                               icon: const Icon(Icons.upload_file),
                               label: const Text('보정 파일 선택'),
                             ),
+                            TextButton(
+                              onPressed:
+                                  _busy ||
+                                      _mustReload ||
+                                      (camera.upload == null &&
+                                          (camera.clearCalibration ||
+                                              camera.calibrationName.isEmpty))
+                                  ? null
+                                  : () => setState(() {
+                                      camera.upload = null;
+                                      camera.clearCalibration = true;
+                                      camera.enabled = false;
+                                      _dirty = true;
+                                    }),
+                              child: const Text('보정 파일 해제'),
+                            ),
                             TextButton.icon(
                               onPressed:
                                   _busy ||
@@ -351,7 +535,11 @@ class _CameraSetupPanelState extends State<CameraSetupPanel> {
                                       !camera.discovered
                                   ? null
                                   : () => widget.onPreview(
-                                      _hardware[camera.hardware!]['camera_id']
+                                      _hardware.singleWhere(
+                                            (role) =>
+                                                role['hardware_id'] ==
+                                                camera.hardware,
+                                          )['camera_id']
                                           as String,
                                     ),
                               icon: const Icon(Icons.videocam_outlined),
