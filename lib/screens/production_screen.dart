@@ -326,34 +326,6 @@ class _ProductionScreenState extends State<ProductionScreen>
       appBar: AppBar(
         title: const Text('검사 관리'),
         actions: [
-          IconButton(
-            tooltip: '카메라 설정',
-            icon: const Icon(Icons.camera_alt_outlined),
-            onPressed: _busy || !_fresh
-                ? null
-                : () async {
-                    final settings = _settings;
-                    final endpoint = _endpoint;
-                    await showDialog<bool>(
-                      context: context,
-                      barrierDismissible: false,
-                      builder: (_) => CameraSetupDialog(
-                        settings: settings,
-                        canSave: () =>
-                            mounted && _endpoint == endpoint && _canEditPlc,
-                        onPreview: (camera) => showDialog<void>(
-                          context: context,
-                          barrierDismissible: false,
-                          builder: (_) => _RecipePreview(
-                            settings: settings,
-                            camera: camera,
-                          ),
-                        ),
-                      ),
-                    );
-                    if (mounted && _endpoint == endpoint) await _poll();
-                  },
-          ),
           Tooltip(
             message: _fresh
                 ? '서버 상태 갱신 ${_time(_updatedAt)}'
@@ -384,21 +356,53 @@ class _ProductionScreenState extends State<ProductionScreen>
       ),
       body: Column(
         children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TabBar(
-              controller: _tabs,
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              labelPadding: const EdgeInsets.symmetric(horizontal: 12),
-              tabs: const [
-                Tab(text: '제품 레시피'),
-                Tab(text: '생산 검사'),
-                Tab(text: 'PLC 통신 진단'),
-                Tab(text: 'PLC 디버그'),
-              ],
-            ),
+          Row(
+            children: [
+              const SizedBox(width: 12),
+              TextButton.icon(
+                label: const Text('카메라 설정'),
+                icon: const Icon(Icons.camera_alt_outlined),
+                onPressed: _busy || !_fresh
+                    ? null
+                    : () async {
+                        final settings = _settings;
+                        final endpoint = _endpoint;
+                        await showDialog<bool>(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (_) => CameraSetupDialog(
+                            settings: settings,
+                            canSave: () =>
+                                mounted && _endpoint == endpoint && _canEditPlc,
+                            onPreview: (camera) => showDialog<void>(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (_) => _RecipePreview(
+                                settings: settings,
+                                camera: camera,
+                              ),
+                            ),
+                          ),
+                        );
+                        if (mounted && _endpoint == endpoint) await _poll();
+                      },
+              ),
+              Expanded(
+                child: TabBar(
+                  controller: _tabs,
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  tabs: const [
+                    Tab(text: '제품 레시피'),
+                    Tab(text: '생산 검사'),
+                    Tab(text: 'PLC 통신 진단'),
+                    Tab(text: 'PLC 디버그'),
+                  ],
+                ),
+              ),
+            ],
           ),
           if (_error != null)
             Padding(
