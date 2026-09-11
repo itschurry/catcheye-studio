@@ -14,8 +14,9 @@ import '../widgets/plc_settings_dialog.dart';
 import '../widgets/plc_debug_panel.dart';
 
 class ProductionScreen extends StatefulWidget {
-  const ProductionScreen({super.key, this.api});
+  const ProductionScreen({super.key, this.api, this.active = true});
   final RemoteProductionApiService? api;
+  final bool active;
   @override
   State<ProductionScreen> createState() => _ProductionScreenState();
 }
@@ -80,6 +81,15 @@ class _ProductionScreenState extends State<ProductionScreen> {
   }
 
   @override
+  void didUpdateWidget(covariant ProductionScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active != oldWidget.active) {
+      _fresh = false;
+      if (widget.active && !_busy) unawaited(_reload());
+    }
+  }
+
+  @override
   void dispose() {
     _timer?.cancel();
     if (widget.api == null) _api.close();
@@ -131,7 +141,9 @@ class _ProductionScreenState extends State<ProductionScreen> {
   }
 
   Future<void> _poll() async {
-    if (!mounted || _polling || _busy || _catalog == null) return;
+    if (!mounted || !widget.active || _polling || _busy || _catalog == null) {
+      return;
+    }
     final generation = _generation;
     _polling = true;
     final statusGeneration = _statusGeneration;
@@ -295,9 +307,9 @@ class _ProductionScreenState extends State<ProductionScreen> {
 
   @override
   Widget build(BuildContext context) => PopScope(
-    canPop: !_dirty && !_busy,
+    canPop: !widget.active || (!_dirty && !_busy),
     onPopInvokedWithResult: (didPop, _) async {
-      if (didPop || _busy) return;
+      if (didPop || !widget.active || _busy) return;
       if (await _discardChanges() && mounted) {
         setState(() => _dirty = false);
         if (context.mounted) Navigator.pop(context);
@@ -305,7 +317,7 @@ class _ProductionScreenState extends State<ProductionScreen> {
     },
     child: Scaffold(
       appBar: AppBar(
-        title: const Text('제품 레시피 · 생산 검사'),
+        title: const Text('검사 관리'),
         actions: [
           IconButton(
             tooltip: '서버 상태 새로고침',
@@ -323,8 +335,8 @@ class _ProductionScreenState extends State<ProductionScreen> {
               runSpacing: 8,
               children: [
                 for (final (index, label) in [
-                  '레시피 편집',
-                  '검사 진행',
+                  '제품 레시피',
+                  '생산 검사',
                   'PLC 통신 진단',
                   'PLC 디버그',
                 ].indexed)

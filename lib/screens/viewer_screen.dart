@@ -21,7 +21,6 @@ import '../widgets/zoomable_viewport.dart';
 import '../widgets/point_cloud_viewer.dart';
 import '../widgets/stream_selector.dart';
 import '../widgets/station_capture_actions.dart';
-import 'production_screen.dart';
 import '../widgets/station_undistortion_control.dart';
 
 /// Live preview viewer screen — connects to the remote detector RTSP or WebSocket stream.
@@ -1856,19 +1855,7 @@ class _ViewerScreenState extends State<ViewerScreen>
             ),
           ),
           const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              icon: const Icon(Icons.fact_check_outlined),
-              label: const Text('제품 레시피 · 생산 검사 · PLC 진단'),
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const ProductionScreen(),
-                ),
-              ),
-            ),
-          ),
-          const Text('개별 수동 촬영 · 생산 검사는 레시피 화면에서 시작'),
+          const Text('개별 수동 촬영 · 생산 검사는 검사 관리 탭에서 시작'),
           StationCaptureActions(
             status: status,
             connected: receiver.connected,

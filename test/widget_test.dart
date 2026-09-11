@@ -69,42 +69,45 @@ void main() {
     expect(RemoteDeviceKind.capture.label, 'Capture');
   });
 
-  test('inspection discovery and navigation expose Viewer and Results', () {
-    expect(
-      RemoteDeviceKind.fromApiValue('inspection'),
-      RemoteDeviceKind.inspection,
-    );
-    expect(RemoteDeviceKind.inspection.label, 'Inspection');
-    expect(
-      RemoteDeviceInfo.fromJson(const {
-        'kind': 'inspection',
-        'runtime_mode': 'station',
-      }).isInspectionStation,
-      isTrue,
-    );
-    expect(
-      RemoteDeviceInfo.fromJson(const {
-        'kind': 'inspection',
-      }).isInspectionStation,
-      isFalse,
-    );
-    expect(
-      app.visibleAppItemIndexes(RemoteDeviceKind.inspection, false),
-      const [0, 6],
-    );
-    expect(app.visibleAppItemIndexes(RemoteDeviceKind.inspection, true), const [
-      0,
-      6,
-    ]);
-    expect(
-      app.visibleAppItemIndexes(
+  test(
+    'inspection navigation places Production between Viewer and Results',
+    () {
+      expect(
+        RemoteDeviceKind.fromApiValue('inspection'),
         RemoteDeviceKind.inspection,
-        false,
-        referenceManagementAvailable: true,
-      ),
-      const [0, 6, 7],
-    );
-  });
+      );
+      expect(RemoteDeviceKind.inspection.label, 'Inspection');
+      expect(
+        RemoteDeviceInfo.fromJson(const {
+          'kind': 'inspection',
+          'runtime_mode': 'station',
+        }).isInspectionStation,
+        isTrue,
+      );
+      expect(
+        RemoteDeviceInfo.fromJson(const {
+          'kind': 'inspection',
+        }).isInspectionStation,
+        isFalse,
+      );
+      expect(
+        app.visibleAppItemIndexes(RemoteDeviceKind.inspection, false),
+        const [0, 8, 6],
+      );
+      expect(
+        app.visibleAppItemIndexes(RemoteDeviceKind.inspection, true),
+        const [0, 8, 6],
+      );
+      expect(
+        app.visibleAppItemIndexes(
+          RemoteDeviceKind.inspection,
+          false,
+          referenceManagementAvailable: true,
+        ),
+        const [0, 8, 6, 7],
+      );
+    },
+  );
 
   test('legacy guard setting migrates to hss', () async {
     SharedPreferences.setMockInitialValues(const {

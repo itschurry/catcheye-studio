@@ -38,28 +38,32 @@ class FakeProductionApi extends RemoteProductionApiService {
 
   int saves = 0;
   int activations = 0;
+  int statusReads = 0;
   @override
   Future<RecipeCatalog> recipes(AppSettings settings) async => catalog;
   @override
-  Future<ProductionStatus> status(AppSettings settings) async =>
-      ProductionStatus.fromJson({
-        'api_version': 3,
-        'control_epoch': 'boot-1',
-        'capture': null,
-        'events': [],
+  Future<ProductionStatus> status(AppSettings settings) async {
+    statusReads++;
+    return ProductionStatus.fromJson({
+      'api_version': 3,
+      'control_epoch': 'boot-1',
+      'capture': null,
+      'events': [],
+      'error': '',
+      'plc': {
+        'state': 'DISABLED',
+        'host': '',
+        'port': 0,
+        'protocol': 'inspect_onehot_v2',
+        'enabled': false,
         'error': '',
-        'plc': {
-          'state': 'DISABLED',
-          'host': '',
-          'port': 0,
-          'protocol': 'inspect_onehot_v2',
-          'enabled': false,
-          'error': '',
-          'events': [],
-          'rx_map': <String, dynamic>{},
-          'tx_map': <String, dynamic>{},
-        },
-      });
+        'events': [],
+        'rx_map': <String, dynamic>{},
+        'tx_map': <String, dynamic>{},
+      },
+    });
+  }
+
   @override
   Future<RecipeSlot> save(
     AppSettings settings,
@@ -92,6 +96,67 @@ class FakeProductionApi extends RemoteProductionApiService {
 }
 
 void main() {
+  testWidgets('tab return preserves draft and resumes status reads', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final settings = SettingsProvider();
+    addTearDown(settings.dispose);
+    final api = FakeProductionApi();
+    addTearDown(api.close);
+    final active = ValueNotifier(true);
+    addTearDown(active.dispose);
+    await tester.binding.setSurfaceSize(const Size(1280, 950));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: settings,
+        child: MaterialApp(
+          home: ValueListenableBuilder<bool>(
+            valueListenable: active,
+            builder: (context, visible, _) => Offstage(
+              offstage: !visible,
+              child: ProductionScreen(api: api, active: visible),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('recipe-name')), '편집 중');
+    await tester.tap(find.text('PLC 통신 진단'));
+    await tester.pumpAndSettle();
+    final readsBeforeHide = api.statusReads;
+    active.value = false;
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+    expect(api.statusReads, readsBeforeHide);
+    expect(
+      tester
+          .widget<PopScope>(
+            find.byWidgetPredicate(
+              (widget) => widget is PopScope,
+              skipOffstage: false,
+            ),
+          )
+          .canPop,
+      isTrue,
+    );
+    active.value = true;
+    await tester.pumpAndSettle();
+    expect(api.statusReads, greaterThan(readsBeforeHide));
+    expect(
+      tester
+          .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'PLC 통신 진단'))
+          .selected,
+      isTrue,
+    );
+    await tester.tap(find.text('제품 레시피'));
+    await tester.pumpAndSettle();
+    expect(find.text('편집 중'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets(
     'refresh does not rebase unsaved edits onto another editor revision',
     (tester) async {
@@ -163,7 +228,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('add-product')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('product-6')), findsOneWidget);
-      await tester.tap(find.text('검사 진행'));
+      await tester.tap(find.text('생산 검사'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('1. A'));
       await tester.pumpAndSettle();

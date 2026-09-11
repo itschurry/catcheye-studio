@@ -18,6 +18,7 @@ import 'screens/camera_properties_screen.dart';
 import 'screens/capture_images_screen.dart';
 import 'screens/inspection_results_screen.dart';
 import 'screens/monitor_screen.dart';
+import 'screens/production_screen.dart';
 import 'screens/reference_images_screen.dart';
 import 'screens/roi_editor_screen.dart';
 import 'screens/viewer_screen.dart';
@@ -36,7 +37,7 @@ List<int> visibleAppItemIndexes(
       RemoteDeviceKind.pick => const [0, 2],
       RemoteDeviceKind.capture => const [0, 5, 1],
       RemoteDeviceKind.inspection =>
-        referenceManagementAvailable ? const [0, 6, 7] : const [0, 6],
+        referenceManagementAvailable ? const [0, 8, 6, 7] : const [0, 8, 6],
       null => const [0],
     };
   }
@@ -45,7 +46,7 @@ List<int> visibleAppItemIndexes(
     RemoteDeviceKind.pick => const [0, 2, 4],
     RemoteDeviceKind.capture => const [0, 5, 1, 3],
     RemoteDeviceKind.inspection =>
-      referenceManagementAvailable ? const [0, 6, 7] : const [0, 6],
+      referenceManagementAvailable ? const [0, 8, 6, 7] : const [0, 8, 6],
     null => const [0],
   };
 }
@@ -194,6 +195,7 @@ class _AppShellState extends State<AppShell> {
       _ReferenceDiscoveryState.idle;
   bool _resultsMounted = false;
   bool _referenceMounted = false;
+  bool _productionMounted = false;
   static const _wideBreakpoint = 900.0;
   static const _phoneBreakpoint = 600.0;
 
@@ -237,6 +239,11 @@ class _AppShellState extends State<AppShell> {
       label: '기준 이미지',
       icon: Icons.collections_bookmark_outlined,
       selectedIcon: Icons.collections_bookmark,
+    ),
+    _NavItem(
+      label: '검사 관리',
+      icon: Icons.assignment_outlined,
+      selectedIcon: Icons.assignment,
     ),
   ];
 
@@ -332,7 +339,7 @@ class _AppShellState extends State<AppShell> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (selectedIndex != 6 && selectedIndex != 7)
+        if (selectedIndex != 6 && selectedIndex != 7 && selectedIndex != 8)
           _screenForIndex(selectedIndex, isPhone: isPhone),
         if (_resultsMounted)
           Offstage(
@@ -352,6 +359,17 @@ class _AppShellState extends State<AppShell> {
                 initialStatus: _referenceStatus,
                 refreshKey: _referenceDiscoveryKey,
               ),
+            ),
+          ),
+        if (_productionMounted &&
+            context.read<SettingsProvider>().settings.remoteDeviceKind ==
+                RemoteDeviceKind.inspection)
+          Offstage(
+            key: const ValueKey('production-screen'),
+            offstage: selectedIndex != 8,
+            child: TickerMode(
+              enabled: selectedIndex == 8,
+              child: ProductionScreen(active: selectedIndex == 8),
             ),
           ),
       ],
@@ -491,6 +509,7 @@ class _AppShellState extends State<AppShell> {
       _selectedIndex = index;
       if (index == 6) _resultsMounted = true;
       if (index == 7) _referenceMounted = true;
+      if (index == 8) _productionMounted = true;
     });
   }
 }
