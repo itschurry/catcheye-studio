@@ -12,7 +12,7 @@ import '../services/remote_production_api_service.dart';
 import '../widgets/station_inspection_image.dart';
 import '../widgets/plc_settings_dialog.dart';
 import '../widgets/plc_debug_panel.dart';
-import '../widgets/camera_setup_dialog.dart';
+import '../widgets/camera_setup_panel.dart';
 
 class ProductionScreen extends StatefulWidget {
   const ProductionScreen({super.key, this.api, this.active = true});
@@ -34,11 +34,17 @@ class _ProductionScreenState extends State<ProductionScreen>
   List<ProductionCapture> _history = [];
   List<RecipePoint> _points = [];
   int _product = 1;
-  int _tab = 0;
-  late final TabController _tabs = TabController(length: 4, vsync: this)
-    ..addListener(() {
-      if (_tab != _tabs.index) setState(() => _tab = _tabs.index);
-    });
+  int _tab = 1;
+  bool _cameraOpened = false;
+  late final TabController _tabs =
+      TabController(length: 5, initialIndex: 1, vsync: this)..addListener(() {
+        if (_tab != _tabs.index) {
+          setState(() {
+            _tab = _tabs.index;
+            if (_tab == 0) _cameraOpened = true;
+          });
+        }
+      });
   bool _dirty = false;
   bool _busy = false;
   bool _polling = false;
@@ -66,6 +72,7 @@ class _ProductionScreenState extends State<ProductionScreen>
     if (_endpoint != endpoint) {
       final changed = _endpoint != null;
       _endpoint = endpoint;
+      _cameraOpened = _tab == 0;
       _generation++;
       _catalog = null;
       _status = null;
@@ -312,6 +319,22 @@ class _ProductionScreenState extends State<ProductionScreen>
     });
   }
 
+  Widget _cameraSettings() {
+    final settings = _settings;
+    final endpoint = _endpoint;
+    return CameraSetupPanel(
+      key: ValueKey('camera-$endpoint'),
+      settings: settings,
+      api: widget.api,
+      canSave: () => mounted && _endpoint == endpoint && _canEditPlc,
+      onPreview: (camera) => showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _RecipePreview(settings: settings, camera: camera),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !widget.active || (!_dirty && !_busy),
@@ -356,52 +379,18 @@ class _ProductionScreenState extends State<ProductionScreen>
       ),
       body: Column(
         children: [
-          Row(
-            children: [
-              const SizedBox(width: 12),
-              TextButton.icon(
-                label: const Text('카메라 설정'),
-                icon: const Icon(Icons.camera_alt_outlined),
-                onPressed: _busy || !_fresh
-                    ? null
-                    : () async {
-                        final settings = _settings;
-                        final endpoint = _endpoint;
-                        await showDialog<bool>(
-                          context: context,
-                          barrierDismissible: false,
-                          builder: (_) => CameraSetupDialog(
-                            settings: settings,
-                            canSave: () =>
-                                mounted && _endpoint == endpoint && _canEditPlc,
-                            onPreview: (camera) => showDialog<void>(
-                              context: context,
-                              barrierDismissible: false,
-                              builder: (_) => _RecipePreview(
-                                settings: settings,
-                                camera: camera,
-                              ),
-                            ),
-                          ),
-                        );
-                        if (mounted && _endpoint == endpoint) await _poll();
-                      },
-              ),
-              Expanded(
-                child: TabBar(
-                  controller: _tabs,
-                  isScrollable: true,
-                  tabAlignment: TabAlignment.start,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 12),
-                  tabs: const [
-                    Tab(text: '제품 레시피'),
-                    Tab(text: '생산 검사'),
-                    Tab(text: 'PLC 통신 진단'),
-                    Tab(text: 'PLC 디버그'),
-                  ],
-                ),
-              ),
+          TabBar(
+            controller: _tabs,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+            tabs: const [
+              Tab(text: '카메라 설정'),
+              Tab(text: '제품 레시피'),
+              Tab(text: '생산 검사'),
+              Tab(text: 'PLC 통신 진단'),
+              Tab(text: 'PLC 디버그'),
             ],
           ),
           if (_error != null)
@@ -418,41 +407,52 @@ class _ProductionScreenState extends State<ProductionScreen>
               alignment: Alignment.topLeft,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1120),
-                child: _catalog == null
-                    ? Center(
-                        child: Text(
-                          _busy
-                              ? 'Inspect에서 레시피를 읽는 중…'
-                              : '레시피를 불러올 수 없습니다. Inspect API와 연결 설정을 확인해 주세요.',
-                        ),
-                      )
-                    : switch (_tab) {
-                        0 => _recipes(),
-                        1 => _operation(),
-                        2 => _diagnostics(),
-                        _ => PlcDebugPanel(
-                          key: ValueKey('debug-$_endpoint'),
-                          catalog: _catalog!,
-                          status: _status,
-                          fresh: _fresh,
-                          busy: _busy,
-                          captureApi: _captureApi,
-                          onConnect: (simulator) => _plcAction(
-                            simulator ? 'plc/simulator/connect' : 'plc/connect',
-                          ),
-                          onDisconnect: () => _plcAction('plc/disconnect'),
-                          onConfigure: () => _tabs.animateTo(2),
-                          onCapture: (id, product, point, hardware) =>
-                              _plcAction('plc/simulator/capture', {
-                                'simulator_id': id,
-                                'request_id':
-                                    RemoteProductionApiService.requestId(),
-                                'product_id': product,
-                                'point_number': point,
-                                'hardware_id': hardware,
-                              }),
-                        ),
-                      },
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (_cameraOpened)
+                      Offstage(offstage: _tab != 0, child: _cameraSettings()),
+                    if (_tab != 0)
+                      _catalog == null
+                          ? Center(
+                              child: Text(
+                                _busy
+                                    ? 'Inspect에서 레시피를 읽는 중…'
+                                    : '레시피를 불러올 수 없습니다. Inspect API와 연결 설정을 확인해 주세요.',
+                              ),
+                            )
+                          : switch (_tab) {
+                              1 => _recipes(),
+                              2 => _operation(),
+                              3 => _diagnostics(),
+                              _ => PlcDebugPanel(
+                                key: ValueKey('debug-$_endpoint'),
+                                catalog: _catalog!,
+                                status: _status,
+                                fresh: _fresh,
+                                busy: _busy,
+                                captureApi: _captureApi,
+                                onConnect: (simulator) => _plcAction(
+                                  simulator
+                                      ? 'plc/simulator/connect'
+                                      : 'plc/connect',
+                                ),
+                                onDisconnect: () =>
+                                    _plcAction('plc/disconnect'),
+                                onConfigure: () => _tabs.animateTo(3),
+                                onCapture: (id, product, point, hardware) =>
+                                    _plcAction('plc/simulator/capture', {
+                                      'simulator_id': id,
+                                      'request_id':
+                                          RemoteProductionApiService.requestId(),
+                                      'product_id': product,
+                                      'point_number': point,
+                                      'hardware_id': hardware,
+                                    }),
+                              ),
+                            },
+                  ],
+                ),
               ),
             ),
           ),

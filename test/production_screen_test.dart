@@ -8,10 +8,32 @@ import 'package:catcheye_studio/providers/settings_provider.dart';
 import 'package:catcheye_studio/screens/production_screen.dart';
 import 'package:catcheye_studio/services/remote_production_api_service.dart';
 import 'production_api_test.dart' show catalogJson;
+import 'camera_setup_panel_test.dart' as camera;
 
 class FakeProductionApi extends RemoteProductionApiService {
   RecipeCatalog catalog = RecipeCatalog.fromJson(catalogJson());
   Map<String, dynamic>? lastCapture;
+  final cameraApi = camera.CameraApi();
+  int cameraReads = 0;
+
+  @override
+  Future<Map<String, dynamic>> request(
+    AppSettings settings,
+    String method,
+    String endpoint, [
+    Map<String, dynamic>? body,
+  ]) async {
+    expect(endpoint, 'camera-setup');
+    if (method == 'GET') cameraReads++;
+    return cameraApi.request(settings, method, endpoint, body);
+  }
+
+  @override
+  void close() {
+    cameraApi.close();
+    super.close();
+  }
+
   @override
   Future<RecipeSlot> addProduct(AppSettings settings, int count) async {
     expect(count, catalog.products.length);
@@ -96,6 +118,60 @@ class FakeProductionApi extends RemoteProductionApiService {
 }
 
 void main() {
+  for (final width in [390.0, 1280.0]) {
+    testWidgets(
+      'camera settings stay inline and retain edits at width $width',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({});
+        final settings = SettingsProvider();
+        addTearDown(settings.dispose);
+        final api = FakeProductionApi();
+        addTearDown(api.close);
+        await tester.binding.setSurfaceSize(Size(width, 950));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        await tester.pumpWidget(
+          ChangeNotifierProvider.value(
+            value: settings,
+            child: MaterialApp(
+              theme: buildStudioTheme(),
+              home: ProductionScreen(api: api),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(api.cameraReads, 0);
+        final tabs = tester.widget<TabBar>(find.byType(TabBar));
+        expect((tabs.tabs.first as Tab).text, '카메라 설정');
+        await tester.enterText(
+          find.byKey(const ValueKey('recipe-name')),
+          '편집 중',
+        );
+        await tester.ensureVisible(find.text('카메라 설정'));
+        await tester.tap(find.text('카메라 설정'));
+        await tester.pumpAndSettle();
+        expect(find.byType(Dialog), findsNothing);
+        expect(find.text('시리얼 S0'), findsOneWidget);
+        await camera.choose(tester, 'S0', '너트 (2)');
+        await tester.ensureVisible(find.text('제품 레시피'));
+        await tester.tap(find.text('제품 레시피'));
+        await tester.pumpAndSettle();
+        expect(find.text('편집 중'), findsOneWidget);
+        await tester.ensureVisible(find.text('카메라 설정'));
+        await tester.tap(find.text('카메라 설정'));
+        await tester.pumpAndSettle();
+        expect(api.cameraReads, 1);
+        expect(find.byKey(const ValueKey('hardware-S0-2')), findsOneWidget);
+        await tester.tap(find.text('저장 및 적용'));
+        await tester.pumpAndSettle();
+        expect(api.cameraApi.saved!['cameras'][0]['hardware_id'], 2);
+        expect(find.textContaining('저장·적용 완료'), findsOneWidget);
+        expect(find.byType(Dialog), findsNothing);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
+  }
+
   testWidgets('tab return preserves draft and resumes status reads', (
     tester,
   ) async {
@@ -146,7 +222,7 @@ void main() {
     active.value = true;
     await tester.pumpAndSettle();
     expect(api.statusReads, greaterThan(readsBeforeHide));
-    expect(tester.widget<TabBar>(find.byType(TabBar)).controller!.index, 2);
+    expect(tester.widget<TabBar>(find.byType(TabBar)).controller!.index, 3);
     await tester.tap(find.text('제품 레시피'));
     await tester.pumpAndSettle();
     expect(find.text('편집 중'), findsOneWidget);

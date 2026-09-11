@@ -32,8 +32,8 @@ class _Camera {
   CalibrationUpload? upload;
 }
 
-class CameraSetupDialog extends StatefulWidget {
-  const CameraSetupDialog({
+class CameraSetupPanel extends StatefulWidget {
+  const CameraSetupPanel({
     super.key,
     required this.settings,
     required this.canSave,
@@ -47,10 +47,10 @@ class CameraSetupDialog extends StatefulWidget {
   final RemoteProductionApiService? api;
   final Future<CalibrationUpload?> Function()? pickCalibration;
   @override
-  State<CameraSetupDialog> createState() => _CameraSetupDialogState();
+  State<CameraSetupPanel> createState() => _CameraSetupPanelState();
 }
 
-class _CameraSetupDialogState extends State<CameraSetupDialog> {
+class _CameraSetupPanelState extends State<CameraSetupPanel> {
   late final _api =
       widget.api ??
       RemoteProductionApiService(timeout: const Duration(seconds: 90));
@@ -234,13 +234,12 @@ class _CameraSetupDialogState extends State<CameraSetupDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => PopScope(
-    canPop: !_busy,
-    child: AlertDialog(
-      title: const Text('카메라 · 하드웨어 · 왜곡 보정'),
-      content: SizedBox(
-        width: 760,
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Expanded(
         child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -371,20 +370,25 @@ class _CameraSetupDialogState extends State<CameraSetupDialog> {
           ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _busy ? null : () => Navigator.pop(context, _saved),
-          child: const Text('닫기'),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            TextButton(
+              onPressed: _busy ? null : _load,
+              child: const Text('서버 설정 다시 불러오기 · 재검색'),
+            ),
+            FilledButton(
+              onPressed: _busy || _revision == null || _mustReload
+                  ? null
+                  : _save,
+              child: const Text('저장 및 적용'),
+            ),
+          ],
         ),
-        TextButton(
-          onPressed: _busy ? null : _load,
-          child: const Text('서버 설정 다시 불러오기 · 재검색'),
-        ),
-        FilledButton(
-          onPressed: _busy || _revision == null || _mustReload ? null : _save,
-          child: const Text('저장 및 적용'),
-        ),
-      ],
-    ),
+      ),
+    ],
   );
 }

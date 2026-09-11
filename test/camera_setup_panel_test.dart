@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:catcheye_studio/models/app_settings.dart';
 import 'package:catcheye_studio/services/remote_production_api_service.dart';
-import 'package:catcheye_studio/widgets/camera_setup_dialog.dart';
+import 'package:catcheye_studio/widgets/camera_setup_panel.dart';
 
 Map<String, dynamic> setup() => {
   'revision': 3,
@@ -84,26 +84,17 @@ Future<void> open(
   addTearDown(api.close);
   await tester.pumpWidget(
     MaterialApp(
-      home: Builder(
-        builder: (context) => Scaffold(
-          body: TextButton(
-            onPressed: () => showDialog<void>(
-              context: context,
-              builder: (_) => CameraSetupDialog(
-                settings: AppSettings(),
-                api: api,
-                canSave: canSave ?? () => true,
-                pickCalibration: pick,
-                onPreview: preview ?? (_) async {},
-              ),
-            ),
-            child: const Text('open'),
-          ),
+      home: Scaffold(
+        body: CameraSetupPanel(
+          settings: AppSettings(),
+          api: api,
+          canSave: canSave ?? () => true,
+          pickCalibration: pick,
+          onPreview: preview ?? (_) async {},
         ),
       ),
     ),
   );
-  await tester.tap(find.text('open'));
   await tester.pumpAndSettle();
 }
 
