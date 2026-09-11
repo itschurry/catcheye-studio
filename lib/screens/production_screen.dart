@@ -835,7 +835,6 @@ class _ProductionScreenState extends State<ProductionScreen>
                           ? '미설정'
                           : '${plc.host}:${plc.port}',
                     ),
-                    _diagnosticField('프로토콜', plc?.protocol ?? '확인 불가'),
                     _diagnosticField(
                       '최근 수신 / 송신',
                       '${_millis(plc?.lastRxAtMs)} / ${_millis(plc?.lastTxAtMs)}',

@@ -55,7 +55,6 @@ class FakeProductionApi extends RemoteProductionApiService {
         'state': 'DISABLED',
         'host': '',
         'port': 0,
-        'protocol': 'inspect_onehot_v2',
         'enabled': false,
         'error': '',
         'events': [],

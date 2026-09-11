@@ -333,7 +333,6 @@ class PlcStatus {
       enabled = _field<bool>(json, 'enabled'),
       host = _field<String>(json, 'host'),
       port = _field<int>(json, 'port'),
-      protocol = _field<String>(json, 'protocol'),
       error = _field<String>(json, 'error'),
       lastRxAtMs = _optional<int>(json, 'last_rx_at_ms'),
       lastTxAtMs = _optional<int>(json, 'last_tx_at_ms'),
@@ -355,7 +354,7 @@ class PlcStatus {
   final PlcSimulatorStatus? simulator;
   final PlcConnectionState state;
   final bool enabled;
-  final String host, protocol, error;
+  final String host, error;
   final int port;
   final int? lastRxAtMs, lastTxAtMs, productId, pointNumber, hardwareId;
   final List<ProductionEvent> events;

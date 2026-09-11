@@ -7,7 +7,6 @@ import 'package:catcheye_studio/widgets/plc_settings_dialog.dart';
 
 Map<String, dynamic> configuration() => {
   'enabled': false,
-  'protocol': 'inspect_onehot_v2',
   'host': '',
   'port': null,
   'rx_words': null,
@@ -111,6 +110,7 @@ void main() {
       expect(saved['host'], '192.168.1.50');
       expect(saved['port'], 30000);
       expect(saved['enabled'], false);
+      expect(saved.containsKey('protocol'), isFalse);
       expect((saved['rx'] as Map).values.every((value) => value == null), true);
       expect(find.text('PLC 통신 설정'), findsNothing);
     },

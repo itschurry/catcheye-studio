@@ -20,7 +20,7 @@ Inspect는 요청된 포인트를 한 번 판정하며 검사 시작·종료·�
 로봇 이동과 이후 동작은 PLC가 관리합니다. Studio 수동 검증은 PLC 연결을 해제한 상태에서 사용합니다.
 레시피는 Inspect의 state/production에 저장되며 촬영 중에는 적용을 막고 초안 편집은 허용합니다.
 
-PLC 규약은 **inspect_onehot_v2**입니다. 신호 하나는 2바이트의 0/1이고 위치는 0부터 시작합니다.
+PLC는 제품·포인트·하드웨어 ON/OFF 단일 규약을 사용하며 버전을 선택하지 않습니다. 신호 하나는 2바이트의 0/1이고 위치는 0부터 시작합니다.
 입력은 제품별 전용 선택 신호·포인트별 전용 선택 신호·하드웨어 선택 4칸, 출력은 OK·NG·Heartbeat 세 칸입니다.
 제품 5·포인트 2·스터드라면 product_5, point_2, hardware_1을 켭니다. 세 종류가 각각 하나씩 ON이 되면 1회 촬영합니다.
 하드웨어는 0=볼트 머리, 1=스터드, 2=너트, 3=너트 홀이며 해당 포인트 레시피와 일치해야 합니다.
@@ -36,8 +36,10 @@ ON을 계속 유지하면 중복 촬영하지 않습니다. 별도 트리거는 
 
 설정은 촬영 완료 및 PLC 연결 해제 후 저장하며 재시작 없이 적용됩니다. 연결은 별도로 실행합니다.
 운영 설정은 Inspect의 state/production/plc_network.json에 저장합니다.
-**생산 API v3를 지원하는 Inspect가 필요하며 이전 inspect_words_v1·비트 합산형 inspect_signals_v2·별도 트리거형 inspect_onehot_v1 운영 설정은 자동 변환하지 않습니다.**
-서버의 docs/PRODUCTION_RECIPES.md에 있는 업그레이드 절차로 기존 설정을 보관한 뒤 새 신호표를 지정하세요.
+생산 API v3를 지원하는 Inspect가 필요합니다. PLC 설정·상태의 protocol 필드와 저장 JSON의 schema_version은 사용하지 않습니다.
+저장 JSON에는 revision과 config만 포함하며 revision은 동시 저장 충돌 방지에 사용합니다.
+필수 신호 누락·중복 위치·잘못된 값은 오류로 표시합니다. 설정 초기화가 필요하면 서버의 docs/PRODUCTION_RECIPES.md 절차에 따라
+운영 PLC JSON을 삭제하고 새 설치본의 YAML로 시작한 뒤 신호표를 다시 입력하세요. 버전별 보관이나 자동 변환은 하지 않습니다.
 기존 5종 레시피는 보존됩니다. 제품 추가 API는 POST /api/production/products, 촬영 이력은 GET /api/production/captures입니다.
 PLC IP가 서버의 허용 대역 밖이면 관리자 네트워크 설정이 필요합니다.
 

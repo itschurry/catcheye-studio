@@ -103,7 +103,6 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
       if (revision is! int ||
           revision < 0 ||
           config['enabled'] is! bool ||
-          config['protocol'] != 'inspect_onehot_v2' ||
           !{'little', 'big'}.contains(config['byte_order'])) {
         throw const FormatException('지원하지 않는 PLC 설정 응답입니다');
       }
@@ -203,7 +202,6 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
     int? number(String key) => int.tryParse(_fields[key]!.text.trim());
     final config = <String, dynamic>{
       'enabled': _enabled,
-      'protocol': 'inspect_onehot_v2',
       'host': _fields['host']!.text.trim(),
       'port': number('port'),
       'rx_words': number('rx_words'),
@@ -321,7 +319,7 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
                     title: const Text('고급 설정 · 프레임과 신호 매핑'),
                     children: [
                       const Text(
-                        'inspect_onehot_v2 · PLC 프로그램과 동일하게 설정하세요. 신호 위치는 0부터 시작하며 신호 하나는 2바이트의 0/1입니다. 제품·포인트·하드웨어가 각각 하나씩 ON이 되면 1회 촬영합니다. 별도 트리거는 없습니다. 제품 5는 제품 5 선택 신호만 ON입니다. 다음 촬영 전에는 한 종류의 선택을 모두 OFF로 내린 프레임을 보내야 합니다. 예: 하드웨어 전체 OFF → 원하는 하드웨어 하나 ON.',
+                        'PLC 프로그램과 신호표를 동일하게 설정하세요. 신호 위치는 0부터 시작하며 신호 하나는 2바이트의 0/1입니다. 제품·포인트·하드웨어가 각각 하나씩 ON이 되면 1회 촬영합니다. 별도 트리거는 없습니다. 제품 5는 제품 5 선택 신호만 ON입니다. 다음 촬영 전에는 한 종류의 선택을 모두 OFF로 내린 프레임을 보내야 합니다. 예: 하드웨어 전체 OFF → 원하는 하드웨어 하나 ON.',
                       ),
                       const SizedBox(height: 12),
                       _numberField(

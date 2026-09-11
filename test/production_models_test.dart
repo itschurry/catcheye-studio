@@ -36,7 +36,7 @@ Map<String, dynamic> captureJson({
         as Map<String, dynamic>;
 Map<String, dynamic> plcJson() =>
     jsonDecode(
-          '''{"state":"DISABLED","enabled":false,"host":"","port":0,"protocol":"inspect_onehot_v2","error":"","events":[],"rx_map":{},"tx_map":{}}''',
+          '''{"state":"DISABLED","enabled":false,"host":"","port":0,"error":"","events":[],"rx_map":{},"tx_map":{}}''',
         )
         as Map<String, dynamic>;
 

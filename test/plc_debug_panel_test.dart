@@ -52,7 +52,6 @@ Map<String, dynamic> debugStatus({
     'enabled': true,
     'host': source == 'simulator' ? '127.0.0.1' : '192.168.1.50',
     'port': 2500,
-    'protocol': 'inspect_onehot_v2',
     'error': '',
     'events': [],
     'rx_map': <String, dynamic>{},
