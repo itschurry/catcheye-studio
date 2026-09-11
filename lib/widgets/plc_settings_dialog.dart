@@ -30,7 +30,68 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
     'tx': {'ok': 'OK', 'ng': 'NG', 'heartbeat': 'Heartbeat'},
   };
   final _selectionNumber = TextEditingController();
+  final _productCount = TextEditingController();
+  final _pointCount = TextEditingController();
+  final _advanced = ExpansibleController();
+  int _requiredProducts = 0;
+  int _requiredPoints = 0;
+  bool _generated = false;
   String _selectionKind = 'product';
+
+  int? get _products => int.tryParse(_productCount.text.trim());
+  int? get _points => int.tryParse(_pointCount.text.trim());
+  bool get _countsValid =>
+      _products != null &&
+      _products! >= _requiredProducts &&
+      _products! >= 1 &&
+      _products! <= 255 &&
+      _points != null &&
+      _points! >= _requiredPoints &&
+      _points! >= 1 &&
+      _points! <= 200;
+
+  bool get _missingRecipeSignals => [
+    for (var i = 1; i <= _requiredProducts; i++) 'product_$i',
+    for (var i = 1; i <= _requiredPoints; i++) 'point_$i',
+  ].any((name) => int.tryParse(_fields['rx.$name']?.text ?? '') == null);
+
+  void _generateSignals() {
+    if (!widget.canSave()) {
+      setState(() => _error = '촬영이 끝나고 PLC 연결을 해제한 뒤 신호표를 생성하세요.');
+      return;
+    }
+    if (!_countsValid) return;
+    final rx = <String, String>{
+      for (var i = 1; i <= _products!; i++) 'product_$i': '제품 $i 선택',
+      for (var i = 1; i <= _points!; i++) 'point_$i': '포인트 $i 선택',
+      'hardware_0': '볼트 머리 선택 (0)',
+      'hardware_1': '스터드 선택 (1)',
+      'hardware_2': '너트 선택 (2)',
+      'hardware_3': '너트 홀 선택 (3)',
+    };
+    final removed = <TextEditingController>[];
+    for (final name in signals['rx']!.keys) {
+      if (!rx.containsKey(name)) removed.add(_fields.remove('rx.$name')!);
+    }
+    signals['rx'] = rx;
+    for (final direction in signals.entries) {
+      var index = 0;
+      for (final name in direction.value.keys) {
+        (_fields['${direction.key}.$name'] ??= TextEditingController()).text =
+            '${index++}';
+      }
+      _fields['${direction.key}_words']!.text = '$index';
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final controller in removed) {
+        controller.dispose();
+      }
+    });
+    setState(() {
+      _generated = true;
+      _error = null;
+    });
+  }
 
   String _selectionLabel(String name) {
     final match = RegExp(
@@ -60,6 +121,7 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
       signals['rx']![name] = _selectionLabel(name);
       // New locations must be assigned explicitly; existing offsets never shift.
       _fields['rx.$name'] = TextEditingController();
+      _generated = false;
       _error = null;
     });
   }
@@ -84,6 +146,9 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
       field.dispose();
     }
     _selectionNumber.dispose();
+    _productCount.dispose();
+    _pointCount.dispose();
+    _advanced.dispose();
     super.dispose();
   }
 
@@ -98,6 +163,15 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
         'GET',
         'plc/config',
       );
+      final catalog = await widget.api.recipes(widget.settings);
+      var requiredPoints = 0;
+      for (final product in catalog.products) {
+        for (final recipe in [product.draft, product.active]) {
+          if (recipe != null && recipe.points.length > requiredPoints) {
+            requiredPoints = recipe.points.length;
+          }
+        }
+      }
       final revision = response['revision'];
       final config = productionObject(response['config']);
       if (revision is! int ||
@@ -149,6 +223,19 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
         }
       }
       setState(() {
+        _requiredProducts = catalog.products.length;
+        _requiredPoints = requiredPoints;
+        // Preserve reserved capacity in the suggestion; never renumber on load.
+        var products = _requiredProducts;
+        var points = _requiredPoints;
+        for (final name in rx.keys) {
+          final id = int.parse(name.split('_').last);
+          if (name.startsWith('product_') && id > products) products = id;
+          if (name.startsWith('point_') && id > points) points = id;
+        }
+        _productCount.text = '$products';
+        _pointCount.text = points == 0 ? '' : '$points';
+        _generated = false;
         _revision = revision;
         _enabled = config['enabled'] as bool;
         _order = config['byte_order'] as String;
@@ -182,6 +269,7 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
       keyboardType: TextInputType.number,
       decoration: InputDecoration(labelText: label),
       validator: (text) => _number(text, low, high, required: required),
+      onChanged: (_) => setState(() => _generated = false),
     ),
   );
 
@@ -192,7 +280,10 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
       );
       return;
     }
-    if (!_form.currentState!.validate()) return;
+    if (!_form.currentState!.validate()) {
+      _advanced.expand();
+      return;
+    }
     if (_enabled &&
         (!signals['rx']!.keys.any((name) => name.startsWith('product_')) ||
             !signals['rx']!.keys.any((name) => name.startsWith('point_')))) {
@@ -249,6 +340,111 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
       if (mounted) setState(() => _busy = false);
     }
   }
+
+  Widget _signalGenerator() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text('신호표 자동 생성', style: Theme.of(context).textTheme.titleMedium),
+      const SizedBox(height: 8),
+      Text('저장된 레시피 기준: 제품 $_requiredProducts종 · 최대 $_requiredPoints포인트'),
+      const Text(
+        '제품마다 포인트 수가 달라도 포인트 신호는 공통으로 사용합니다. 초안·적용 레시피의 최대 개수 이상으로 여유를 둘 수 있습니다.',
+      ),
+      if (_missingRecipeSignals)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Text('레시피에 필요한 선택 신호 위치가 부족합니다. 신호표를 생성하거나 고급 설정에서 추가하세요.'),
+        ),
+      const SizedBox(height: 12),
+      Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          for (final item in [
+            (
+              _productCount,
+              '제품 수',
+              'auto-product-count',
+              '$_requiredProducts~255',
+            ),
+            (
+              _pointCount,
+              '최대 촬영 포인트 수',
+              'auto-point-count',
+              '${_requiredPoints == 0 ? 1 : _requiredPoints}~200',
+            ),
+          ])
+            SizedBox(
+              width: 220,
+              child: TextField(
+                key: ValueKey(item.$3),
+                controller: item.$1,
+                enabled: !_busy,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: item.$2,
+                  helperText: '${item.$4}개',
+                ),
+                onChanged: (_) => setState(() => _generated = false),
+              ),
+            ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      const Text('하드웨어 4종: 볼트 머리(0) · 스터드(1) · 너트(2) · 너트 홀(3)'),
+      const SizedBox(height: 12),
+      if (_countsValid) ...[
+        const Text('생성할 신호표 미리보기 · 위치는 0부터 시작'),
+        const SizedBox(height: 8),
+        Table(
+          columnWidths: const {0: FlexColumnWidth(2), 1: FlexColumnWidth(3)},
+          children: [
+            for (final row in [
+              ('신호', '배정 위치'),
+              ('제품 1~$_products', '0~${_products! - 1}'),
+              ('포인트 1~$_points', '$_products~${_products! + _points! - 1}'),
+              (
+                '하드웨어 0~3',
+                '${_products! + _points!}~${_products! + _points! + 3}',
+              ),
+              ('결과 출력', 'OK=0 · NG=1 · Heartbeat=2'),
+            ])
+              TableRow(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Text(row.$1),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Text(row.$2),
+                  ),
+                ],
+              ),
+          ],
+        ),
+        Text('수신 ${_products! + _points! + 4}워드 · 송신 3워드 (1워드 = 2바이트)'),
+      ] else
+        const Text('레시피에 필요한 개수 이상의 정수를 입력하세요. 제품은 최대 255종, 포인트는 1~200개입니다.'),
+      const SizedBox(height: 12),
+      const Text(
+        '개수 입력만으로 기존 신호표가 바뀌지 않습니다. 생성하면 모든 수신·송신 위치와 워드 수를 위 표로 교체합니다. PLC 쪽 신호표도 함께 맞추세요.',
+      ),
+      const SizedBox(height: 8),
+      OutlinedButton.icon(
+        key: const ValueKey('generate-signal-map'),
+        onPressed: _busy || !_countsValid ? null : _generateSignals,
+        icon: const Icon(Icons.auto_fix_high),
+        label: const Text('신호표 생성 · 편집에 반영'),
+      ),
+      if (_generated)
+        const Text('신호표를 편집에 반영했습니다. 아래 저장 및 적용을 눌러 Inspect에 저장하세요.'),
+      Text(
+        '현재 편집값: 수신 ${_fields['rx_words']!.text.isEmpty ? '미설정' : _fields['rx_words']!.text}워드 · 송신 ${_fields['tx_words']!.text.isEmpty ? '미설정' : _fields['tx_words']!.text}워드',
+      ),
+      const SizedBox(height: 12),
+    ],
+  );
 
   @override
   Widget build(BuildContext context) => PopScope(
@@ -313,8 +509,10 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
                   ),
                   const SizedBox(height: 12),
                   _numberField('port', 'PLC 포트', 1, 65535),
+                  _signalGenerator(),
                   ExpansionTile(
-                    initiallyExpanded: true,
+                    controller: _advanced,
+                    maintainState: true,
                     tilePadding: EdgeInsets.zero,
                     title: const Text('고급 설정 · 프레임과 신호 매핑'),
                     children: [
@@ -372,6 +570,7 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
                         const SizedBox(height: 12),
                         for (final signal in direction.value.entries)
                           Row(
+                            key: ValueKey('${direction.key}.${signal.key}'),
                             children: [
                               Expanded(
                                 child: _numberField(
@@ -391,6 +590,7 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
                                       ? null
                                       : () => setState(() {
                                           signals['rx']!.remove(signal.key);
+                                          _generated = false;
                                           // Controllers are disposed after the old field leaves the widget tree.
                                           final controller = _fields.remove(
                                             'rx.${signal.key}',
