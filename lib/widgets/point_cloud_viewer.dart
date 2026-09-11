@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/frame_receiver_service.dart';
 
@@ -129,7 +130,9 @@ class _PointCloudViewerState extends State<PointCloudViewer> {
   Widget build(BuildContext context) {
     return Listener(
       onPointerSignal: (event) {
-        if (event is! PointerScrollEvent) {
+        if (event is! PointerScrollEvent ||
+            !HardwareKeyboard.instance.isControlPressed ||
+            event.scrollDelta.dy == 0) {
           return;
         }
         final delta = event.scrollDelta.dy < 0 ? 1.08 : 0.92;

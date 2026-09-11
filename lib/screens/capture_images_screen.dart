@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/settings_provider.dart';
 import '../widgets/capture_storage_summary.dart';
+import '../widgets/ctrl_zoom_viewer.dart';
 
 class CaptureImagesScreen extends StatefulWidget {
   const CaptureImagesScreen({super.key, this.isPhone = false});
@@ -301,7 +302,7 @@ class _CaptureImagesScreenState extends State<CaptureImagesScreen> {
         Positioned.fill(
           child: Container(
             color: const Color(0xFF101010),
-            child: InteractiveViewer(
+            child: CtrlZoomViewer(
               transformationController: _transformController,
               minScale: 0.25,
               maxScale: 8,

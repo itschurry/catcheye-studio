@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'ctrl_zoom_viewer.dart';
+
 /// Transforms the image and its overlays together, preserving child coordinates.
 class ZoomableViewport extends StatefulWidget {
   const ZoomableViewport({
@@ -43,12 +45,11 @@ class _ZoomableViewportState extends State<ZoomableViewport> {
       builder: (context, constraints) => Stack(
         fit: StackFit.expand,
         children: [
-          InteractiveViewer(
+          CtrlZoomViewer(
             transformationController: _transform,
             minScale: 1,
             maxScale: 16,
             panEnabled: !widget.editable || _moveMode,
-            trackpadScrollCausesScale: true,
             child: IgnorePointer(
               ignoring: widget.editable && _moveMode,
               child: widget.child,

@@ -1,16 +1,20 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:catcheye_studio/models/roi_config.dart';
+import 'package:catcheye_studio/models/viewer_frame.dart';
 import 'package:catcheye_studio/providers/roi_config_provider.dart';
 import 'package:catcheye_studio/screens/reference_images_screen.dart';
 import 'package:catcheye_studio/services/remote_reference_api_service.dart';
 import 'package:catcheye_studio/widgets/roi_editor_canvas.dart';
 import 'package:catcheye_studio/widgets/zoomable_viewport.dart';
+import 'package:catcheye_studio/widgets/point_cloud_viewer.dart';
 
 Widget host(Widget child) => MaterialApp(
   home: Scaffold(
@@ -36,7 +40,7 @@ TransformationController controller(WidgetTester tester) => tester
     .transformationController!;
 
 void main() {
-  testWidgets('wheel anchors zoom at cursor, keeps live updates, and resets', (
+  testWidgets('Ctrl+wheel anchors zoom, keeps live updates, and resets', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -45,6 +49,8 @@ void main() {
     final origin = tester.getTopLeft(find.byType(InteractiveViewer));
     const focal = Offset(120, 80);
     final before = controller(tester).toScene(focal);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
     await tester.sendEventToBinding(
       PointerScrollEvent(
         position: origin + focal,
@@ -53,6 +59,7 @@ void main() {
       ),
     );
     await tester.pump();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     expect(controller(tester).value.getMaxScaleOnAxis(), greaterThan(1));
     expect(
       (controller(tester).toScene(focal) - before).distance,
@@ -66,6 +73,158 @@ void main() {
     await tester.tap(find.byType(TextButton));
     await tester.pump();
     expect(controller(tester).value, Matrix4.identity());
+  });
+
+  for (final kind in [PointerDeviceKind.mouse, PointerDeviceKind.trackpad]) {
+    for (final key in [
+      LogicalKeyboardKey.controlLeft,
+      LogicalKeyboardKey.controlRight,
+    ]) {
+      testWidgets('$kind zoom requires $key and stops on release', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          host(const ZoomableViewport(child: ColoredBox(color: Colors.red))),
+        );
+        Future<void> wheel(double delta) async {
+          await tester.sendEventToBinding(
+            PointerScrollEvent(
+              position: tester.getCenter(find.byType(InteractiveViewer)),
+              scrollDelta: Offset(0, delta),
+              kind: kind,
+            ),
+          );
+          await tester.pump();
+        }
+
+        await wheel(-120);
+        expect(controller(tester).value, Matrix4.identity());
+        await tester.sendKeyDownEvent(key);
+        await tester.pump();
+        await wheel(-120);
+        final zoomed = controller(tester).value.getMaxScaleOnAxis();
+        expect(zoomed, greaterThan(1));
+        await wheel(40);
+        expect(controller(tester).value.getMaxScaleOnAxis(), lessThan(zoomed));
+        await tester.sendKeyUpEvent(key);
+        await tester.pump();
+        final matrix = controller(tester).value.clone();
+        await wheel(120);
+        expect(controller(tester).value, matrix);
+      });
+    }
+  }
+
+  testWidgets('plain wheel scrolls page and Ctrl+wheel only zooms image', (
+    tester,
+  ) async {
+    final scroll = ScrollController();
+    await tester.pumpWidget(
+      host(
+        SingleChildScrollView(
+          controller: scroll,
+          child: const Column(
+            children: [
+              SizedBox(
+                height: 300,
+                child: ZoomableViewport(child: ColoredBox(color: Colors.red)),
+              ),
+              SizedBox(height: 800),
+            ],
+          ),
+        ),
+      ),
+    );
+    Future<void> wheel(double delta) async {
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          position: tester.getCenter(find.byType(InteractiveViewer)),
+          scrollDelta: Offset(0, delta),
+          kind: PointerDeviceKind.mouse,
+        ),
+      );
+      await tester.pump();
+    }
+
+    await wheel(60);
+    expect(scroll.offset, 60);
+    expect(controller(tester).value, Matrix4.identity());
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    await wheel(-120);
+    expect(scroll.offset, 60);
+    expect(controller(tester).value.getMaxScaleOnAxis(), greaterThan(1));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpWidget(const SizedBox());
+    scroll.dispose();
+  });
+
+  testWidgets('touch pinch still zooms without Ctrl', (tester) async {
+    await tester.pumpWidget(
+      host(const ZoomableViewport(child: ColoredBox(color: Colors.red))),
+    );
+    final center = tester.getCenter(find.byType(InteractiveViewer));
+    final first = await tester.startGesture(
+      center - const Offset(40, 0),
+      pointer: 1,
+    );
+    final second = await tester.startGesture(
+      center + const Offset(40, 0),
+      pointer: 2,
+    );
+    await tester.pump();
+    await first.moveTo(center - const Offset(60, 0));
+    await second.moveTo(center + const Offset(60, 0));
+    await tester.pump();
+    await first.moveTo(center - const Offset(90, 0));
+    await second.moveTo(center + const Offset(90, 0));
+    await tester.pump();
+    expect(controller(tester).value.getMaxScaleOnAxis(), greaterThan(1));
+    await first.up();
+    await second.up();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('point cloud wheel also requires Ctrl', (tester) async {
+    final zooms = <double>[];
+    await tester.pumpWidget(
+      host(
+        PointCloudViewer(
+          data: PointCloudData(
+            xyz: Float32List(0),
+            pointCount: 0,
+            minZ: 0,
+            maxZ: 1,
+          ),
+          pointSize: 2,
+          showAxis: false,
+          axisScale: 1,
+          minDepth: 0,
+          maxDepth: 1,
+          yaw: 0,
+          pitch: 0,
+          zoom: 1,
+          panOffset: Offset.zero,
+          palette: PointCloudPalette.depth,
+          onZoomChanged: zooms.add,
+        ),
+      ),
+    );
+    Future<void> wheel() => tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(find.byType(PointCloudViewer)),
+        scrollDelta: const Offset(0, -120),
+        kind: PointerDeviceKind.mouse,
+      ),
+    );
+    await wheel();
+    expect(zooms, isEmpty);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await wheel();
+    expect(zooms, [1.08]);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await wheel();
+    expect(zooms, [1.08]);
   });
 
   testWidgets(
