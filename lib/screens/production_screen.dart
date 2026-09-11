@@ -25,8 +25,8 @@ class _ProductionScreenState extends State<ProductionScreen> {
   final _name = TextEditingController();
   final _scroll = ScrollController();
   RecipeCatalog? _catalog;
-  Map<String, dynamic>? _status;
-  List<Map<String, dynamic>> _history = [];
+  ProductionStatus? _status;
+  List<ProductionSession> _history = [];
   List<RecipePoint> _points = [];
   int _product = 1;
   int _tab = 0;
@@ -43,12 +43,8 @@ class _ProductionScreenState extends State<ProductionScreen> {
 
   AppSettings get _settings => context.read<SettingsProvider>().settings;
   RecipeSlot? get _slot => _catalog?.products[_product - 1];
-  Map<String, dynamic>? get _session => _status?['session'] == null
-      ? null
-      : productionObject(_status!['session']);
-  bool get _active =>
-      _session != null &&
-      !{'COMPLETED', 'ABORTED'}.contains(_session!['state']);
+  ProductionSession? get _session => _status?.session;
+  bool get _active => _session?.active == true;
 
   @override
   void didChangeDependencies() {
@@ -64,11 +60,12 @@ class _ProductionScreenState extends State<ProductionScreen> {
       _generation++;
       _catalog = null;
       _status = null;
+      _history = [];
       _fresh = false;
       _points = [];
       _name.clear();
       _dirty = false;
-      if (changed) _error = '연결 장비가 바뀌어 이전 장비의 편집 내용을 닫았어.';
+      if (changed) _error = '연결 장비가 바뀌어 이전 장비의 편집 내용을 닫았습니다.';
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_reload());
       });
@@ -116,7 +113,7 @@ class _ProductionScreenState extends State<ProductionScreen> {
         _updatedAt = DateTime.now();
         if (!_dirty) _loadEditor();
         _error = conflict
-            ? '서버 초안이 다른 곳에서 변경됐어. 현재 편집의 기준 버전은 유지했어. 서버 초안을 다시 불러온 뒤 편집해.'
+            ? '서버 초안이 다른 곳에서 변경되었습니다. 현재 편집의 기준 버전은 유지했습니다. 서버 초안을 다시 불러온 뒤 편집해 주세요.'
             : null;
       });
     } catch (error) {
@@ -166,8 +163,8 @@ class _ProductionScreenState extends State<ProductionScreen> {
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('저장하지 않은 변경이 있어'),
-            content: const Text('변경 내용을 버리고 이동할까?'),
+            title: const Text('저장하지 않은 변경이 있습니다'),
+            content: const Text('변경 내용을 버리고 이동하시겠습니까?'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -205,7 +202,7 @@ class _ProductionScreenState extends State<ProductionScreen> {
       if (mounted && generation == _generation) {
         setState(() {
           _error = error is TimeoutException
-              ? '응답 시간이 초과됐어. 요청은 자동 반복하지 않아. 상태를 새로고침해서 접수 여부를 확인해.'
+              ? '응답 시간이 초과되었습니다. 요청은 자동 반복하지 않습니다. 상태를 새로고침해서 접수 여부를 확인해 주세요.'
               : '$error';
           _fresh = false;
         });
@@ -253,17 +250,18 @@ class _ProductionScreenState extends State<ProductionScreen> {
       action,
       values: {
         ...values,
-        'control_epoch': _status!['control_epoch'],
-        if (action != 'start') 'session_id': _session!['session_id'],
+        'control_epoch': _status!.controlEpoch,
+        if (action != 'start') 'session_id': _session!.id,
       },
     );
     if (mounted && generation == _generation) {
       setState(() {
-        _status = {...?_status, 'session': response['session']};
+        _status = _status!.withSession(response);
       });
     }
   });
   Future<void> _editPoint([int? index]) async {
+    final generation = _generation;
     final point = await showDialog<RecipePoint>(
       context: context,
       builder: (context) => _PointEditor(
@@ -271,7 +269,7 @@ class _ProductionScreenState extends State<ProductionScreen> {
         defaults: _catalog!.defaults,
       ),
     );
-    if (!mounted || point == null) return;
+    if (!mounted || generation != _generation || point == null) return;
     setState(() {
       if (index == null) {
         _points.add(point);
@@ -348,7 +346,7 @@ class _ProductionScreenState extends State<ProductionScreen> {
                     child: Text(
                       _busy
                           ? 'Inspect에서 레시피를 읽는 중…'
-                          : '레시피를 불러올 수 없어. Inspect API와 연결 설정을 확인해.',
+                          : '레시피를 불러올 수 없습니다. Inspect API와 연결 설정을 확인해 주세요.',
                     ),
                   )
                 : switch (_tab) {
@@ -398,7 +396,7 @@ class _ProductionScreenState extends State<ProductionScreen> {
       ),
       const SizedBox(height: 8),
       const Text(
-        '목록 순서가 로봇 촬영 순서야. 기대 개수를 비워 두면 초안으로 저장할 수 있지만 생산 검사에는 적용할 수 없어.',
+        '목록 순서가 로봇 촬영 순서입니다. 기대 개수를 비워 두면 초안으로 저장할 수 있지만 생산 검사에는 적용할 수 없습니다.',
       ),
       const SizedBox(height: 12),
       for (var i = 0; i < _points.length; i++)
@@ -484,7 +482,7 @@ class _ProductionScreenState extends State<ProductionScreen> {
       if (_points.isEmpty)
         const Padding(
           padding: EdgeInsets.all(24),
-          child: Text('등록된 촬영 포인트가 없어. 현장에서 정한 순서대로 추가해.'),
+          child: Text('등록된 촬영 포인트가 없습니다. 현장에서 정한 순서대로 추가해 주세요.'),
         ),
       Wrap(
         spacing: 12,
@@ -529,26 +527,23 @@ class _ProductionScreenState extends State<ProductionScreen> {
       if (_active)
         const Padding(
           padding: EdgeInsets.only(top: 8),
-          child: Text('제품 검사 중에는 레시피를 적용할 수 없어. 초안 편집·저장은 가능해.'),
+          child: Text('제품 검사 중에는 레시피를 적용할 수 없습니다. 초안 편집·저장은 가능합니다.'),
         ),
     ],
   );
 
   Widget _operation() {
     final session = _session;
-    final manual = !_active || session?['origin'] == 'studio';
     final enabled = !_busy && _fresh;
-    final points = session == null
-        ? <dynamic>[]
-        : productionObject(session['recipe'])['points'] as List;
-    final results = session?['results'] as List? ?? [];
-    final step = session?['step'] as int? ?? 0;
-    final next = step < points.length ? productionObject(points[step]) : null;
+    final points = session?.recipe.points ?? const <RecipePoint>[];
+    final results = session?.results ?? const <ProductionResult>[];
+    final step = session?.step ?? 0;
+    final next = session?.nextPoint;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         const Text(
-          'Studio 수동 검증은 실제 카메라를 촬영해. PLC에서 시작한 검사 회차는 여기서 촬영·종료할 수 없어.',
+          'Studio 수동 검증은 실제 카메라로 촬영합니다. PLC에서 시작한 검사 회차는 여기서 촬영·종료할 수 없습니다.',
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -569,38 +564,34 @@ class _ProductionScreenState extends State<ProductionScreen> {
         if (session != null) ...[
           const SizedBox(height: 20),
           Text(
-            '${productionObject(session['recipe'])['name']} · ${session['state']} · 판정 ${session['status']}',
+            '${session.recipe.name} · ${session.state.code} · 판정 ${session.status}',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           SelectableText(
-            '회차 ${session['session_id']} · 레시피 v${session['recipe_revision']} · 제어 ${session['origin']}',
+            '회차 ${session.id} · 레시피 v${session.recipeRevision} · 제어 ${session.origin}',
           ),
           Text(
             '촬영 접수 $step / ${points.length} · 완료 ${results.length} / ${points.length}',
           ),
-          if ((session['error'] as String? ?? '').isNotEmpty)
-            Text(
-              '${session['error']}',
-              style: const TextStyle(color: Colors.orange),
-            ),
+          if (session.error.isNotEmpty)
+            Text(session.error, style: const TextStyle(color: Colors.orange)),
           const SizedBox(height: 12),
           for (var i = 0; i < points.length; i++)
             Card(
               child: ListTile(
                 title: Text(
-                  '${i + 1}. ${productionObject(points[i])['name']} · ${inspectionLabels[productionObject(points[i])['inspection_id']]}',
+                  '${i + 1}. ${points[i].name} · ${inspectionLabels[points[i].inspectionId]}',
                 ),
                 subtitle: Text(
                   i < results.length
-                      ? _resultSummary(productionObject(results[i]))
+                      ? _resultSummary(results[i])
                       : i < step
                       ? '촬영·판정 중'
                       : '대기',
                 ),
                 trailing: i < results.length
                     ? TextButton(
-                        onPressed: () =>
-                            _showResult(productionObject(results[i])),
+                        onPressed: () => _showResult(results[i]),
                         child: const Text('이미지·사유'),
                       )
                     : null,
@@ -611,51 +602,33 @@ class _ProductionScreenState extends State<ProductionScreen> {
             runSpacing: 8,
             children: [
               FilledButton(
-                onPressed:
-                    enabled &&
-                        manual &&
-                        session['state'] == 'READY' &&
-                        next != null
+                onPressed: enabled && session.canCapture
                     ? () => _command('capture', {
-                        'inspection_id': next['inspection_id'],
+                        'inspection_id': next!.inspectionId,
                       })
                     : null,
                 child: Text(
                   next == null
                       ? '촬영 완료'
-                      : '${step + 1}번 ${inspectionLabels[next['inspection_id']]} 촬영',
+                      : '${step + 1}번 ${inspectionLabels[next.inspectionId]} 촬영',
                 ),
               ),
               OutlinedButton(
-                onPressed:
-                    enabled &&
-                        manual &&
-                        {
-                          'WAITING_ACK',
-                          'WAITING_FINAL_ACK',
-                        }.contains(session['state'])
+                onPressed: enabled && session.canAcknowledge
                     ? () => _command('ack', {
-                        'result_request_id': session['result_request_id'],
+                        'result_request_id': session.resultRequestId,
                       })
                     : null,
                 child: const Text('결과 수신 확인'),
               ),
               FilledButton.tonal(
-                onPressed:
-                    enabled &&
-                        manual &&
-                        session['state'] == 'READY' &&
-                        results.length == points.length
+                onPressed: enabled && session.canEnd
                     ? () => _command('end')
                     : null,
                 child: const Text('검사 종료·전체 판정'),
               ),
               OutlinedButton(
-                onPressed:
-                    enabled &&
-                        _active &&
-                        session['pending_cycle_id'] == null &&
-                        (manual || session['state'] == 'FAULT')
+                onPressed: enabled && session.canAbort
                     ? () => _command('abort')
                     : null,
                 child: const Text('검사 중단'),
@@ -670,18 +643,10 @@ class _ProductionScreenState extends State<ProductionScreen> {
             onPressed: _busy
                 ? null
                 : () => _act(() async {
-                    final result = await _api.request(
-                      _settings,
-                      'GET',
-                      'sessions',
-                    );
-                    if (mounted) {
-                      setState(
-                        () => _history = [
-                          for (final entry in result['sessions'] as List)
-                            productionObject(entry),
-                        ],
-                      );
+                    final generation = _generation;
+                    final history = await _api.sessions(_settings);
+                    if (mounted && generation == _generation) {
+                      setState(() => _history = history);
                     }
                   }),
             child: const Text('최근 제품 검사 이력 100건 조회'),
@@ -690,17 +655,15 @@ class _ProductionScreenState extends State<ProductionScreen> {
         for (final record in _history)
           ExpansionTile(
             title: Text(
-              '${record['product_id']} · ${productionObject(record['recipe'])['name']} · ${record['state']} / ${record['status']}',
+              '${record.productId} · ${record.recipe.name} · ${record.state.code} / ${record.status}',
             ),
-            subtitle: Text(
-              '${record['session_id']} · 레시피 v${record['recipe_revision']}',
-            ),
+            subtitle: Text('${record.id} · 레시피 v${record.recipeRevision}'),
             children: [
-              for (final result in record['results'] as List)
+              for (final result in record.results)
                 ListTile(
-                  title: Text(_resultSummary(productionObject(result))),
+                  title: Text(_resultSummary(result)),
                   trailing: TextButton(
-                    onPressed: () => _showResult(productionObject(result)),
+                    onPressed: () => _showResult(result),
                     child: const Text('이미지·사유'),
                   ),
                 ),
@@ -710,16 +673,11 @@ class _ProductionScreenState extends State<ProductionScreen> {
     );
   }
 
-  String _resultSummary(Map<String, dynamic> result) {
-    final inspections = productionObject(result['inspections']);
-    return '${result['status']} · ${inspections.values.map((v) {
-      final inspection = productionObject(v);
-      return '기대 ${inspection['expected_count']} / 검출 ${inspection['present_count']} · ${inspection['reason']}';
-    }).join(' / ')}';
-  }
+  String _resultSummary(ProductionResult result) =>
+      '${result.capture.status} · ${result.summaries.map((inspection) => '기대 ${inspection.expectedCount} / 검출 ${inspection.presentCount} · ${inspection.reason}').join(' / ')}';
 
-  void _showResult(Map<String, dynamic> raw) {
-    final result = StationCaptureResult.fromJson(raw);
+  void _showResult(ProductionResult record) {
+    final result = record.capture;
     showDialog<void>(
       context: context,
       builder: (context) => Dialog(
@@ -729,19 +687,21 @@ class _ProductionScreenState extends State<ProductionScreen> {
           child: Column(
             children: [
               ListTile(
-                title: Text(_resultSummary(raw)),
+                title: Text(_resultSummary(record)),
                 trailing: IconButton(
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.close),
                 ),
               ),
               Expanded(
-                child: StationInspectionImage(
-                  result: result,
-                  inspection: result.inspections.values.first,
-                  api: _captureApi,
-                  archived: true,
-                ),
+                child: result.inspections.isEmpty
+                    ? const Center(child: Text('이 결과에는 검사 이미지 정보가 없습니다.'))
+                    : StationInspectionImage(
+                        result: result,
+                        inspection: result.inspections.values.first,
+                        api: _captureApi,
+                        archived: true,
+                      ),
               ),
             ],
           ),
@@ -751,59 +711,45 @@ class _ProductionScreenState extends State<ProductionScreen> {
   }
 
   Widget _diagnostics() {
-    final plc = _status?['plc'] == null
-        ? null
-        : productionObject(_status!['plc']);
-    final events =
-        [
-            ...?_status?['events'] as List?,
-            ...?plc?['events'] as List?,
-          ].map(productionObject).toList()
-          ..sort((a, b) => (b['at_ms'] as int).compareTo(a['at_ms'] as int));
-    final live = _fresh && plc?['state'] == 'CONNECTED';
+    final plc = _status?.plc;
+    final events = [...?_status?.events, ...?plc?.events]
+      ..sort((a, b) => b.atMs.compareTo(a.atMs));
+    final live = _fresh && plc?.state == PlcConnectionState.connected;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         Text(
-          _fresh ? 'PLC ${plc?['state'] ?? '미설정'}' : 'PLC 상태 확인 불가',
+          _fresh ? 'PLC ${plc?.state.code ?? '미설정'}' : 'PLC 상태 확인 불가',
           style: Theme.of(context).textTheme.titleLarge,
         ),
         const SizedBox(height: 8),
         Text(
-          '주소 ${plc?['host'] ?? ''}:${plc?['port'] ?? ''} · 프로토콜 ${plc?['protocol'] ?? ''}',
+          '주소 ${plc?.host ?? ''}:${plc?.port ?? ''} · 프로토콜 ${plc?.protocol ?? ''}',
         ),
         Text(
-          '최근 수신 ${_millis(plc?['last_rx_at_ms'])} / 송신 ${_millis(plc?['last_tx_at_ms'])}',
+          '최근 수신 ${_millis(plc?.lastRxAtMs)} / 송신 ${_millis(plc?.lastTxAtMs)}',
         ),
         Text(
           live
-              ? (plc?['result_acknowledged'] == true
+              ? (plc?.resultAcknowledged == true
                     ? 'PLC 결과 수신 확인됨'
                     : '현재 결과의 PLC 수신 확인 없음')
-              : '통신 상태가 유효하지 않아 결과 수신 확인을 보장할 수 없어.',
+              : '통신 상태가 유효하지 않아 결과 수신 확인을 보장할 수 없습니다.',
         ),
-        if (plc?['enabled'] == false)
-          const Text('현장 IP·포트·신호표가 미설정이어서 PLC 연결은 비활성이야.'),
-        if ((plc?['error'] as String? ?? '').isNotEmpty)
+        if (plc?.enabled == false)
+          const Text('현장 IP·포트·신호표가 미설정이어서 PLC 연결은 비활성 상태입니다.'),
+        if ((plc?.error ?? '').isNotEmpty)
           SelectableText(
-            '${plc!['error']}',
+            plc!.error,
             style: const TextStyle(color: Colors.orange),
           ),
-        if ((_status?['error'] as String? ?? '').isNotEmpty)
-          SelectableText('Inspect 오류: ${_status!['error']}'),
+        if ((_status?.error ?? '').isNotEmpty)
+          SelectableText('Inspect 오류: ${_status!.error}'),
         Wrap(
           spacing: 8,
           children: [
             OutlinedButton(
-              onPressed:
-                  !_busy &&
-                      _fresh &&
-                      plc?['enabled'] == true &&
-                      !{
-                        'CONNECTED',
-                        'CONNECTING',
-                        'WAITING_IDLE',
-                      }.contains(plc?['state'])
+              onPressed: !_busy && _fresh && plc?.canConnect == true
                   ? () => _act(() async {
                       await _api.request(_settings, 'POST', 'plc/connect');
                     })
@@ -811,14 +757,7 @@ class _ProductionScreenState extends State<ProductionScreen> {
               child: const Text('PLC 연결'),
             ),
             OutlinedButton(
-              onPressed:
-                  !_busy &&
-                      _fresh &&
-                      {
-                        'CONNECTED',
-                        'CONNECTING',
-                        'WAITING_IDLE',
-                      }.contains(plc?['state'])
+              onPressed: !_busy && _fresh && plc?.canDisconnect == true
                   ? () => _act(() async {
                       await _api.request(_settings, 'POST', 'plc/disconnect');
                     })
@@ -835,15 +774,12 @@ class _ProductionScreenState extends State<ProductionScreen> {
             ),
             children: [
               for (final entry
-                  in (plc?['${direction}_map'] == null
-                          ? <String, dynamic>{}
-                          : productionObject(plc!['${direction}_map']))
-                      .entries)
+                  in (plc?.mapping(direction) ?? const <String, int>{}).entries)
                 ListTile(
                   dense: true,
                   title: Text(entry.key),
                   subtitle: Text('워드 ${entry.value}'),
-                  trailing: Text(_word(plc, direction, entry.value as int)),
+                  trailing: Text(_word(plc, direction, entry.value)),
                 ),
             ],
           ),
@@ -852,23 +788,21 @@ class _ProductionScreenState extends State<ProductionScreen> {
           '요청 수신 → 접수/거부 → 검사 완료 → 결과 송신 → PLC 수신 확인',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        const Text('수신 확인은 PLC의 확인 신호를 뜻해. 실제 로봇 이동 완료를 뜻하지 않아.'),
+        const Text('수신 확인은 PLC의 확인 신호를 의미합니다. 실제 로봇 이동 완료를 뜻하지 않습니다.'),
         const SizedBox(height: 8),
         for (final event in events.take(200))
           ListTile(
             dense: true,
-            title: Text('${_millis(event['at_ms'])}  ${event['event']}'),
-            subtitle: SelectableText(jsonEncode(event['detail'])),
+            title: Text('${_millis(event.atMs)}  ${event.name}'),
+            subtitle: SelectableText(jsonEncode(event.detail)),
           ),
       ],
     );
   }
 
-  String _word(Map<String, dynamic>? plc, String direction, int word) {
-    final words = plc?['${direction}_words'];
-    return _fresh && words is List && word < words.length
-        ? '${words[word]}'
-        : '확인 안 됨';
+  String _word(PlcStatus? plc, String direction, int word) {
+    final value = _fresh ? plc?.word(direction, word) : null;
+    return value == null ? '확인 안 됨' : '$value';
   }
 
   Future<void> _preview(String inspectionId) async {
@@ -953,7 +887,7 @@ class _PointEditorState extends State<_PointEditor> {
     if (optional && (text == null || text.trim().isEmpty)) return null;
     final value = double.tryParse(text ?? '');
     return value == null || !value.isFinite || value < 0 || value > 1
-        ? '0~1 사이 숫자를 입력해'
+        ? '0~1 사이 숫자를 입력해 주세요'
         : null;
   }
 
@@ -998,13 +932,13 @@ class _PointEditorState extends State<_PointEditor> {
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
                   labelText: '기대 개수',
-                  helperText: '미정이면 비워 두고 초안으로 저장',
+                  helperText: '미정이면 비워 두고 초안으로 저장해 주세요',
                 ),
                 validator: (text) {
                   if (text == null || text.trim().isEmpty) return null;
                   final n = int.tryParse(text);
                   return n == null || n < 1 || n > 100
-                      ? '1~100 사이 정수를 입력해'
+                      ? '1~100 사이 정수를 입력해 주세요'
                       : null;
                 },
               ),
@@ -1025,7 +959,7 @@ class _PointEditorState extends State<_PointEditor> {
                       if (error != null) return error;
                       return double.parse(text!) <
                               (double.tryParse(_candidate.text) ?? 0)
-                          ? '후보 신뢰도 이상이어야 해'
+                          ? '후보 신뢰도 이상이어야 합니다'
                           : null;
                     },
                   ),
@@ -1139,7 +1073,7 @@ class _RecipePreviewState extends State<_RecipePreview> {
           children: [
             ListTile(
               title: Text('${widget.camera} 실시간 미리보기'),
-              subtitle: const Text('선택한 카메라가 뷰어 미리보기에도 적용돼.'),
+              subtitle: const Text('선택한 카메라가 뷰어 미리보기에도 적용됩니다.'),
               trailing: TextButton(
                 onPressed: _starting ? null : _close,
                 child: const Text('닫기'),

@@ -389,6 +389,8 @@ class _RoiEditorScreenState extends State<RoiEditorScreen> {
           context,
         ).showSnackBar(SnackBar(content: Text('${kind.label} 불러오기 실패: $e')));
       }
+    } finally {
+      api.close();
     }
   }
 
@@ -413,6 +415,8 @@ class _RoiEditorScreenState extends State<RoiEditorScreen> {
           context,
         ).showSnackBar(SnackBar(content: Text('${kind.label} 적용 실패: $e')));
       }
+    } finally {
+      api.close();
     }
   }
 }

@@ -180,7 +180,7 @@ void main() {
       final api = _Api()..records = [result('cycle_one', saved: false)];
       await _mount(tester, api);
       expect(api.images, isEmpty);
-      expect(find.textContaining('이미지가 저장되지 않았어.'), findsOneWidget);
+      expect(find.textContaining('이미지가 저장되지 않았습니다.'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
     },
   );

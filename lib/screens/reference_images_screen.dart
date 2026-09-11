@@ -1,3 +1,4 @@
+import '../controllers/model_jobs_controller.dart';
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -54,22 +55,67 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
   _ReferencePage _page = _ReferencePage.references;
   List<ReferenceModel> _models = const [];
   ReferenceModel? _selectedModel;
-  ModelBuild? _modelBuild;
-  ModelActivation? _modelActivation;
-  String? _buildRequestId;
-  String? _activationRequestId;
-  bool _modelActionInFlight = false;
-  int _modelPollSession = 0;
+  late final ModelJobsController _jobs;
+  ReferenceApiStatus? _lastJobStatus;
+  int _reloadGeneration = 0;
+  String? _endpoint;
 
   @override
   void initState() {
     super.initState();
     _api = widget.api ?? RemoteReferenceApiService();
     _ownsApi = widget.api == null;
+    _jobs = ModelJobsController(
+      api: _api,
+      readToken: _readToken,
+      showMessage: _showMessage,
+      refresh: _reload,
+      displayId: _displayId,
+      modelLabel: _modelLabel,
+    )..addListener(_onJobsChanged);
     _status = widget.initialStatus;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_reload());
     });
+  }
+
+  void _onJobsChanged() {
+    if (!mounted) return;
+    setState(() {
+      final status = _jobs.status;
+      if (status != null && !identical(status, _lastJobStatus)) {
+        _status = status;
+        _lastJobStatus = status;
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final settings = context.watch<SettingsProvider>().settings;
+    final endpoint = settings.buildApiUri('reference').toString();
+    _jobs.bind(settings);
+    if (_endpoint != null && _endpoint != endpoint) {
+      _pollSession++;
+      _reloadGeneration++;
+      _capture = null;
+      _editorImage = null;
+      _imageBytes = null;
+      _boxes = const [];
+      _cameraId = _className = _baseRevisionId = null;
+      _currentRevision = null;
+      _selectedModel = null;
+      _captureRequestId = _revisionRequestId = null;
+      _capturing = _saving = false;
+      _status = null;
+      _revisions = const [];
+      _models = const [];
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_reload());
+      });
+    }
+    _endpoint = endpoint;
   }
 
   @override
@@ -83,7 +129,8 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
   @override
   void dispose() {
     _pollSession++;
-    _modelPollSession++;
+    _jobs.dispose();
+    _reloadGeneration++;
     if (_ownsApi) _api.close();
     super.dispose();
   }
@@ -250,16 +297,16 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
     if (status == null) {
       return _MessagePanel(
         icon: Icons.extension_off_outlined,
-        title: '기준 이미지를 관리할 수 없어',
-        message: _error ?? '이 장비는 Reference API v1을 지원하지 않아.',
+        title: '기준 이미지를 관리할 수 없습니다',
+        message: _error ?? '이 장비는 Reference API v1을 지원하지 않습니다.',
         onRetry: _reload,
       );
     }
     if (!status.capabilities.hasReferenceManagement) {
       return _MessagePanel(
         icon: Icons.extension_off_outlined,
-        title: '기준 이미지 관리가 비활성화돼 있어',
-        message: '장비에서 해당 기능이 비활성화돼 있어.',
+        title: '기준 이미지 관리가 비활성화되어 있습니다',
+        message: '장비에서 해당 기능이 비활성화되어 있습니다.',
         onRetry: _reload,
       );
     }
@@ -355,7 +402,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
           if (!status.isRunning) ...[
             const SizedBox(height: 8),
             Text(
-              '장비가 실행 중일 때만 촬영할 수 있어.',
+              '장비가 실행 중일 때만 촬영할 수 있습니다.',
               style: TextStyle(
                 fontSize: 12,
                 color: Theme.of(context).colorScheme.error,
@@ -365,7 +412,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
           if (!status.capabilities.referenceCapture) ...[
             const SizedBox(height: 8),
             const Text(
-              '이 장비에서는 이미지 촬영이 비활성화돼 있어.',
+              '이 장비에서는 이미지 촬영이 비활성화되어 있습니다.',
               style: TextStyle(fontSize: 12),
             ),
           ],
@@ -442,7 +489,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
           if (_revisions.isEmpty) ...[
             const SizedBox(height: 8),
             const Text(
-              '기준 개정본이 없어서 새 개정본을 저장할 수 없어.',
+              '기준 개정본이 없어서 새 개정본을 저장할 수 없습니다.',
               style: TextStyle(fontSize: 12),
             ),
           ] else if (_currentRevision != null) ...[
@@ -474,8 +521,8 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
     if (image == null || _imageBytes == null) {
       return const _MessagePanel(
         icon: Icons.crop_free,
-        title: '원본 이미지를 촬영해',
-        message: '이미지 위를 드래그해서 바운딩박스를 추가해.',
+        title: '원본 이미지를 촬영해 주세요',
+        message: '이미지 위를 드래그해서 바운딩박스를 추가해 주세요.',
       );
     }
     return Container(
@@ -547,7 +594,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
               child: _boxes.isEmpty
                   ? Center(
                       child: Text(
-                        '등록된 박스가 없어',
+                        '등록된 박스가 없습니다',
                         style: TextStyle(color: scheme.onSurfaceVariant),
                       ),
                     )
@@ -602,7 +649,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
             if (!status.capabilities.referenceRevisions) ...[
               const SizedBox(height: 8),
               const Text(
-                '이 장비에서는 개정본 저장이 비활성화돼 있어.',
+                '이 장비에서는 개정본 저장이 비활성화되어 있습니다.',
                 style: TextStyle(fontSize: 12),
               ),
             ],
@@ -618,8 +665,8 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
         !status.capabilities.modelActivation) {
       return const _MessagePanel(
         icon: Icons.model_training_outlined,
-        title: '모델 관리가 비활성화돼 있어',
-        message: '이 장비는 모델 관리 기능을 지원하지 않아.',
+        title: '모델 관리가 비활성화되어 있습니다',
+        message: '이 장비는 모델 관리 기능을 지원하지 않습니다.',
       );
     }
     final list = Material(
@@ -632,7 +679,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  '모델을 빌드하는 동안 장비가 유지보수 상태로 전환되어 검사와 실시간 검출이 일시 중지돼.',
+                  '모델을 빌드하는 동안 장비가 유지보수 상태로 전환되어 검사와 실시간 검출이 일시 중지됩니다.',
                   style: TextStyle(
                     fontSize: 12,
                     color: scheme.onSurfaceVariant,
@@ -650,7 +697,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
                   onPressed:
                       status.capabilities.modelBuild &&
                           _baseRevisionId != null &&
-                          !_modelActionInFlight
+                          !_jobs.busy
                       ? _confirmModelBuild
                       : null,
                   icon: const Icon(Icons.build_outlined),
@@ -662,7 +709,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
           const Divider(height: 1),
           Expanded(
             child: _models.isEmpty
-                ? const Center(child: Text('등록된 모델이 없어'))
+                ? const Center(child: Text('등록된 모델이 없습니다'))
                 : ListView.separated(
                     itemCount: _models.length,
                     separatorBuilder: (_, _) => const Divider(height: 1),
@@ -697,7 +744,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
                         ),
                         onTap: () => setState(() {
                           _selectedModel = model;
-                          _activationRequestId = null;
+                          _jobs.activationRequestId = null;
                         }),
                       );
                     },
@@ -733,27 +780,27 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          if (_modelBuild case final build?) ...[
+          if (_jobs.build case final build?) ...[
             _JobCard(
               title: '모델 빌드',
               id: build.buildId,
               state: build.state.name.toUpperCase(),
               error: build.error,
-              onRefresh: !build.state.isFinal && !_modelActionInFlight
-                  ? _resumeModelBuild
+              onRefresh: !build.state.isFinal && !_jobs.busy
+                  ? _jobs.resumeBuild
                   : null,
             ),
             const SizedBox(height: 12),
           ],
-          if (_modelActivation case final activation?) ...[
+          if (_jobs.activation case final activation?) ...[
             _JobCard(
               title: '모델 적용',
               id: activation.activationId,
               state: _activationStateLabel(activation.state),
               error: activation.error,
               detail: '현재 사용 중: ${_modelLabel(activation.activeModelId)}',
-              onRefresh: !activation.state.isFinal && !_modelActionInFlight
-                  ? _resumeModelActivation
+              onRefresh: !activation.state.isFinal && !_jobs.busy
+                  ? _jobs.resumeActivation
                   : null,
             ),
             const SizedBox(height: 12),
@@ -761,8 +808,8 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
           if (model == null)
             const _MessagePanel(
               icon: Icons.memory_outlined,
-              title: '모델을 선택해',
-              message: '적용하기 전에 기술 검증 결과를 확인해.',
+              title: '모델을 선택해 주세요',
+              message: '적용하기 전에 기술 검증 결과를 확인해 주세요.',
             )
           else ...[
             Row(
@@ -827,7 +874,9 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
                 border: Border.all(color: Colors.orange.withValues(alpha: 0.6)),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Text('기술 검증이 생산 품질을 보증하지는 않아. 적용 전에 양품·불량 샘플로 확인해.'),
+              child: const Text(
+                '기술 검증이 생산 품질을 보증하지는 않습니다. 적용 전에 양품·불량 샘플로 확인해 주세요.',
+              ),
             ),
             const SizedBox(height: 14),
             FilledButton.icon(
@@ -835,7 +884,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
                   status.capabilities.modelActivation &&
                       model.technicalPassed &&
                       model.modelId != status.activeModelId &&
-                      !_modelActionInFlight &&
+                      !_jobs.busy &&
                       status.activeModelId != null
                   ? () => _confirmActivation(model)
                   : null,
@@ -861,6 +910,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
   }
 
   Future<void> _reload() async {
+    final generation = ++_reloadGeneration;
     final settings = context.read<SettingsProvider>().settings;
     setState(() {
       _loading = true;
@@ -882,7 +932,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
           limit: 100,
         )).models;
       }
-      if (!mounted) return;
+      if (!mounted || generation != _reloadGeneration) return;
       final cameraId = status.cameraClasses.containsKey(_cameraId)
           ? _cameraId
           : status.cameraClasses.keys.firstOrNull;
@@ -901,10 +951,10 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
           bearerToken: token,
         );
       }
-      if (!mounted) return;
+      if (!mounted || generation != _reloadGeneration) return;
       final preferredModelId =
-          _modelBuild?.candidateModelId ??
-          _modelActivation?.activeModelId ??
+          _jobs.build?.candidateModelId ??
+          _jobs.activation?.activeModelId ??
           _selectedModel?.modelId;
       final selectedModel = models
           .where((model) => model.modelId == preferredModelId)
@@ -925,21 +975,23 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
         if (!classes.contains(_className)) _className = classes.firstOrNull;
       });
     } on RemoteReferenceApiException catch (error) {
-      if (!mounted) return;
+      if (!mounted || generation != _reloadGeneration) return;
       setState(() {
         final statusMissing =
             error.statusCode == 404 &&
             error.uri.path.endsWith('/reference/status');
         if (statusMissing) _status = null;
         _error = statusMissing
-            ? '이 장비에 Reference API v1이 설치되어 있지 않아.'
+            ? '이 장비에 Reference API v1이 설치되어 있지 않습니다.'
             : error.message;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || generation != _reloadGeneration) return;
       setState(() => _error = _describeError(error));
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && generation == _reloadGeneration) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -982,6 +1034,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
     try {
       final settings = context.read<SettingsProvider>().settings;
       final token = await _readToken(settings);
+      if (!mounted || session != _pollSession) return;
       _captureRequestId ??= generateRequestId();
       var capture = await _api.requestCapture(
         settings,
@@ -1009,7 +1062,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
         await _loadCaptureImage(settings, capture, session, token);
       } else if (!capture.state.isFinal) {
         _showMessage(
-          '촬영 상태: ${statusLabel(capture.state.name)}. 새로고침으로 계속 확인해.',
+          '촬영 상태: ${statusLabel(capture.state.name)}. 새로고침으로 계속 확인해 주세요.',
         );
       } else if (capture.error.isNotEmpty) {
         _showMessage(capture.error, error: true);
@@ -1033,6 +1086,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
     try {
       final settings = context.read<SettingsProvider>().settings;
       final token = await _readToken(settings);
+      if (!mounted || session != _pollSession) return;
       final capture = await _api.fetchCapture(
         settings,
         current.captureId,
@@ -1081,17 +1135,20 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
   }
 
   Future<void> _saveRevision() async {
+    if (_saving) return;
+    final session = _pollSession;
     final image = _editorImage;
     final className = _className;
     if (image == null || className == null || _boxes.isEmpty) return;
     if (_boxes.any((box) => !box.isValidFor(image.width, image.height))) {
-      _showMessage('원본 이미지 범위를 벗어난 박스가 있어.', error: true);
+      _showMessage('원본 이미지 범위를 벗어난 박스가 있습니다.', error: true);
       return;
     }
     setState(() => _saving = true);
     try {
       final settings = context.read<SettingsProvider>().settings;
       final token = await _readToken(settings);
+      if (!mounted || session != _pollSession) return;
       _revisionRequestId ??= generateRequestId();
       final revision = await _api.createRevision(
         settings,
@@ -1102,7 +1159,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
         bearerToken: token,
         requestId: _revisionRequestId,
       );
-      if (!mounted) return;
+      if (!mounted || session != _pollSession) return;
       setState(() {
         _baseRevisionId = revision.revisionId;
         _revisionRequestId = null;
@@ -1118,9 +1175,13 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
       _showMessage('${_displayId(revision.revisionId)} 저장 완료.');
       unawaited(_reload());
     } catch (error) {
-      if (mounted) _showMessage(_describeError(error), error: true);
+      if (mounted && session == _pollSession) {
+        _showMessage(_describeError(error), error: true);
+      }
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted && session == _pollSession) {
+        setState(() => _saving = false);
+      }
     }
   }
 
@@ -1159,41 +1220,51 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
 
   Future<void> _selectBaseRevision(String? revisionId) async {
     if (revisionId == null) return;
+    final session = ++_pollSession;
+    _reloadGeneration++;
     setState(() {
       _baseRevisionId = revisionId;
       _revisionRequestId = null;
-      _buildRequestId = null;
+      _jobs.buildRequestId = null;
       _loading = true;
     });
     try {
       final settings = context.read<SettingsProvider>().settings;
       final token = await _readToken(settings);
+      if (!mounted || session != _pollSession) return;
       final revision = await _api.fetchRevision(
         settings,
         revisionId,
         bearerToken: token,
       );
-      if (mounted && _baseRevisionId == revisionId) {
+      if (mounted && session == _pollSession && _baseRevisionId == revisionId) {
         setState(() => _currentRevision = revision);
       }
     } catch (error) {
-      if (mounted) _showMessage(_describeError(error), error: true);
+      if (mounted && session == _pollSession) {
+        _showMessage(_describeError(error), error: true);
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && session == _pollSession) {
+        setState(() => _loading = false);
+      }
     }
   }
 
   Future<void> _openRevisionEntry(ReferenceRevisionEntry entry) async {
+    final session = ++_pollSession;
+    _reloadGeneration++;
     setState(() => _loading = true);
     try {
       final settings = context.read<SettingsProvider>().settings;
       final token = await _readToken(settings);
+      if (!mounted || session != _pollSession) return;
       final bytes = await _api.fetchImageUrl(
         settings,
         entry.imageUrl,
         bearerToken: token,
       );
-      if (!mounted) return;
+      if (!mounted || session != _pollSession) return;
       final cameraId = _cameraForClass(entry.className);
       setState(() {
         _cameraId = cameraId;
@@ -1211,9 +1282,13 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
         _revisionRequestId = null;
       });
     } catch (error) {
-      if (mounted) _showMessage(_describeError(error), error: true);
+      if (mounted && session == _pollSession) {
+        _showMessage(_describeError(error), error: true);
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && session == _pollSession) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -1223,10 +1298,11 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
             const <MapEntry<String, List<String>>>[]) {
       if (entry.value.contains(className)) return entry.key;
     }
-    throw FormatException('$className 분류에 연결된 카메라가 없어');
+    throw FormatException('$className 분류에 연결된 카메라가 없습니다');
   }
 
   Future<void> _confirmModelBuild() async {
+    final session = _pollSession;
     final revisionId = _baseRevisionId;
     if (revisionId == null) return;
     var confirmed = false;
@@ -1235,7 +1311,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
       barrierDismissible: false,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('후보 모델을 빌드할까?'),
+          title: const Text('후보 모델을 빌드하시겠습니까?'),
           content: SizedBox(
             width: 520,
             child: Column(
@@ -1248,13 +1324,13 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  '모델 내보내기·빌드·검증 중에는 검사 요청과 실시간 검출이 일시 중지돼. 빌드가 끝나면 현재 모델로 복원돼.',
+                  '모델 내보내기·빌드·검증 중에는 검사 요청과 실시간 검출이 일시 중지됩니다. 빌드가 끝나면 현재 모델로 복원됩니다.',
                 ),
                 const SizedBox(height: 12),
                 CheckboxListTile(
                   value: confirmed,
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('유지보수를 위한 일시 중지에 동의해.'),
+                  title: const Text('유지보수를 위한 일시 중지에 동의합니다.'),
                   onChanged: (value) =>
                       setDialogState(() => confirmed = value ?? false),
                 ),
@@ -1276,103 +1352,13 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
         ),
       ),
     );
-    if (approved == true) await _startModelBuild(revisionId);
-  }
-
-  Future<void> _startModelBuild(String revisionId) async {
-    final session = ++_modelPollSession;
-    setState(() {
-      _modelActionInFlight = true;
-      _modelActivation = null;
-    });
-    try {
-      final settings = context.read<SettingsProvider>().settings;
-      final token = await _readToken(settings);
-      _buildRequestId ??= generateRequestId();
-      final build = await _api.requestModelBuild(
-        settings,
-        referenceRevisionId: revisionId,
-        bearerToken: token,
-        requestId: _buildRequestId,
-      );
-      if (!mounted || session != _modelPollSession) return;
-      setState(() {
-        _modelBuild = build;
-        _buildRequestId = null;
-      });
-      await _pollModelBuild(settings, token, build, session);
-    } catch (error) {
-      if (mounted && session == _modelPollSession) {
-        _showMessage(_describeError(error), error: true);
-      }
-    } finally {
-      if (mounted && session == _modelPollSession) {
-        setState(() => _modelActionInFlight = false);
-      }
+    if (mounted && session == _pollSession && approved == true) {
+      await _jobs.startBuild(revisionId);
     }
-  }
-
-  Future<void> _resumeModelBuild() async {
-    final build = _modelBuild;
-    if (build == null) return;
-    final session = ++_modelPollSession;
-    setState(() => _modelActionInFlight = true);
-    try {
-      final settings = context.read<SettingsProvider>().settings;
-      final token = await _readToken(settings);
-      await _pollModelBuild(settings, token, build, session);
-    } catch (error) {
-      if (mounted && session == _modelPollSession) {
-        _showMessage(_describeError(error), error: true);
-      }
-    } finally {
-      if (mounted && session == _modelPollSession) {
-        setState(() => _modelActionInFlight = false);
-      }
-    }
-  }
-
-  Future<void> _pollModelBuild(
-    AppSettings settings,
-    String token,
-    ModelBuild initial,
-    int session,
-  ) async {
-    var build = initial;
-    for (var attempt = 0; !build.state.isFinal && attempt < 1800; attempt++) {
-      await Future<void>.delayed(const Duration(seconds: 1));
-      if (!mounted || session != _modelPollSession) return;
-      build = await _api.fetchModelBuild(
-        settings,
-        build.buildId,
-        bearerToken: token,
-      );
-      final status = await _api.fetchStatus(settings, bearerToken: token);
-      if (!mounted || session != _modelPollSession) return;
-      setState(() {
-        _modelBuild = build;
-        _status = status;
-      });
-    }
-    if (!mounted || session != _modelPollSession) return;
-    if (build.state == ModelBuildState.succeeded) {
-      _showMessage(
-        '${_displayId(build.referenceRevisionId)} 빌드 완료. 후보 모델은 아직 적용되지 않았어.',
-      );
-    } else if (build.state.isFinal) {
-      _showMessage(
-        build.error.isEmpty
-            ? '모델 빌드: ${statusLabel(build.state.name)}.'
-            : build.error,
-        error: true,
-      );
-    } else {
-      _showMessage('빌드가 진행 중이야. 새로고침으로 상태를 계속 확인해.');
-    }
-    await _reload();
   }
 
   Future<void> _confirmActivation(ReferenceModel model) async {
+    final session = _pollSession;
     final current = _status?.activeModelId;
     if (current == null || current == model.modelId) return;
     var reviewed = false;
@@ -1386,7 +1372,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
       barrierDismissible: false,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text(restoring ? '이전 모델로 복원할까?' : '후보 모델을 적용할까?'),
+          title: Text(restoring ? '이전 모델로 복원하시겠습니까?' : '후보 모델을 적용하시겠습니까?'),
           content: SizedBox(
             width: 560,
             child: Column(
@@ -1397,13 +1383,13 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
                 Text('요청: ${_modelLabel(model.modelId)}'),
                 const SizedBox(height: 12),
                 const Text(
-                  '기술 검증이 생산 정확도를 보증하지는 않아. 적용 중에는 검사가 일시 중지되고, 로딩에 실패하면 장비가 현재 모델로 복원할 수 있어.',
+                  '기술 검증이 생산 정확도를 보증하지는 않습니다. 적용 중에는 검사가 일시 중지되고, 로딩에 실패하면 장비가 현재 모델로 복원할 수 있습니다.',
                 ),
                 const SizedBox(height: 12),
                 CheckboxListTile(
                   value: reviewed,
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('양품·불량 샘플을 확인했고 모델 변경에 동의해.'),
+                  title: const Text('양품·불량 샘플을 확인했고 모델 변경에 동의합니다.'),
                   onChanged: (value) =>
                       setDialogState(() => reviewed = value ?? false),
                 ),
@@ -1425,118 +1411,9 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
         ),
       ),
     );
-    if (approved == true) await _startModelActivation(model, current);
-  }
-
-  Future<void> _startModelActivation(
-    ReferenceModel model,
-    String expectedActiveModelId,
-  ) async {
-    final session = ++_modelPollSession;
-    setState(() {
-      _modelActionInFlight = true;
-      _modelBuild = null;
-    });
-    try {
-      final settings = context.read<SettingsProvider>().settings;
-      final token = await _readToken(settings);
-      _activationRequestId ??= generateRequestId();
-      final activation = await _api.requestModelActivation(
-        settings,
-        modelId: model.modelId,
-        expectedActiveModelId: expectedActiveModelId,
-        bearerToken: token,
-        requestId: _activationRequestId,
-      );
-      if (!mounted || session != _modelPollSession) return;
-      setState(() {
-        _modelActivation = activation;
-        _activationRequestId = null;
-      });
-      await _pollModelActivation(settings, token, activation, session);
-    } on RemoteReferenceApiException catch (error) {
-      if (mounted && error.code == 'ACTIVE_MODEL_CHANGED') {
-        await _reload();
-      }
-      if (mounted && session == _modelPollSession) {
-        _showMessage(error.message, error: true);
-      }
-    } catch (error) {
-      if (mounted && session == _modelPollSession) {
-        _showMessage(_describeError(error), error: true);
-      }
-    } finally {
-      if (mounted && session == _modelPollSession) {
-        setState(() => _modelActionInFlight = false);
-      }
+    if (mounted && session == _pollSession && approved == true) {
+      await _jobs.startActivation(model, current);
     }
-  }
-
-  Future<void> _resumeModelActivation() async {
-    final activation = _modelActivation;
-    if (activation == null) return;
-    final session = ++_modelPollSession;
-    setState(() => _modelActionInFlight = true);
-    try {
-      final settings = context.read<SettingsProvider>().settings;
-      final token = await _readToken(settings);
-      await _pollModelActivation(settings, token, activation, session);
-    } catch (error) {
-      if (mounted && session == _modelPollSession) {
-        _showMessage(_describeError(error), error: true);
-      }
-    } finally {
-      if (mounted && session == _modelPollSession) {
-        setState(() => _modelActionInFlight = false);
-      }
-    }
-  }
-
-  Future<void> _pollModelActivation(
-    AppSettings settings,
-    String token,
-    ModelActivation initial,
-    int session,
-  ) async {
-    var activation = initial;
-    for (
-      var attempt = 0;
-      !activation.state.isFinal && attempt < 300;
-      attempt++
-    ) {
-      await Future<void>.delayed(const Duration(seconds: 1));
-      if (!mounted || session != _modelPollSession) return;
-      activation = await _api.fetchModelActivation(
-        settings,
-        activation.activationId,
-        bearerToken: token,
-      );
-      final status = await _api.fetchStatus(settings, bearerToken: token);
-      if (!mounted || session != _modelPollSession) return;
-      setState(() {
-        _modelActivation = activation;
-        _status = status;
-      });
-    }
-    if (!mounted || session != _modelPollSession) return;
-    if (activation.state == ModelActivationState.succeeded) {
-      _showMessage('${_modelLabel(activation.activeModelId)} 적용 완료.');
-    } else if (activation.state == ModelActivationState.rolledBack) {
-      _showMessage(
-        '적용에 실패해서 ${_modelLabel(activation.activeModelId)}로 복원됐어.',
-        error: true,
-      );
-    } else if (activation.state.isFinal) {
-      _showMessage(
-        activation.error.isEmpty
-            ? '모델 적용: ${statusLabel(activation.state.name)}.'
-            : activation.error,
-        error: true,
-      );
-    } else {
-      _showMessage('모델 적용 중이야. 새로고침으로 상태를 계속 확인해.');
-    }
-    await _reload();
   }
 
   String _modelLabel(String id) {
@@ -1571,7 +1448,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
       settings,
     );
     if (token == null) {
-      throw StateError('관리 토큰이 설정되지 않았어.');
+      throw StateError('관리 토큰이 설정되지 않았습니다.');
     }
     return token;
   }
@@ -1962,6 +1839,6 @@ String _formatTimestamp(int milliseconds) {
 
 String _describeError(Object error) => switch (error) {
   RemoteReferenceApiException() => error.message,
-  TimeoutException() => '장비 응답 시간이 초과됐어.',
+  TimeoutException() => '장비 응답 시간이 초과되었습니다.',
   _ => error.toString(),
 };

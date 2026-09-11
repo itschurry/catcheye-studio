@@ -79,7 +79,7 @@ class _InspectionResultsScreenState extends State<InspectionResultsScreen> {
 
   String _archiveError(Object error) =>
       error is RemoteCaptureApiException && error.statusCode == 404
-      ? '날짜별 검사 기록 API를 찾을 수 없어. Inspect 서버 업데이트와 저장 폴더를 확인해.\n${error.message}'
+      ? '날짜별 검사 기록 API를 찾을 수 없습니다. Inspect 서버 업데이트와 저장 폴더를 확인해 주세요.\n${error.message}'
       : '저장된 검사 기록 조회 실패: $error';
 
   Future<void> _refresh({bool latest = false}) async {
@@ -151,7 +151,7 @@ class _InspectionResultsScreenState extends State<InspectionResultsScreen> {
       );
       if (!mounted || generation != _requestGeneration) return;
       if (page.nextCursor != null && page.nextCursor == cursor) {
-        throw const FormatException('페이지 커서가 진행되지 않았어');
+        throw const FormatException('페이지 커서가 진행되지 않았습니다');
       }
       setState(() {
         final ids = _results.map((result) => result.cycleId).toSet();
@@ -315,7 +315,7 @@ class _InspectionResultsScreenState extends State<InspectionResultsScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _results.isEmpty
-                ? const Center(child: Text('저장된 검사 결과가 없어'))
+                ? const Center(child: Text('저장된 검사 결과가 없습니다'))
                 : _buildResultList(compact: compact),
           ),
           if (_nextCursor != null)
@@ -412,7 +412,7 @@ class _InspectionResultsScreenState extends State<InspectionResultsScreen> {
   }
 
   Widget _buildResultDetails(StationCaptureResult? result) {
-    if (result == null) return const Center(child: Text('검사 이력을 선택해.'));
+    if (result == null) return const Center(child: Text('검사 이력을 선택해 주세요.'));
     final inspections = result.inspections.values.toList(growable: false);
     final selected =
         inspections
@@ -468,7 +468,7 @@ class _InspectionResultsScreenState extends State<InspectionResultsScreen> {
           ],
           const SizedBox(height: 14),
           if (selected == null)
-            Text(result.state.isFinal ? '검사 상세 기록이 없어.' : '검사 결과를 기다리는 중이야.')
+            Text(result.state.isFinal ? '검사 상세 기록이 없습니다.' : '검사 결과를 기다리는 중입니다.')
           else ...[
             Wrap(
               spacing: 8,
@@ -723,12 +723,12 @@ String _reasonLabel(String reason) => switch (reason) {
   _ => reason,
 };
 String _checkLabel(String reason) => switch (reason) {
-  'TARGET_CONFIRMED' || 'SHAPE_QUALITY_OK' => '검출 위치가 실제 검사할 부품과 일치하는지 확인',
-  'NO_CANDIDATE' || 'NUT_HOLE_ABSENT' => '부품 유무·위치·가림을 먼저 확인하고 조명과 초점 점검',
-  'SHAPE_QUALITY_FAILED' => '측정값과 기준을 비교하고 홀 형상·이물·초점 점검',
-  'GEOMETRY_NOT_FOUND' => '홀 경계의 초점·조명·반사·이물 확인',
-  'PLAIN_HOLE_DETECTED' => '해당 위치의 Nut Hole·부품 장착 상태 확인',
-  'QUALITY_LIMITS_NOT_CONFIGURED' => '장비의 형상 판정 기준 설정 필요',
-  'LOW_CONFIDENCE_CANDIDATE' => '후보 위치·검출 점수와 필요한 부품 개수 확인',
-  _ => '검사 이미지와 판정 코드를 확인',
+  'TARGET_CONFIRMED' || 'SHAPE_QUALITY_OK' => '검출 위치가 실제 검사할 부품과 일치하는지 확인해 주세요',
+  'NO_CANDIDATE' || 'NUT_HOLE_ABSENT' => '부품 유무·위치·가림을 먼저 확인하고 조명과 초점을 점검해 주세요',
+  'SHAPE_QUALITY_FAILED' => '측정값과 기준을 비교하고 홀 형상·이물·초점을 점검해 주세요',
+  'GEOMETRY_NOT_FOUND' => '홀 경계의 초점·조명·반사·이물을 확인해 주세요',
+  'PLAIN_HOLE_DETECTED' => '해당 위치의 Nut Hole·부품 장착 상태를 확인해 주세요',
+  'QUALITY_LIMITS_NOT_CONFIGURED' => '장비의 형상 판정 기준을 설정해 주세요',
+  'LOW_CONFIDENCE_CANDIDATE' => '후보 위치·검출 점수와 필요한 부품 개수를 확인해 주세요',
+  _ => '검사 이미지와 판정 코드를 확인해 주세요',
 };

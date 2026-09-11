@@ -37,6 +37,7 @@ class _CameraPropertiesScreenState extends State<CameraPropertiesScreen> {
 
   @override
   void dispose() {
+    _api.close();
     _receiver.dispose();
     super.dispose();
   }

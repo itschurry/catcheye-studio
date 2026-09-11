@@ -1,3 +1,4 @@
+import '../controllers/capture_browser_controller.dart';
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -6,8 +7,6 @@ import 'package:provider/provider.dart';
 
 import '../providers/settings_provider.dart';
 import '../widgets/capture_storage_summary.dart';
-import '../services/remote_capture_api_service.dart';
-import '../services/remote_capture_image_api_service.dart';
 
 class CaptureImagesScreen extends StatefulWidget {
   const CaptureImagesScreen({super.key, this.isPhone = false});
@@ -19,35 +18,43 @@ class CaptureImagesScreen extends StatefulWidget {
 }
 
 class _CaptureImagesScreenState extends State<CaptureImagesScreen> {
-  final RemoteCaptureImageApiService _api = RemoteCaptureImageApiService();
+  final _browser = CaptureBrowserController();
+  Uint8List? _displayedBytes;
   final TransformationController _transformController =
       TransformationController();
 
-  List<CaptureDateSummary> _dates = const [];
-  List<CaptureImageItem> _images = const [];
-  CaptureStorageInfo? _storage;
-  CaptureImageItem? _selectedImage;
-  Uint8List? _imageBytes;
-  String? _selectedDate;
-  String? _error;
-  bool _loading = false;
-  bool _imageLoading = false;
-  bool _captureBusy = false;
   bool _fitToView = true;
   double _zoom = 1.0;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        unawaited(_reload());
-      }
-    });
+    _browser.addListener(_onBrowserChanged);
+  }
+
+  void _onBrowserChanged() {
+    if (!mounted) return;
+    if (_browser.imageBytes != null && _displayedBytes != _browser.imageBytes) {
+      _displayedBytes = _browser.imageBytes;
+      _zoom = 1;
+      _transformController.value = Matrix4.identity();
+    }
+    setState(() {});
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_browser.bind(context.watch<SettingsProvider>().settings)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_browser.reload());
+      });
+    }
   }
 
   @override
   void dispose() {
+    _browser.dispose();
     _transformController.dispose();
     super.dispose();
   }
@@ -116,7 +123,9 @@ class _CaptureImagesScreenState extends State<CaptureImagesScreen> {
                     message: '촬영',
                     child: IconButton.outlined(
                       icon: const Icon(Icons.camera_alt_outlined, size: 20),
-                      onPressed: _captureBusy ? null : _captureAndShowLatest,
+                      onPressed: _browser.captureBusy
+                          ? null
+                          : _browser.captureAndShowLatest,
                     ),
                   ),
                   const SizedBox(width: 4),
@@ -124,7 +133,7 @@ class _CaptureImagesScreenState extends State<CaptureImagesScreen> {
                     message: '최신 이미지',
                     child: IconButton.outlined(
                       icon: const Icon(Icons.skip_next_outlined, size: 20),
-                      onPressed: _loading ? null : _showLatest,
+                      onPressed: _browser.loading ? null : _browser.showLatest,
                     ),
                   ),
                   const SizedBox(width: 4),
@@ -132,7 +141,7 @@ class _CaptureImagesScreenState extends State<CaptureImagesScreen> {
                     message: '새로고침',
                     child: IconButton.outlined(
                       icon: const Icon(Icons.refresh, size: 20),
-                      onPressed: _loading ? null : _reload,
+                      onPressed: _browser.loading ? null : _browser.reload,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -145,7 +154,7 @@ class _CaptureImagesScreenState extends State<CaptureImagesScreen> {
                             : Icons.fit_screen_outlined,
                         size: 20,
                       ),
-                      onPressed: _selectedImage == null
+                      onPressed: _browser.selectedImage == null
                           ? null
                           : () => _setFit(!_fitToView),
                     ),
@@ -155,7 +164,7 @@ class _CaptureImagesScreenState extends State<CaptureImagesScreen> {
                     message: '축소',
                     child: IconButton.outlined(
                       icon: const Icon(Icons.remove, size: 20),
-                      onPressed: _selectedImage == null
+                      onPressed: _browser.selectedImage == null
                           ? null
                           : () => _setZoom(_zoom / 1.25),
                     ),
@@ -174,7 +183,7 @@ class _CaptureImagesScreenState extends State<CaptureImagesScreen> {
                     message: '확대',
                     child: IconButton.outlined(
                       icon: const Icon(Icons.add, size: 20),
-                      onPressed: _selectedImage == null
+                      onPressed: _browser.selectedImage == null
                           ? null
                           : () => _setZoom(_zoom * 1.25),
                     ),
@@ -190,32 +199,36 @@ class _CaptureImagesScreenState extends State<CaptureImagesScreen> {
 
   Widget _buildBrowserPanel(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    if (_loading && _dates.isEmpty && _storage == null) {
+    if (_browser.loading &&
+        _browser.dates.isEmpty &&
+        _browser.storage == null) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_error != null && _dates.isEmpty && _storage == null) {
-      return _MessagePanel(icon: Icons.error_outline, text: _error!);
+    if (_browser.error != null &&
+        _browser.dates.isEmpty &&
+        _browser.storage == null) {
+      return _MessagePanel(icon: Icons.error_outline, text: _browser.error!);
     }
 
     return Container(
       color: colorScheme.surface,
       child: Column(
         children: [
-          _storage == null
+          _browser.storage == null
               ? const _StorageUnavailableSummary()
-              : CaptureStorageSummary(storage: _storage!),
-          if (_dates.isNotEmpty)
+              : CaptureStorageSummary(storage: _browser.storage!),
+          if (_browser.dates.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
               child: DropdownButtonFormField<String>(
-                initialValue: _selectedDate,
+                initialValue: _browser.selectedDate,
                 decoration: const InputDecoration(
                   labelText: '날짜',
                   border: OutlineInputBorder(),
                   isDense: true,
                 ),
                 items: [
-                  for (final date in _dates)
+                  for (final date in _browser.dates)
                     DropdownMenuItem(
                       value: date.date,
                       child: Text('${date.date} (${date.count})'),
@@ -223,26 +236,26 @@ class _CaptureImagesScreenState extends State<CaptureImagesScreen> {
                 ],
                 onChanged: (date) {
                   if (date != null) {
-                    unawaited(_loadImages(date));
+                    unawaited(_browser.loadImages(date));
                   }
                 },
               ),
             ),
           const Divider(height: 1),
           Expanded(
-            child: _images.isEmpty
+            child: _browser.images.isEmpty
                 ? const _MessagePanel(
                     icon: Icons.image_not_supported_outlined,
-                    text: '저장된 이미지가 없어',
+                    text: '저장된 이미지가 없습니다',
                   )
                 : ListView.separated(
-                    itemCount: _images.length,
+                    itemCount: _browser.images.length,
                     separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (context, index) {
-                      final image = _images[index];
+                      final image = _browser.images[index];
                       final selected =
-                          image.filename == _selectedImage?.filename &&
-                          image.date == _selectedImage?.date;
+                          image.filename == _browser.selectedImage?.filename &&
+                          image.date == _browser.selectedImage?.date;
                       return ListTile(
                         dense: true,
                         selected: selected,
@@ -258,7 +271,7 @@ class _CaptureImagesScreenState extends State<CaptureImagesScreen> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        onTap: () => _selectImage(image),
+                        onTap: () => _browser.selectImage(image),
                       );
                     },
                   ),
@@ -269,15 +282,18 @@ class _CaptureImagesScreenState extends State<CaptureImagesScreen> {
   }
 
   Widget _buildPreview(BuildContext context) {
-    final image = _selectedImage;
-    if (_imageLoading) {
+    final image = _browser.selectedImage;
+    if (_browser.imageLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_error != null && image == null) {
-      return _MessagePanel(icon: Icons.error_outline, text: _error!);
+    if (_browser.error != null && image == null) {
+      return _MessagePanel(icon: Icons.error_outline, text: _browser.error!);
     }
-    if (image == null || _imageBytes == null) {
-      return const _MessagePanel(icon: Icons.image_outlined, text: '이미지를 선택해');
+    if (image == null || _browser.imageBytes == null) {
+      return const _MessagePanel(
+        icon: Icons.image_outlined,
+        text: '이미지를 선택해 주세요',
+      );
     }
 
     return Stack(
@@ -291,7 +307,7 @@ class _CaptureImagesScreenState extends State<CaptureImagesScreen> {
               maxScale: 8,
               child: Center(
                 child: Image.memory(
-                  _imageBytes!,
+                  _browser.imageBytes!,
                   fit: _fitToView ? BoxFit.contain : BoxFit.none,
                   gaplessPlayback: true,
                 ),
@@ -325,145 +341,6 @@ class _CaptureImagesScreenState extends State<CaptureImagesScreen> {
         ),
       ],
     );
-  }
-
-  Future<void> _reload() async {
-    final previousDate = _selectedDate;
-    final previousFilename = _selectedImage?.filename;
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-
-    try {
-      final settings = context.read<SettingsProvider>().settings;
-      final response = await _api.fetchDates(settings);
-      final dates = response.dates;
-      if (!mounted) return;
-      final nextDate =
-          previousDate != null && dates.any((date) => date.date == previousDate)
-          ? previousDate
-          : dates.isEmpty
-          ? null
-          : dates.first.date;
-      setState(() {
-        _storage = response.storage;
-        _dates = dates;
-        _selectedDate = nextDate;
-        _loading = false;
-      });
-      if (nextDate != null) {
-        await _loadImages(nextDate, preferredFilename: previousFilename);
-      } else {
-        setState(() {
-          _images = const [];
-          _selectedImage = null;
-          _imageBytes = null;
-        });
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = '$e';
-      });
-    }
-  }
-
-  Future<void> _loadImages(String date, {String? preferredFilename}) async {
-    setState(() {
-      _loading = true;
-      _error = null;
-      _selectedDate = date;
-    });
-    try {
-      final settings = context.read<SettingsProvider>().settings;
-      final list = await _api.fetchImages(settings, date: date);
-      if (!mounted) return;
-      final selected = preferredFilename == null
-          ? (list.items.isEmpty ? null : list.items.first)
-          : list.items.cast<CaptureImageItem?>().firstWhere(
-              (image) => image?.filename == preferredFilename,
-              orElse: () => list.items.isEmpty ? null : list.items.first,
-            );
-      setState(() {
-        _images = list.items;
-        _selectedImage = selected;
-        _imageBytes = null;
-        _loading = false;
-      });
-      if (selected != null) {
-        await _selectImage(selected);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = '$e';
-      });
-    }
-  }
-
-  Future<void> _selectImage(CaptureImageItem image) async {
-    setState(() {
-      _selectedImage = image;
-      _imageLoading = true;
-      _error = null;
-    });
-    try {
-      final bytes = await _api.fetchImageBytes(
-        context.read<SettingsProvider>().settings,
-        image,
-      );
-      if (!mounted) return;
-      setState(() {
-        _imageBytes = bytes;
-        _imageLoading = false;
-      });
-      _setFit(_fitToView);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _imageLoading = false;
-        _error = '$e';
-      });
-    }
-  }
-
-  Future<void> _showLatest() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final settings = context.read<SettingsProvider>().settings;
-      final latest = await _api.fetchLatest(settings);
-      if (!mounted) return;
-      await _loadImages(latest.date, preferredFilename: latest.filename);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = '$e';
-      });
-    }
-  }
-
-  Future<void> _captureAndShowLatest() async {
-    setState(() => _captureBusy = true);
-    try {
-      final settings = context.read<SettingsProvider>().settings;
-      await RemoteCaptureApiService().requestCapture(settings);
-      if (!mounted) return;
-      await _showLatest();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = '$e');
-    } finally {
-      if (mounted) {
-        setState(() => _captureBusy = false);
-      }
-    }
   }
 
   void _setFit(bool value) {
@@ -544,7 +421,7 @@ class _StorageUnavailableSummary extends StatelessWidget {
             SizedBox(width: 8),
             Expanded(
               child: Text(
-                '저장 공간을 조회할 수 없어',
+                '저장 공간을 조회할 수 없습니다',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 12, color: Colors.grey),

@@ -1,5 +1,4 @@
-import 'dart:convert';
-import 'dart:io';
+import 'api_http_client.dart';
 
 import '../models/app_settings.dart';
 
@@ -60,7 +59,10 @@ class CameraExtrinsics {
 }
 
 class RemotePickApiService {
-  final HttpClient _client = HttpClient();
+  RemotePickApiService({ApiHttpClient? client})
+    : _client = client ?? ApiHttpClient();
+  final ApiHttpClient _client;
+  void close() => _client.close();
 
   Future<CameraIntrinsics> fetchCameraIntrinsics(AppSettings settings) async {
     final json = await _requestJson(
@@ -78,27 +80,16 @@ class RemotePickApiService {
     return CameraExtrinsics.fromJson(json);
   }
 
-  Future<Map<String, dynamic>> _requestJson(String method, Uri uri) async {
-    final request = await _client.openUrl(method, uri);
-    request.headers.contentType = ContentType.json;
-    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-
-    final response = await request.close();
-    final responseBody = await response.transform(utf8.decoder).join();
-    if (response.statusCode != 200) {
-      final errorBody = responseBody.isEmpty
-          ? response.reasonPhrase
-          : responseBody;
-      throw HttpException(
-        '요청 실패 (${response.statusCode}) · $uri: $errorBody',
-        uri: uri,
-      );
-    }
-
-    final decoded = jsonDecode(responseBody);
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('JSON 객체 응답이 필요해');
-    }
-    return decoded;
-  }
+  Future<Map<String, dynamic>> _requestJson(
+    String method,
+    Uri uri, {
+    Object? body,
+    Set<int> expectedStatusCodes = const {200},
+  }) => _client.requestJson(
+    method,
+    uri,
+    body: body,
+    expectedStatusCodes: expectedStatusCodes,
+    allowEmpty: false,
+  );
 }

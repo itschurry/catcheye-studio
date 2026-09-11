@@ -567,7 +567,7 @@ class _PointCloudPainter extends CustomPainter {
   void _drawEmpty(Canvas canvas, Size size) {
     final textPainter = TextPainter(
       text: const TextSpan(
-        text: '설정한 깊이 범위에 점이 없어',
+        text: '설정한 깊이 범위에 점이 없습니다',
         style: TextStyle(color: Colors.grey, fontSize: 14),
       ),
       textDirection: TextDirection.ltr,

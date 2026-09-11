@@ -38,6 +38,7 @@ class _CameraCalibrationScreenState extends State<CameraCalibrationScreen> {
 
   @override
   void dispose() {
+    _api.close();
     _receiver.dispose();
     super.dispose();
   }

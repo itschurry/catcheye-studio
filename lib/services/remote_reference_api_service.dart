@@ -1,3 +1,4 @@
+import 'api_http_client.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -73,24 +74,24 @@ class ReferenceApiStatus {
   factory ReferenceApiStatus.fromJson(Map<String, dynamic> json) {
     final rawCapabilities = json['capabilities'];
     if (rawCapabilities is! Map) {
-      throw const FormatException('capabilities 객체가 필요해');
+      throw const FormatException('capabilities 객체가 필요합니다');
     }
     final rawCameraClasses = json['camera_classes'];
     if (rawCameraClasses is! Map) {
-      throw const FormatException('camera_classes 객체가 필요해');
+      throw const FormatException('camera_classes 객체가 필요합니다');
     }
     final cameraClasses = <String, List<String>>{};
     for (final entry in rawCameraClasses.entries) {
       if (entry.key is! String ||
           entry.value is! List ||
           (entry.value as List).any((value) => value is! String)) {
-        throw const FormatException('camera_classes 항목이 올바르지 않아');
+        throw const FormatException('camera_classes 항목이 올바르지 않습니다');
       }
       final classes = (entry.value as List).cast<String>();
       if (classes.isEmpty ||
           classes.any((value) => value.isEmpty) ||
           classes.length != classes.toSet().length) {
-        throw const FormatException('카메라 분류는 중복되거나 비어 있으면 안 돼');
+        throw const FormatException('카메라 분류는 중복되거나 비어 있으면 안 됩니다');
       }
       cameraClasses[entry.key as String] = List.unmodifiable(classes);
     }
@@ -160,11 +161,11 @@ class ReferenceImageInfo {
     final width = _requiredInt(json, 'width');
     final height = _requiredInt(json, 'height');
     if (width <= 0 || height <= 0) {
-      throw const FormatException('이미지 가로·세로 크기는 양수여야 해');
+      throw const FormatException('이미지 가로·세로 크기는 양수여야 합니다');
     }
     final url = _requiredString(json, 'url');
     if (!url.startsWith('/') || url.startsWith('//')) {
-      throw const FormatException('기준 이미지 URL은 상대 경로여야 해');
+      throw const FormatException('기준 이미지 URL은 상대 경로여야 합니다');
     }
     return ReferenceImageInfo(
       imageId: _requiredString(json, 'image_id'),
@@ -197,13 +198,13 @@ class ReferenceCapture {
     final state = ReferenceCaptureState.parse(_requiredString(json, 'state'));
     final rawImage = json['image'];
     if (rawImage != null && rawImage is! Map) {
-      throw const FormatException('image 객체가 필요해');
+      throw const FormatException('image 객체가 필요합니다');
     }
     final image = rawImage == null
         ? null
         : ReferenceImageInfo.fromJson(Map<String, dynamic>.from(rawImage));
     if (state == ReferenceCaptureState.ready && image == null) {
-      throw const FormatException('촬영 완료 응답에 이미지가 없어');
+      throw const FormatException('촬영 완료 응답에 이미지가 없습니다');
     }
     return ReferenceCapture(
       captureId: _requiredString(json, 'capture_id'),
@@ -238,7 +239,7 @@ class ReferenceBox {
 
   factory ReferenceBox.fromJson(dynamic json) {
     if (json is! List || json.length != 4 || json.any((v) => v is! num)) {
-      throw const FormatException('박스 좌표에는 숫자 4개가 필요해');
+      throw const FormatException('박스 좌표에는 숫자 4개가 필요합니다');
     }
     return ReferenceBox(
       (json[0] as num).toDouble(),
@@ -270,7 +271,7 @@ class ReferenceRevisionEntry {
 
   factory ReferenceRevisionEntry.fromJson(Map<String, dynamic> json) {
     final rawBoxes = json['boxes'];
-    if (rawBoxes is! List) throw const FormatException('boxes 목록이 필요해');
+    if (rawBoxes is! List) throw const FormatException('boxes 목록이 필요합니다');
     return ReferenceRevisionEntry(
       className: _requiredString(json, 'class_name'),
       imageId: _requiredString(json, 'image_id'),
@@ -319,7 +320,7 @@ class ReferenceRevision {
   factory ReferenceRevision.fromJson(Map<String, dynamic> json) {
     final rawEntries = json['entries'];
     if (rawEntries is! List) {
-      throw const FormatException('entries 목록이 필요해');
+      throw const FormatException('entries 목록이 필요합니다');
     }
     return ReferenceRevision(
       revisionId: _requiredString(json, 'revision_id'),
@@ -348,7 +349,7 @@ class ReferenceRevisionList {
   factory ReferenceRevisionList.fromJson(Map<String, dynamic> json) {
     final rawRevisions = json['revisions'];
     if (rawRevisions is! List) {
-      throw const FormatException('revisions 목록이 필요해');
+      throw const FormatException('revisions 목록이 필요합니다');
     }
     return ReferenceRevisionList(
       revisions: List.unmodifiable(
@@ -413,7 +414,7 @@ class ModelValidationDetection {
         !confidence.isFinite ||
         confidence < 0 ||
         confidence > 1) {
-      throw const FormatException('검증 결과의 검출 좌표 또는 신뢰도가 올바르지 않아');
+      throw const FormatException('검증 결과의 검출 좌표 또는 신뢰도가 올바르지 않습니다');
     }
     return ModelValidationDetection(
       className: _requiredString(json, 'class_name'),
@@ -447,10 +448,10 @@ class ModelValidationResult {
     final rawDetections = json['detections'];
     final rawMeasurements = json['measurements'];
     if (rawDetections != null && rawDetections is! List) {
-      throw const FormatException('검증 결과에 detections 목록이 필요해');
+      throw const FormatException('검증 결과에 detections 목록이 필요합니다');
     }
     if (rawMeasurements != null && rawMeasurements is! Map) {
-      throw const FormatException('검증 결과에 measurements 객체가 필요해');
+      throw const FormatException('검증 결과에 measurements 객체가 필요합니다');
     }
     return ModelValidationResult(
       source: _requiredString(json, 'source'),
@@ -463,7 +464,7 @@ class ModelValidationResult {
           : List.unmodifiable(
               (rawDetections as List).map((value) {
                 if (value is! Map) {
-                  throw const FormatException('검증 결과에 검출 객체가 필요해');
+                  throw const FormatException('검증 결과에 검출 객체가 필요합니다');
                 }
                 return ModelValidationDetection.fromJson(
                   Map<String, dynamic>.from(value),
@@ -493,7 +494,7 @@ class ModelValidation {
   factory ModelValidation.fromJson(Map<String, dynamic> json) {
     final rawResults = json['results'];
     if (rawResults is! List) {
-      throw const FormatException('검증 결과 목록이 필요해');
+      throw const FormatException('검증 결과 목록이 필요합니다');
     }
     return ModelValidation(
       technicalPassed: _requiredBool(json, 'technical_passed'),
@@ -531,7 +532,7 @@ class ModelBuild {
   factory ModelBuild.fromJson(Map<String, dynamic> json) {
     final rawValidation = json['validation'];
     if (rawValidation != null && rawValidation is! Map) {
-      throw const FormatException('validation 객체가 필요해');
+      throw const FormatException('validation 객체가 필요합니다');
     }
     return ModelBuild(
       buildId: _requiredString(json, 'build_id'),
@@ -579,7 +580,7 @@ class ReferenceModel {
   factory ReferenceModel.fromJson(Map<String, dynamic> json) {
     final rawValidation = json['validation'];
     if (rawValidation != null && rawValidation is! Map) {
-      throw const FormatException('validation 객체가 필요해');
+      throw const FormatException('validation 객체가 필요합니다');
     }
     return ReferenceModel(
       modelId: _requiredString(json, 'model_id'),
@@ -608,7 +609,7 @@ class ReferenceModelList {
 
   factory ReferenceModelList.fromJson(Map<String, dynamic> json) {
     final rawModels = json['models'];
-    if (rawModels is! List) throw const FormatException('models 목록이 필요해');
+    if (rawModels is! List) throw const FormatException('models 목록이 필요합니다');
     return ReferenceModelList(
       models: List.unmodifiable(
         rawModels.map(
@@ -684,14 +685,13 @@ class RemoteReferenceApiService {
   RemoteReferenceApiService({
     Duration requestTimeout = const Duration(seconds: 10),
     int maxImageBytes = 16 * 1024 * 1024,
-  }) : _requestTimeout = requestTimeout,
+  }) : _client = ApiHttpClient(timeout: requestTimeout),
        _maxImageBytes = maxImageBytes;
 
-  final HttpClient _client = HttpClient();
-  final Duration _requestTimeout;
+  final ApiHttpClient _client;
   final int _maxImageBytes;
 
-  void close() => _client.close(force: true);
+  void close() => _client.close();
 
   Future<ReferenceApiStatus> fetchStatus(
     AppSettings settings, {
@@ -713,7 +713,7 @@ class RemoteReferenceApiService {
   }) async {
     final normalizedCameraId = cameraId.trim();
     if (normalizedCameraId.isEmpty) {
-      throw const FormatException('camera_id가 비어 있으면 안 돼');
+      throw const FormatException('camera_id가 비어 있으면 안 됩니다');
     }
     final json = await _requestJson(
       'POST',
@@ -753,42 +753,33 @@ class RemoteReferenceApiService {
     required String bearerToken,
   }) async {
     final uri = _relativeApiUri(settings, relativeUrl);
-    HttpClientRequest? request;
-    try {
-      request = await _client.getUrl(uri).timeout(_requestTimeout);
-      request.headers.set(HttpHeaders.acceptHeader, 'image/png');
-      _setAuthorization(request, bearerToken);
-      final response = await request.close().timeout(_requestTimeout);
-      if (response.statusCode != HttpStatus.ok) {
-        final responseBody = await response
-            .transform(utf8.decoder)
-            .join()
-            .timeout(_requestTimeout);
-        throw _apiException('GET', uri, response.statusCode, responseBody);
-      }
-      if (response.headers.contentType?.mimeType != 'image/png') {
-        throw const FormatException('기준 이미지 응답은 PNG여야 해');
-      }
-      final declaredLength = response.contentLength;
-      if (declaredLength > _maxImageBytes) {
-        throw const FormatException('기준 이미지가 16 MiB를 초과했어');
-      }
-      final bytes = BytesBuilder(copy: false);
-      await for (final chunk in response.timeout(_requestTimeout)) {
-        if (bytes.length + chunk.length > _maxImageBytes) {
-          request.abort();
-          throw const FormatException('기준 이미지가 16 MiB를 초과했어');
+    return _client.send(
+      'GET',
+      uri,
+      accept: 'image/png',
+      headers: _authorization(bearerToken),
+      read: (response) async {
+        if (response.statusCode != HttpStatus.ok) {
+          final body = await response.transform(utf8.decoder).join();
+          throw _apiException('GET', uri, response.statusCode, body);
         }
-        bytes.add(chunk);
-      }
-      return bytes.takeBytes();
-    } on TimeoutException {
-      request?.abort();
-      rethrow;
-    } catch (_) {
-      request?.abort();
-      rethrow;
-    }
+        if (response.headers.contentType?.mimeType != 'image/png') {
+          throw const FormatException('기준 이미지 응답는 PNG여야 합니다');
+        }
+        final maxBytes = _maxImageBytes;
+        if (response.contentLength > maxBytes) {
+          throw const FormatException('기준 이미지가 16 MiB를 초과했습니다');
+        }
+        final bytes = BytesBuilder(copy: false);
+        await for (final chunk in response) {
+          if (bytes.length + chunk.length > maxBytes) {
+            throw const FormatException('기준 이미지가 16 MiB를 초과했습니다');
+          }
+          bytes.add(chunk);
+        }
+        return bytes.takeBytes();
+      },
+    );
   }
 
   Future<ReferenceRevisionList> fetchRevisions(
@@ -798,7 +789,7 @@ class RemoteReferenceApiService {
     String? cursor,
   }) async {
     if (limit < 1 || limit > 100) {
-      throw const FormatException('조회 개수는 1~100이어야 해');
+      throw const FormatException('조회 개수는 1~100이어야 합니다');
     }
     final base = settings.buildApiUri('reference/revisions');
     final uri = base.replace(
@@ -837,7 +828,7 @@ class RemoteReferenceApiService {
     final normalizedClass = _requireId(className, 'class_name');
     final normalizedImageId = _requireId(imageId, 'image_id');
     if (boxes.isEmpty || boxes.length > 64) {
-      throw const FormatException('박스는 1~64개가 필요해');
+      throw const FormatException('박스는 1~64개가 필요합니다');
     }
     final json = await _requestJson(
       'POST',
@@ -899,7 +890,7 @@ class RemoteReferenceApiService {
     String? cursor,
   }) async {
     if (limit < 1 || limit > 100) {
-      throw const FormatException('조회 개수는 1~100이어야 해');
+      throw const FormatException('조회 개수는 1~100이어야 합니다');
     }
     final uri = settings
         .buildApiUri('models')
@@ -958,48 +949,16 @@ class RemoteReferenceApiService {
     Uri uri, {
     required String bearerToken,
     Map<String, dynamic>? body,
-  }) async {
-    HttpClientRequest? request;
-    try {
-      request = await _client.openUrl(method, uri).timeout(_requestTimeout);
-      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      _setAuthorization(request, bearerToken);
-      if (body == null) {
-        if (method == 'POST') request.headers.contentLength = 0;
-      } else {
-        final encoded = utf8.encode(jsonEncode(body));
-        if (encoded.length > 64 * 1024) {
-          throw const FormatException('기준 이미지 요청이 64 KiB를 초과했어');
-        }
-        request.headers.contentType = ContentType.json;
-        request.headers.contentLength = encoded.length;
-        request.add(encoded);
-      }
-      final response = await request.close().timeout(_requestTimeout);
-      final responseBody = await response
-          .transform(utf8.decoder)
-          .join()
-          .timeout(_requestTimeout);
-      if (response.statusCode != HttpStatus.ok &&
-          response.statusCode != HttpStatus.created &&
-          response.statusCode != HttpStatus.accepted) {
-        throw _apiException(method, uri, response.statusCode, responseBody);
-      }
-      if (responseBody.isEmpty) return const <String, dynamic>{};
-      final decoded = jsonDecode(responseBody);
-      if (decoded is! Map<String, dynamic>) {
-        throw const FormatException('JSON 객체 응답이 필요해');
-      }
-      return decoded;
-    } on TimeoutException {
-      request?.abort();
-      rethrow;
-    } catch (_) {
-      request?.abort();
-      rethrow;
-    }
-  }
-
+  }) => _client.requestJson(
+    method,
+    uri,
+    body: body,
+    allowEmpty: true,
+    headers: _authorization(bearerToken),
+    maxRequestBytes: 64 * 1024,
+    expectedStatusCodes: const {200, 201, 202},
+    error: (status, text, _) => _apiException(method, uri, status, text),
+  );
   static RemoteReferenceApiException _apiException(
     String method,
     Uri uri,
@@ -1027,11 +986,11 @@ class RemoteReferenceApiService {
     );
   }
 
-  static void _setAuthorization(HttpClientRequest request, String bearerToken) {
+  static Map<String, String> _authorization(String bearerToken) {
     if (!RegExp(r'^[A-Za-z0-9_-]{32,256}$').hasMatch(bearerToken)) {
-      throw const FormatException('관리 인증 정보가 올바르지 않아');
+      throw const FormatException('관리 인증 정보가 올바르지 않습니다');
     }
-    request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $bearerToken');
+    return {HttpHeaders.authorizationHeader: 'Bearer $bearerToken'};
   }
 }
 
@@ -1053,7 +1012,7 @@ Uri _relativeApiUri(AppSettings settings, String relativeUrl) {
   if (relative.hasScheme ||
       relative.hasAuthority ||
       !relativeUrl.startsWith('/')) {
-    throw const FormatException('서버 리소스 URL은 상대 경로여야 해');
+    throw const FormatException('서버 리소스 URL은 상대 경로여야 합니다');
   }
   final base = Uri.parse(
     settings.detectorBaseUrl.contains('://')
@@ -1065,14 +1024,14 @@ Uri _relativeApiUri(AppSettings settings, String relativeUrl) {
 
 String _requireId(String value, String field) {
   final normalized = value.trim();
-  if (normalized.isEmpty) throw FormatException('$field 항목이 비어 있으면 안 돼');
+  if (normalized.isEmpty) throw FormatException('$field 항목이 비어 있으면 안 됩니다');
   return normalized;
 }
 
 String _requiredString(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value is! String || value.isEmpty) {
-    throw FormatException('$key 항목에 비어 있지 않은 문자열이 필요해');
+    throw FormatException('$key 항목에 비어 있지 않은 문자열이 필요합니다');
   }
   return value;
 }
@@ -1080,27 +1039,27 @@ String _requiredString(Map<String, dynamic> json, String key) {
 String _optionalString(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value == null) return '';
-  if (value is! String) throw FormatException('$key 항목에 문자열이 필요해');
+  if (value is! String) throw FormatException('$key 항목에 문자열이 필요합니다');
   return value;
 }
 
 String? _nullableString(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value == null) return null;
-  if (value is! String) throw FormatException('$key 항목에 문자열이 필요해');
+  if (value is! String) throw FormatException('$key 항목에 문자열이 필요합니다');
   return value.isEmpty ? null : value;
 }
 
 bool _requiredBool(Map<String, dynamic> json, String key) {
   final value = json[key];
-  if (value is! bool) throw FormatException('$key 항목에 불리언 값이 필요해');
+  if (value is! bool) throw FormatException('$key 항목에 불리언 값이 필요합니다');
   return value;
 }
 
 int _requiredInt(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value is! num || !value.isFinite || value != value.roundToDouble()) {
-    throw FormatException('$key 항목에 정수가 필요해');
+    throw FormatException('$key 항목에 정수가 필요합니다');
   }
   return value.toInt();
 }
@@ -1114,7 +1073,7 @@ num? _optionalNumber(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value == null) return null;
   if (value is! num || !value.isFinite) {
-    throw FormatException('$key 항목에 유한한 숫자가 필요해');
+    throw FormatException('$key 항목에 유한한 숫자가 필요합니다');
   }
   return value;
 }
@@ -1125,5 +1084,5 @@ String _errorMessage(dynamic error) {
   if (error is Map && error['message'] is String) {
     return error['message'] as String;
   }
-  throw const FormatException('촬영 오류 응답이 올바르지 않아');
+  throw const FormatException('촬영 오류 응답이 올바르지 않습니다');
 }

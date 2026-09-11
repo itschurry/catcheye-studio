@@ -31,6 +31,12 @@ class _CameraDepthCalibrationScreenState
   }
 
   @override
+  void dispose() {
+    _api.close();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       children: [
@@ -257,7 +263,7 @@ class _CameraPosition extends StatelessWidget {
       children: [
         SelectableText(
           '카메라는 로봇 기준으로 x=${_meter(position.x)}, '
-          'y=${_meter(position.y)}, z=${_meter(position.z)} 위치에 있음',
+          'y=${_meter(position.y)}, z=${_meter(position.z)} 위치에 있습니다',
         ),
         const SizedBox(height: 10),
         _AxisOffset(axis: 'X', value: position.x),

@@ -46,7 +46,7 @@ class ZoneListPanel extends StatelessWidget {
               child: zones.isEmpty
                   ? const Center(
                       child: Text(
-                        '영역이 없어.\n+ 버튼으로 영역을 추가해.',
+                        '영역이 없습니다.\n+ 버튼으로 영역을 추가해 주세요.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.grey),
                       ),
@@ -290,7 +290,7 @@ class _PointRow extends StatelessWidget {
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline, size: 16),
-            tooltip: canRemove ? '꼭짓점 삭제' : '꼭짓점이 최소 3개 필요해',
+            tooltip: canRemove ? '꼭짓점 삭제' : '꼭짓점이 최소 3개 필요합니다',
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints.tightFor(width: 28, height: 28),
             color: canRemove ? Colors.redAccent : Colors.grey,

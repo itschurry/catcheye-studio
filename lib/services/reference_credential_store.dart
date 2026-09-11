@@ -42,7 +42,7 @@ class ReferenceCredentialStore {
   Future<void> writeToken(AppSettings settings, String token) async {
     final normalized = token.trim();
     if (!isValidReferenceToken(normalized)) {
-      throw const FormatException('관리 토큰은 영문·숫자·-·_로 구성된 32자 이상의 문자열이어야 해.');
+      throw const FormatException('관리 토큰은 영문·숫자·-·_로 구성된 32자 이상의 문자열이어야 합니다.');
     }
     await _backend.write(_key(settings), normalized);
   }

@@ -139,7 +139,7 @@ class _StationUndistortionControlState
               )
             else if (_enabled != null)
               Tooltip(
-                message: '이 카메라의 송출·검출·저장·기준 촬영에 함께 적용돼',
+                message: '이 카메라의 송출·검출·저장·기준 촬영에 함께 적용됩니다',
                 child: Switch(
                   value: _enabled!,
                   onChanged:

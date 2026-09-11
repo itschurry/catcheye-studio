@@ -334,7 +334,7 @@ class _MonitorCameraTile extends StatelessWidget {
               ),
               Expanded(
                 child: Tooltip(
-                  message: '더블클릭하면 뷰어에서 열려',
+                  message: '더블클릭하면 뷰어에서 열립니다',
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onDoubleTap: onOpenViewer,
@@ -501,7 +501,7 @@ class _EmptyMonitor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Center(
-      child: Text('등록된 카메라가 없어', style: TextStyle(color: Colors.grey)),
+      child: Text('등록된 카메라가 없습니다', style: TextStyle(color: Colors.grey)),
     );
   }
 }

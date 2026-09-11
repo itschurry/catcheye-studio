@@ -264,7 +264,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Management token was rejected.'), findsOneWidget);
-    expect(find.text('기준 이미지를 관리할 수 없어'), findsNothing);
+    expect(find.text('기준 이미지를 관리할 수 없습니다'), findsNothing);
   });
 
   testWidgets('reference screen state survives navigation to another tab', (

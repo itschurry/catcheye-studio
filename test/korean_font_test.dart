@@ -47,7 +47,7 @@ void main() {
                 Expanded(
                   child: ReferenceBoxEditor(
                     imageBytes: base64Decode(
-                      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
+                      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
                     ),
                     imageWidth: 1920,
                     imageHeight: 1200,

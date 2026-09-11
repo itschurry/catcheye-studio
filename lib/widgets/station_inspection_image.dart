@@ -68,18 +68,18 @@ class _StationInspectionImageState extends State<StationInspectionImage> {
     });
     try {
       if (!widget.result.state.isFinal) {
-        throw StateError('완료된 검사의 이미지가 아직 없어.');
+        throw StateError('완료된 검사의 이미지가 아직 없습니다.');
       }
       if (!widget.inspection.artifacts.containsKey(_kind)) {
         throw StateError(
           widget.inspection.artifactError.isNotEmpty
               ? '이미지 저장 실패: ${widget.inspection.artifactError}'
-              : '이 검사의 ${_kind == 'overlay' ? '검출 결과' : '원본'} 이미지가 저장되지 않았어. Inspect 저장 설정과 검사 오류를 확인해.',
+              : '이 검사의 ${_kind == 'overlay' ? '검출 결과' : '원본'} 이미지가 저장되지 않았습니다. Inspect 저장 설정과 검사 오류를 확인해 주세요.',
         );
       }
       final storagePath = widget.result.rawJson['storage_path'];
       if (widget.archived && (storagePath is! String || storagePath.isEmpty)) {
-        throw StateError('저장된 검사 이미지 경로가 없어.');
+        throw StateError('저장된 검사 이미지 경로가 없습니다.');
       }
       final bytes = await widget.api.fetchStationImage(
         context.read<SettingsProvider>().settings,
@@ -94,7 +94,7 @@ class _StationInspectionImageState extends State<StationInspectionImage> {
       if (!mounted || session != _session) return;
       setState(
         () => _error = error.statusCode == 404
-            ? '이미지를 찾을 수 없어. Inspect의 이미지 조회 API 적용 여부와 파일 보존 상태를 확인해.\n${error.message}'
+            ? '이미지를 찾을 수 없습니다. Inspect의 이미지 조회 API 적용 여부와 파일 보존 상태를 확인해 주세요.\n${error.message}'
             : '이미지 조회 실패 (${error.statusCode})\n${error.message}',
       );
     } catch (error) {
@@ -170,7 +170,7 @@ class _StationInspectionImageState extends State<StationInspectionImage> {
                       fit: BoxFit.contain,
                       errorBuilder: (_, _, _) => const Center(
                         child: Text(
-                          '저장 이미지 파일을 해석할 수 없어.',
+                          '저장 이미지 파일을 해석할 수 없습니다.',
                           style: TextStyle(color: Colors.orangeAccent),
                         ),
                       ),

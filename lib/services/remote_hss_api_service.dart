@@ -1,12 +1,15 @@
+import 'api_http_client.dart';
 import 'dart:convert';
-import 'dart:io';
 
 import '../models/app_settings.dart';
 import '../models/roi_config.dart';
 import 'roi_config_service.dart';
 
 class RemoteHssApiService {
-  final HttpClient _client = HttpClient();
+  RemoteHssApiService({ApiHttpClient? client})
+    : _client = client ?? ApiHttpClient();
+  final ApiHttpClient _client;
+  void close() => _client.close();
 
   Future<CameraRoiConfig> fetchRoi(
     AppSettings settings, {
@@ -34,36 +37,11 @@ class RemoteHssApiService {
     Uri uri, {
     Object? body,
     Set<int> expectedStatusCodes = const {200},
-  }) async {
-    final request = await _client.openUrl(method, uri);
-    request.headers.contentType = ContentType.json;
-    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-    if (body != null) {
-      final bodyBytes = utf8.encode(jsonEncode(body));
-      request.headers.contentLength = bodyBytes.length;
-      request.add(bodyBytes);
-    }
-
-    final response = await request.close();
-    final responseBody = await response.transform(utf8.decoder).join();
-    if (!expectedStatusCodes.contains(response.statusCode)) {
-      final errorBody = responseBody.isEmpty
-          ? response.reasonPhrase
-          : responseBody;
-      throw HttpException(
-        '요청 실패 (${response.statusCode}) · $uri: $errorBody',
-        uri: uri,
-      );
-    }
-
-    if (responseBody.isEmpty) {
-      return const <String, dynamic>{};
-    }
-
-    final decoded = jsonDecode(responseBody);
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('JSON 객체 응답이 필요해');
-    }
-    return decoded;
-  }
+  }) => _client.requestJson(
+    method,
+    uri,
+    body: body,
+    expectedStatusCodes: expectedStatusCodes,
+    allowEmpty: true,
+  );
 }

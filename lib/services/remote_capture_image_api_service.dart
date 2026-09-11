@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'api_http_client.dart';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -137,7 +137,10 @@ class CaptureImageList {
 }
 
 class RemoteCaptureImageApiService {
-  final HttpClient _client = HttpClient();
+  RemoteCaptureImageApiService({ApiHttpClient? client})
+    : _client = client ?? ApiHttpClient();
+  final ApiHttpClient _client;
+  void close() => _client.close();
 
   Future<CaptureDatesResponse> fetchDates(AppSettings settings) async {
     final json = await _requestJson(
@@ -177,48 +180,39 @@ class RemoteCaptureImageApiService {
     AppSettings settings,
     CaptureImageItem image,
   ) async {
-    final request = await _client.openUrl(
-      'GET',
-      settings.buildApiUri('captures/file/${image.date}/${image.filename}'),
+    final uri = settings.buildApiUri(
+      'captures/file/${image.date}/${image.filename}',
     );
-    request.headers.set(HttpHeaders.acceptHeader, 'image/jpeg');
-
-    final response = await request.close();
-    final chunks = <int>[];
-    await for (final chunk in response) {
-      chunks.addAll(chunk);
-    }
-    if (response.statusCode != 200) {
-      throw HttpException(
-        '요청 실패 (${response.statusCode}) · ${request.uri}',
-        uri: request.uri,
-      );
-    }
-    return Uint8List.fromList(chunks);
+    return _client.send(
+      'GET',
+      uri,
+      accept: 'image/jpeg',
+      read: (response) async {
+        if (response.statusCode != 200) {
+          throw HttpException(
+            '이미지 요청 실패 (${response.statusCode}) · $uri',
+            uri: uri,
+          );
+        }
+        final bytes = BytesBuilder(copy: false);
+        await for (final chunk in response) {
+          bytes.add(chunk);
+        }
+        return bytes.takeBytes();
+      },
+    );
   }
 
-  Future<Map<String, dynamic>> _requestJson(String method, Uri uri) async {
-    final request = await _client.openUrl(method, uri);
-    request.headers.contentType = ContentType.json;
-    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-    request.headers.contentLength = 0;
-
-    final response = await request.close();
-    final responseBody = await response.transform(utf8.decoder).join();
-    if (response.statusCode != 200) {
-      final errorBody = responseBody.isEmpty
-          ? response.reasonPhrase
-          : responseBody;
-      throw HttpException(
-        '요청 실패 (${response.statusCode}) · $uri: $errorBody',
-        uri: uri,
-      );
-    }
-
-    final decoded = jsonDecode(responseBody);
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('JSON 객체 응답이 필요해');
-    }
-    return decoded;
-  }
+  Future<Map<String, dynamic>> _requestJson(
+    String method,
+    Uri uri, {
+    Object? body,
+    Set<int> expectedStatusCodes = const {200},
+  }) => _client.requestJson(
+    method,
+    uri,
+    body: body,
+    expectedStatusCodes: expectedStatusCodes,
+    allowEmpty: false,
+  );
 }

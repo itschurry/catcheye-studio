@@ -1,5 +1,4 @@
-import 'dart:convert';
-import 'dart:io';
+import 'api_http_client.dart';
 
 import '../models/app_settings.dart';
 
@@ -228,7 +227,10 @@ class RobotCalibration {
 }
 
 class RemoteCubeEyeApiService {
-  final HttpClient _client = HttpClient();
+  RemoteCubeEyeApiService({ApiHttpClient? client})
+    : _client = client ?? ApiHttpClient();
+  final ApiHttpClient _client;
+  void close() => _client.close();
 
   Future<CubeEyeProperties> fetchProperties(AppSettings settings) async {
     final json = await _requestJson(
@@ -402,32 +404,12 @@ class RemoteCubeEyeApiService {
     String method,
     Uri uri, {
     Object? body,
-  }) async {
-    final request = await _client.openUrl(method, uri);
-    request.headers.contentType = ContentType.json;
-    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-    if (body != null) {
-      final bodyBytes = utf8.encode(jsonEncode(body));
-      request.headers.contentLength = bodyBytes.length;
-      request.add(bodyBytes);
-    }
-
-    final response = await request.close();
-    final responseBody = await response.transform(utf8.decoder).join();
-    if (response.statusCode != 200) {
-      final errorBody = responseBody.isEmpty
-          ? response.reasonPhrase
-          : responseBody;
-      throw HttpException(
-        '요청 실패 (${response.statusCode}) · $uri: $errorBody',
-        uri: uri,
-      );
-    }
-
-    final decoded = jsonDecode(responseBody);
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('JSON 객체 응답이 필요해');
-    }
-    return decoded;
-  }
+    Set<int> expectedStatusCodes = const {200},
+  }) => _client.requestJson(
+    method,
+    uri,
+    body: body,
+    expectedStatusCodes: expectedStatusCodes,
+    allowEmpty: false,
+  );
 }

@@ -1,3 +1,4 @@
+import '../controllers/station_controller.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -67,21 +68,10 @@ class _ViewerScreenState extends State<ViewerScreen>
   RemoteRecordingStatus? _recordingStatus;
   bool _recordingActionInFlight = false;
   bool _captureActionInFlight = false;
+  final _recordingApi = RemoteRecordingApiService();
   final RemoteCaptureApiService _captureApi = RemoteCaptureApiService();
-  bool _isInspectionStation = false;
-  StationCaptureStatus? _stationStatus;
-  StationViewerSource? _stationViewerSource;
-  StationViewerLayout _stationViewerLayout = StationViewerLayout.oneByOne;
-  List<String> _stationCameraSlots = const [''];
-  final Map<String, StationCaptureResult> _stationCycles = {};
-  String? _selectedStationCycleId;
-  String? _stationError;
-  bool _stationSourceActionInFlight = false;
-  bool _stationUndistortionActionInFlight = false;
-  bool _stationPollInFlight = false;
-  Timer? _stationPollTimer;
-  int _stationSession = 0;
-  String? _stationApiBaseUrl;
+  late final StationController _station;
+  int _connectionGeneration = 0;
   int _handledReconnectToken = 0;
   late final AnimationController _roiAlertBlinkController;
   late final Animation<double> _roiAlertOpacity;
@@ -89,6 +79,14 @@ class _ViewerScreenState extends State<ViewerScreen>
   @override
   void initState() {
     super.initState();
+    _station = StationController(
+      api: _captureApi,
+      selectCameras: (ids) =>
+          context.read<FrameReceiverService>().setExpectedCameraIds(ids),
+      persistLayout: (layout, slots) => context
+          .read<SettingsProvider>()
+          .updateStationViewerLayout(layout: layout, cameraSlots: slots),
+    )..addListener(_onStationChanged);
     _roiAlertBlinkController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 850),
@@ -101,10 +99,15 @@ class _ViewerScreenState extends State<ViewerScreen>
     );
   }
 
+  void _onStationChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
-    _stationPollTimer?.cancel();
+    _station.dispose();
     _captureApi.close();
+    _recordingApi.close();
     _roiAlertBlinkController.dispose();
     super.dispose();
   }
@@ -126,11 +129,7 @@ class _ViewerScreenState extends State<ViewerScreen>
     _hasManualDepthRange =
         settings.pointCloudDepthMin != null &&
         settings.pointCloudDepthMax != null;
-    _stationViewerLayout = settings.stationViewerLayout;
-    _stationCameraSlots = resizeStationCameraSlots(
-      _stationViewerLayout,
-      settings.stationViewerCameraSlots,
-    );
+    _station.restoreLayout(settings);
     _connectAfterTabReturn();
   }
 
@@ -188,7 +187,7 @@ class _ViewerScreenState extends State<ViewerScreen>
             ),
             const Divider(height: 1),
 
-            if (_isInspectionStation) ...[
+            if (_station.active) ...[
               _buildStationPanel(settings, receiver),
               const Divider(height: 1),
             ],
@@ -215,7 +214,7 @@ class _ViewerScreenState extends State<ViewerScreen>
     RemoteDeviceKind? remoteDeviceKind, {
     required bool showRoiAlertOff,
   }) {
-    if (_isInspectionStation) {
+    if (_station.active) {
       return _buildStationViewerGrid(receiver);
     }
     final selectedFrame = receiver.selectedFrame;
@@ -753,7 +752,7 @@ class _ViewerScreenState extends State<ViewerScreen>
                 pitch: _viewPitch,
               ),
             ),
-          if (!_isInspectionStation &&
+          if (!_station.active &&
               stream.kind != 'camera' &&
               receiver.detectionPositions.isNotEmpty)
             CustomPaint(
@@ -1577,30 +1576,29 @@ class _ViewerScreenState extends State<ViewerScreen>
 
   Widget _buildStationViewerGrid(FrameReceiverService receiver) {
     final slots = List<String>.generate(
-      _stationViewerLayout.slotCount,
-      (index) =>
-          index < _stationCameraSlots.length ? _stationCameraSlots[index] : '',
+      _station.layout.slotCount,
+      (index) => index < _station.slots.length ? _station.slots[index] : '',
     );
     return Padding(
       padding: const EdgeInsets.all(8),
       child: Column(
         children: [
-          for (var row = 0; row < _stationViewerLayout.rows; row++) ...[
+          for (var row = 0; row < _station.layout.rows; row++) ...[
             if (row > 0) const SizedBox(height: 8),
             Expanded(
               child: Row(
                 children: [
                   for (
                     var column = 0;
-                    column < _stationViewerLayout.columns;
+                    column < _station.layout.columns;
                     column++
                   ) ...[
                     if (column > 0) const SizedBox(width: 8),
                     Expanded(
                       child: _buildStationCameraTile(
                         receiver,
-                        slots[row * _stationViewerLayout.columns + column],
-                        row * _stationViewerLayout.columns + column,
+                        slots[row * _station.layout.columns + column],
+                        row * _station.layout.columns + column,
                       ),
                     ),
                   ],
@@ -1619,17 +1617,17 @@ class _ViewerScreenState extends State<ViewerScreen>
     int slotIndex,
   ) {
     final frame = cameraId.isEmpty ? null : receiver.streams[cameraId];
-    final cameraStatus = _stationStatus?.cameras[cameraId];
+    final cameraStatus = _station.status?.cameras[cameraId];
     final isFresh =
         frame != null &&
         DateTime.now().difference(frame.receivedAt) <=
             const Duration(seconds: 3);
     String? waitingMessage;
     if (cameraId.isEmpty) {
-      waitingMessage = '${slotIndex + 1}번 화면의 카메라를 선택해';
+      waitingMessage = '${slotIndex + 1}번 화면의 카메라를 선택해 주세요';
     } else if (!receiver.connected) {
       waitingMessage = '연결 끊김';
-    } else if (_stationSourceActionInFlight) {
+    } else if (_station.sourceBusy) {
       waitingMessage = '카메라 선택 적용 중...';
     } else if (frame == null || !isFresh) {
       waitingMessage = cameraStatus?.lastError.isNotEmpty == true
@@ -1696,21 +1694,22 @@ class _ViewerScreenState extends State<ViewerScreen>
     AppSettings settings,
     FrameReceiverService receiver,
   ) {
-    final status = _stationStatus;
-    final source = _stationViewerSource;
+    final status = _station.status;
+    final source = _station.source;
     final cameraIds = <String>{
       ...?source?.cameras,
       ...?status?.cameras.keys,
       ...?source?.cameraIds,
     }.where((cameraId) => cameraId.isNotEmpty).toList(growable: false)..sort();
-    final selectedCycleId = _stationCycles.containsKey(_selectedStationCycleId)
-        ? _selectedStationCycleId
-        : _stationCycles.isEmpty
+    final selectedCycleId =
+        _station.cycles.containsKey(_station.selectedCycleId)
+        ? _station.selectedCycleId
+        : _station.cycles.isEmpty
         ? null
-        : _stationCycles.keys.last;
+        : _station.cycles.keys.last;
     final selectedResult = selectedCycleId == null
         ? null
-        : _stationCycles[selectedCycleId];
+        : _station.cycles[selectedCycleId];
     final queueText = status == null
         ? '대기열: 조회 중'
         : '대기열: ${status.pendingCount}/${status.maxPendingCaptures}'
@@ -1738,11 +1737,11 @@ class _ViewerScreenState extends State<ViewerScreen>
                     for (final layout in StationViewerLayout.values)
                       ButtonSegment(value: layout, label: Text(layout.label)),
                   ],
-                  selected: {_stationViewerLayout},
+                  selected: {_station.layout},
                   showSelectedIcon: false,
                   onSelectionChanged:
-                      _stationSourceActionInFlight ||
-                          _stationUndistortionActionInFlight ||
+                      _station.sourceBusy ||
+                          _station.undistortionBusy ||
                           source == null
                       ? null
                       : (selection) => unawaited(
@@ -1754,18 +1753,14 @@ class _ViewerScreenState extends State<ViewerScreen>
                           ),
                         ),
                 ),
-                for (
-                  var slot = 0;
-                  slot < _stationViewerLayout.slotCount;
-                  slot++
-                )
+                for (var slot = 0; slot < _station.layout.slotCount; slot++)
                   SizedBox(
                     width: 190,
                     child: Column(
                       children: [
                         DropdownButtonFormField<String>(
                           key: ValueKey(
-                            'station-camera-${_stationViewerLayout.name}-$slot-${_stationCameraForSlot(slot)}',
+                            'station-camera-${_station.layout.name}-$slot-${_stationCameraForSlot(slot)}',
                           ),
                           initialValue: _stationCameraForSlot(slot),
                           isExpanded: true,
@@ -1789,8 +1784,8 @@ class _ViewerScreenState extends State<ViewerScreen>
                               ),
                           ],
                           onChanged:
-                              _stationSourceActionInFlight ||
-                                  _stationUndistortionActionInFlight ||
+                              _station.sourceBusy ||
+                                  _station.undistortionBusy ||
                                   source == null
                               ? null
                               : (cameraId) {
@@ -1809,7 +1804,7 @@ class _ViewerScreenState extends State<ViewerScreen>
                         if (_stationCameraForSlot(slot).isNotEmpty)
                           StationUndistortionControl(
                             key: ValueKey(
-                              'undistortion-$_stationSession-${settings.detectorBaseUrl}-${_stationCameraForSlot(slot)}',
+                              'undistortion-${_station.session}-${settings.detectorBaseUrl}-${_stationCameraForSlot(slot)}',
                             ),
                             api: _captureApi,
                             settings: settings,
@@ -1824,10 +1819,10 @@ class _ViewerScreenState extends State<ViewerScreen>
                                 status.busy ||
                                 status.pendingCount > 0 ||
                                 _captureActionInFlight ||
-                                _stationSourceActionInFlight ||
-                                _stationUndistortionActionInFlight,
+                                _station.sourceBusy ||
+                                _station.undistortionBusy,
                             onApplyingChanged: (value) => setState(
-                              () => _stationUndistortionActionInFlight = value,
+                              () => _station.undistortionBusy = value,
                             ),
                           ),
                       ],
@@ -1877,12 +1872,11 @@ class _ViewerScreenState extends State<ViewerScreen>
           StationCaptureActions(
             status: status,
             connected: receiver.connected,
-            inFlight:
-                _captureActionInFlight || _stationUndistortionActionInFlight,
+            inFlight: _captureActionInFlight || _station.undistortionBusy,
             onCapture: (target) =>
                 _requestCapture(settings, stationTarget: target),
           ),
-          if (_stationCycles.isNotEmpty) ...[
+          if (_station.cycles.isNotEmpty) ...[
             const SizedBox(height: 8),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -1901,7 +1895,7 @@ class _ViewerScreenState extends State<ViewerScreen>
                       ),
                       items: [
                         for (final cycleId
-                            in _stationCycles.keys.toList().reversed)
+                            in _station.cycles.keys.toList().reversed)
                           DropdownMenuItem(
                             value: cycleId,
                             child: Text(
@@ -1911,7 +1905,7 @@ class _ViewerScreenState extends State<ViewerScreen>
                           ),
                       ],
                       onChanged: (value) =>
-                          setState(() => _selectedStationCycleId = value),
+                          setState(() => _station.selectedCycleId = value),
                     ),
                   ),
                   if (selectedResult != null) ...[
@@ -1945,11 +1939,11 @@ class _ViewerScreenState extends State<ViewerScreen>
               ),
             ),
           ],
-          if (_stationError != null ||
+          if (_station.error != null ||
               status?.lastError.isNotEmpty == true) ...[
             const SizedBox(height: 6),
             Text(
-              _stationError ?? status!.lastError,
+              _station.error ?? status!.lastError,
               style: const TextStyle(color: Colors.orangeAccent, fontSize: 12),
             ),
           ],
@@ -1992,9 +1986,9 @@ class _ViewerScreenState extends State<ViewerScreen>
       existing = await credentials.readToken(settings);
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('인증 정보 저장소를 사용할 수 없어: $error')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('인증 정보 저장소를 사용할 수 없습니다: $error')),
+        );
       }
       return;
     }
@@ -2015,8 +2009,8 @@ class _ViewerScreenState extends State<ViewerScreen>
               children: [
                 Text(
                   existing == null
-                      ? '이 API 서버의 토큰이 저장되어 있지 않아.'
-                      : '이 API 서버의 토큰이 저장되어 있어.',
+                      ? '이 API 서버의 토큰이 저장되어 있지 않습니다.'
+                      : '이 API 서버의 토큰이 저장되어 있습니다.',
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -2029,8 +2023,8 @@ class _ViewerScreenState extends State<ViewerScreen>
                   decoration: InputDecoration(
                     labelText: '관리 토큰',
                     hintText: existing == null
-                        ? '장비 관리 토큰을 붙여 넣어'
-                        : '비워 두면 기존 토큰을 유지해',
+                        ? '장비 관리 토큰을 붙여 넣어 주세요'
+                        : '비워 두면 기존 토큰을 유지합니다',
                     border: const OutlineInputBorder(),
                     suffixIcon: IconButton(
                       tooltip: hidden ? '토큰 표시' : '토큰 숨기기',
@@ -2045,7 +2039,7 @@ class _ViewerScreenState extends State<ViewerScreen>
                 ),
                 const SizedBox(height: 10),
                 const Text(
-                  '운영체제 인증 정보 저장소에 보관해. 원격 관리에는 보안 터널이나 TLS 프록시를 사용해.',
+                  '운영체제 인증 정보 저장소에 보관합니다. 원격 관리에는 보안 터널이나 TLS 프록시를 사용해 주세요.',
                   style: TextStyle(fontSize: 12),
                 ),
               ],
@@ -2084,7 +2078,7 @@ class _ViewerScreenState extends State<ViewerScreen>
               action == 'clear'
                   ? '관리 토큰 삭제 완료.'
                   : controller.text.trim().isEmpty
-                  ? '기존 관리 토큰을 유지했어.'
+                  ? '기존 관리 토큰을 유지했습니다.'
                   : '관리 토큰 저장 완료.',
             ),
           ),
@@ -2197,321 +2191,27 @@ class _ViewerScreenState extends State<ViewerScreen>
   Future<void> _initializeStation(
     AppSettings settings,
     FrameReceiverService receiver,
-  ) async {
-    final session = ++_stationSession;
-    _stationUndistortionActionInFlight = false;
-    _stationPollTimer?.cancel();
-    final sameDevice = _stationApiBaseUrl == settings.detectorBaseUrl;
-    if (!sameDevice) {
-      _stationCycles.clear();
-      _selectedStationCycleId = null;
-    }
-    _stationApiBaseUrl = settings.detectorBaseUrl;
-    _isInspectionStation = true;
-    _stationError = null;
-
-    StationCaptureStatus? nextStatus;
-    StationViewerSource? nextSource;
-    final errors = <String>[];
-    await Future.wait<void>([
-      () async {
-        try {
-          nextStatus = await _captureApi.fetchStationStatus(settings);
-        } catch (error) {
-          errors.add('상태 조회: $error');
-        }
-      }(),
-      () async {
-        try {
-          nextSource = await _captureApi.fetchViewerSource(settings);
-        } catch (error) {
-          errors.add('미리보기 영상: $error');
-        }
-      }(),
-    ]);
-    if (!mounted || session != _stationSession) return;
-    nextSource ??= sameDevice ? _stationViewerSource : null;
-    final sourceCameraIds = nextSource?.cameraIds ?? const <String>[];
-    final nextLayout = _stationViewerLayout.accommodate(sourceCameraIds.length);
-    final nextSlots = reconcileStationCameraSlots(
-      layout: nextLayout,
-      preferredSlots: _stationCameraSlots,
-      activeCameraIds: sourceCameraIds,
-    );
-    receiver.setExpectedCameraIds(nextSource?.cameraIds ?? const []);
-    setState(() {
-      _stationStatus = nextStatus;
-      _stationViewerSource = nextSource;
-      _stationViewerLayout = nextLayout;
-      _stationCameraSlots = nextSlots;
-      _stationError = errors.isEmpty ? null : errors.join(' · ');
-    });
-    _persistStationViewerLayout(nextLayout, nextSlots);
-    _startStationPolling(settings, session);
-  }
-
-  void _leaveStationMode(FrameReceiverService receiver) {
-    _stationSession++;
-    _stationUndistortionActionInFlight = false;
-    _stationPollTimer?.cancel();
-    receiver.setExpectedCameraIds(null);
-    if (!mounted) return;
-    setState(() {
-      _isInspectionStation = false;
-      _stationStatus = null;
-      _stationViewerSource = null;
-      _stationCycles.clear();
-      _selectedStationCycleId = null;
-      _stationError = null;
-      _stationApiBaseUrl = null;
-    });
-  }
-
-  void _startStationPolling(AppSettings settings, int session) {
-    _stationPollTimer?.cancel();
-    unawaited(_pollStation(settings, session));
-    _stationPollTimer = Timer.periodic(
-      const Duration(milliseconds: 800),
-      (_) => unawaited(_pollStation(settings, session)),
-    );
-  }
-
-  Future<void> _pollStation(AppSettings settings, int session) async {
-    if (_stationPollInFlight ||
-        !mounted ||
-        !_isInspectionStation ||
-        session != _stationSession) {
-      return;
-    }
-    _stationPollInFlight = true;
-    StationCaptureStatus? nextStatus;
-    String? nextError;
-    final nextResults = <String, StationCaptureResult>{};
-    try {
-      try {
-        nextStatus = await _captureApi.fetchStationStatus(settings);
-      } catch (error) {
-        nextError = '장비 상태 조회 실패: $error';
-      }
-
-      final pendingCycles = _stationCycles.values
-          .where((result) => !result.state.isFinal)
-          .toList(growable: false);
-      for (final pending in pendingCycles) {
-        try {
-          nextResults[pending.cycleId] = await _captureApi.fetchStationResult(
-            settings,
-            pending.cycleId,
-          );
-        } on RemoteCaptureApiException catch (error) {
-          if (error.statusCode == 404) {
-            nextResults[pending.cycleId] = StationCaptureResult.expired(
-              pending.cycleId,
-            );
-          } else {
-            nextError ??= '검사 결과 조회 실패: $error';
-          }
-        } catch (error) {
-          nextError ??= '검사 결과 조회 실패: $error';
-        }
-      }
-    } finally {
-      _stationPollInFlight = false;
-    }
-    if (!mounted || session != _stationSession || !_isInspectionStation) {
-      return;
-    }
-    setState(() {
-      _stationStatus = nextStatus;
-      _stationCycles.addAll(nextResults);
-      _stationError = nextError;
-      _trimStationHistory();
-    });
-  }
-
-  void _trimStationHistory() {
-    while (_stationCycles.length > 32) {
-      String? removable;
-      for (final entry in _stationCycles.entries) {
-        if (entry.value.state.isFinal && entry.key != _selectedStationCycleId) {
-          removable = entry.key;
-          break;
-        }
-      }
-      if (removable == null) return;
-      _stationCycles.remove(removable);
-    }
-  }
-
-  String _stationCameraForSlot(int slot) {
-    return slot < _stationCameraSlots.length ? _stationCameraSlots[slot] : '';
-  }
-
-  List<String> _cameraSlotsFor(
-    StationViewerLayout layout,
-    Iterable<String> cameraIds,
-  ) => resizeStationCameraSlots(layout, cameraIds);
-
+  ) => _station.initialize(settings);
+  void _leaveStationMode(FrameReceiverService receiver) => _station.leave();
+  String _stationCameraForSlot(int slot) => _station.cameraForSlot(slot);
   Future<void> _changeStationViewerLayout(
     AppSettings settings,
     FrameReceiverService receiver,
     StationViewerLayout layout,
-    List<String> availableCameras,
-  ) async {
-    final slots = _cameraSlotsFor(layout, _stationCameraSlots);
-    final selected = slots.where((cameraId) => cameraId.isNotEmpty).toSet();
-    for (var index = 0; index < slots.length; index++) {
-      if (slots[index].isNotEmpty) continue;
-      for (final cameraId in availableCameras) {
-        if (selected.add(cameraId)) {
-          slots[index] = cameraId;
-          break;
-        }
-      }
-    }
-    await _setStationViewerSources(settings, receiver, layout, slots);
-  }
-
+    List<String> cameras,
+  ) => _station.changeLayout(layout, cameras);
   Future<void> _changeStationCameraSlot(
     AppSettings settings,
     FrameReceiverService receiver,
     int slot,
     String cameraId,
-  ) async {
-    final slots = _cameraSlotsFor(_stationViewerLayout, _stationCameraSlots);
-    final existingSlot = cameraId.isEmpty ? -1 : slots.indexOf(cameraId);
-    if (existingSlot >= 0 && existingSlot != slot) {
-      slots[existingSlot] = slots[slot];
-    }
-    slots[slot] = cameraId;
-    await _setStationViewerSources(
-      settings,
-      receiver,
-      _stationViewerLayout,
-      slots,
-    );
-  }
-
-  Future<void> _setStationViewerSources(
-    AppSettings settings,
-    FrameReceiverService receiver,
-    StationViewerLayout layout,
-    List<String> slots,
-  ) async {
-    if (_stationSourceActionInFlight) return;
-    final previousSource = _stationViewerSource;
-    final selectedCameraIds = slots
-        .where((cameraId) => cameraId.isNotEmpty)
-        .toList(growable: false);
-    receiver.setExpectedCameraIds(selectedCameraIds);
-    setState(() {
-      _stationSourceActionInFlight = true;
-      _selectedStationCycleId = null;
-      _stationError = null;
-      _stationViewerSource = StationViewerSource(
-        cameraIds: selectedCameraIds,
-        cameras: previousSource?.cameras ?? const [],
-      );
-      _stationViewerLayout = layout;
-      _stationCameraSlots = List.unmodifiable(slots);
-    });
-    try {
-      final source = await _captureApi.setViewerSources(
-        settings,
-        selectedCameraIds,
-      );
-      if (!mounted || !_isInspectionStation) return;
-      final confirmedLayout = layout.accommodate(source.cameraIds.length);
-      final confirmedSlots = reconcileStationCameraSlots(
-        layout: confirmedLayout,
-        preferredSlots: slots,
-        activeCameraIds: source.cameraIds,
-      );
-      receiver.setExpectedCameraIds(source.cameraIds);
-      setState(() {
-        _stationViewerSource = source;
-        _stationViewerLayout = confirmedLayout;
-        _stationCameraSlots = confirmedSlots;
-        _stationSourceActionInFlight = false;
-      });
-      _persistStationViewerLayout(confirmedLayout, confirmedSlots);
-    } catch (error) {
-      if (!mounted || !_isInspectionStation) return;
-      StationViewerSource? actual;
-      try {
-        actual = await _captureApi.fetchViewerSource(settings);
-      } catch (_) {
-        actual = previousSource;
-      }
-      final actualCameraIds = actual?.cameraIds ?? const <String>[];
-      final actualLayout = layout.accommodate(actualCameraIds.length);
-      final actualSlots = actual == null
-          ? List<String>.unmodifiable(slots)
-          : reconcileStationCameraSlots(
-              layout: actualLayout,
-              preferredSlots: slots,
-              activeCameraIds: actualCameraIds,
-            );
-      receiver.setExpectedCameraIds(actual?.cameraIds ?? const []);
-      setState(() {
-        _stationViewerSource = actual;
-        _stationViewerLayout = actualLayout;
-        _stationCameraSlots = actualSlots;
-        _stationSourceActionInFlight = false;
-        _stationError = '카메라 선택 실패: $error';
-      });
-      _persistStationViewerLayout(actualLayout, actualSlots);
-    }
-  }
-
-  void _persistStationViewerLayout(
-    StationViewerLayout layout,
-    List<String> cameraSlots,
-  ) {
-    unawaited(
-      context.read<SettingsProvider>().updateStationViewerLayout(
-        layout: layout,
-        cameraSlots: cameraSlots,
-      ),
-    );
-  }
-
-  Future<void> _requestStationCapture(
-    AppSettings settings,
-    StationCaptureTarget target,
-  ) async {
-    final status = _stationStatus;
-    if (status == null ||
-        !status.ready ||
-        !status.captureTargets.contains(target)) {
-      throw StateError('현재 장비에서 사용할 수 없는 촬영 대상이야');
-    }
-
-    final accepted = await _captureApi.requestStationCapture(
-      settings,
-      target: target,
-    );
-    if (!accepted.accepted || accepted.cycleId.isEmpty) {
-      throw StateError(
-        accepted.error.isEmpty ? '장비가 촬영 요청을 거부했어' : accepted.error,
-      );
-    }
-    if (!mounted) return;
-    setState(() {
-      _stationCycles[accepted.cycleId] = StationCaptureResult.pending(
-        accepted.cycleId,
-      );
-      _selectedStationCycleId = accepted.cycleId;
-      _stationError = accepted.error.isEmpty ? null : accepted.error;
-      _trimStationHistory();
-    });
-    unawaited(_pollStation(settings, _stationSession));
-  }
+  ) => _station.changeCamera(slot, cameraId);
 
   Future<void> _disconnect(FrameReceiverService receiver) async {
-    _stationSession++;
-    _stationUndistortionActionInFlight = false;
-    _stationPollTimer?.cancel();
+    _connectionGeneration++;
+    _recordingActionInFlight = false;
+    _station.suspend();
+    _captureActionInFlight = false;
     await receiver.disconnect();
     if (mounted) setState(() {});
   }
@@ -2522,6 +2222,9 @@ class _ViewerScreenState extends State<ViewerScreen>
     required String streamPath,
     required String? apiBaseUrl,
   }) async {
+    final connection = ++_connectionGeneration;
+    _station.suspend();
+    _captureActionInFlight = _recordingActionInFlight = false;
     final settingsProvider = context.read<SettingsProvider>();
     try {
       final targetApiBaseUrl =
@@ -2539,33 +2242,36 @@ class _ViewerScreenState extends State<ViewerScreen>
       } finally {
         deviceInfoService.close();
       }
+      if (!mounted || connection != _connectionGeneration) return;
       await settingsProvider.updateConnectionUrls(
         streamPath: streamPath,
         detectorBaseUrl: targetApiBaseUrl,
         remoteDeviceKind: deviceInfo.kind,
         personRoiAlertDisabled: deviceInfo.personRoiAlertDisabled,
       );
+      if (!mounted || connection != _connectionGeneration) return;
       if (deviceInfo.isInspectionStation) {
         await _initializeStation(settingsProvider.settings, receiver);
       } else {
         _leaveStationMode(receiver);
       }
+      if (!mounted || connection != _connectionGeneration) return;
       if (deviceInfo.kind == RemoteDeviceKind.hss ||
           deviceInfo.kind == RemoteDeviceKind.capture) {
-        final recordingStatus = await RemoteRecordingApiService().fetchStatus(
+        final recordingStatus = await _recordingApi.fetchStatus(
           settingsProvider.settings,
         );
-        if (context.mounted) {
+        if (context.mounted && connection == _connectionGeneration) {
           setState(() => _recordingStatus = recordingStatus);
         }
-      } else if (context.mounted) {
+      } else if (context.mounted && connection == _connectionGeneration) {
         setState(() => _recordingStatus = null);
       }
-      if (context.mounted) {
+      if (context.mounted && connection == _connectionGeneration) {
         unawaited(receiver.connect(streamPath));
       }
     } catch (e) {
-      if (context.mounted) {
+      if (context.mounted && connection == _connectionGeneration) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('장비 정보 조회 실패: $e')));
@@ -2578,10 +2284,11 @@ class _ViewerScreenState extends State<ViewerScreen>
     action, {
     String Function(RemoteRecordingStatus status)? successMessage,
   }) async {
+    final connection = _connectionGeneration;
     setState(() => _recordingActionInFlight = true);
     try {
-      final next = await action(RemoteRecordingApiService());
-      if (!mounted) return;
+      final next = await action(_recordingApi);
+      if (!mounted || connection != _connectionGeneration) return;
       setState(() {
         _recordingStatus = next;
         _recordingActionInFlight = false;
@@ -2596,7 +2303,7 @@ class _ViewerScreenState extends State<ViewerScreen>
         ).showSnackBar(SnackBar(content: Text(successMessage(next))));
       }
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || connection != _connectionGeneration) return;
       setState(() => _recordingActionInFlight = false);
       ScaffoldMessenger.of(
         context,
@@ -2609,30 +2316,31 @@ class _ViewerScreenState extends State<ViewerScreen>
     StationCaptureTarget? stationTarget,
   }) async {
     if (_captureActionInFlight) return;
+    final connection = _connectionGeneration;
     setState(() => _captureActionInFlight = true);
     try {
-      if (_isInspectionStation) {
+      if (_station.active) {
         if (stationTarget == null) {
-          throw StateError('장비 촬영 대상을 지정해야 해');
+          throw StateError('장비 촬영 대상을 지정해야 합니다');
         }
-        await _requestStationCapture(settings, stationTarget);
+        if (!await _station.capture(stationTarget)) return;
       } else {
         await _captureApi.requestCapture(settings);
       }
-      if (!mounted) return;
+      if (!mounted || connection != _connectionGeneration) return;
       setState(() => _captureActionInFlight = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_isInspectionStation ? '장비가 촬영 요청을 접수했어' : '촬영 요청 완료'),
+          content: Text(_station.active ? '장비가 촬영 요청을 접수했습니다' : '촬영 요청 완료'),
         ),
       );
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || connection != _connectionGeneration) return;
       setState(() => _captureActionInFlight = false);
       final message = e is RemoteCaptureApiException && e.statusCode == 409
-          ? '촬영 대기열이 가득 찼어 (409)'
+          ? '촬영 대기열이 가득 찼습니다 (409)'
           : e is RemoteCaptureApiException && e.statusCode == 503
-          ? '장비가 준비되지 않았어 (503)'
+          ? '장비가 준비되지 않았습니다 (503)'
           : '촬영 API 오류: $e';
       ScaffoldMessenger.of(
         context,

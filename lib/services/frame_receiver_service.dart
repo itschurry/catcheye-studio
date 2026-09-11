@@ -1,5 +1,7 @@
+import '../models/viewer_frame.dart';
+export '../models/viewer_frame.dart';
+import 'websocket_frame_decoder.dart';
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' show Size;
 
@@ -9,364 +11,51 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 enum StreamTransport { rtsp, websocket }
 
-enum ViewerStreamEncoding {
-  jpeg,
-  pointcloudXyzF32,
-  projectedDepthXyDepthF32,
-  unknown;
-
-  static ViewerStreamEncoding parse(String value) {
-    return switch (value) {
-      'jpeg' => ViewerStreamEncoding.jpeg,
-      'pointcloud_xyz_f32' => ViewerStreamEncoding.pointcloudXyzF32,
-      'projected_depth_xy_depth_f32' =>
-        ViewerStreamEncoding.projectedDepthXyDepthF32,
-      _ => ViewerStreamEncoding.unknown,
-    };
-  }
-}
-
-class PointCloudData {
-  final Float32List xyz;
-  final int pointCount;
-  final double minZ;
-  final double maxZ;
-
-  const PointCloudData({
-    required this.xyz,
-    required this.pointCount,
-    required this.minZ,
-    required this.maxZ,
-  });
-
-  factory PointCloudData.parse(Uint8List bytes, int pointCount) {
-    const bytesPerPoint = 12;
-    final expectedBytes = pointCount * bytesPerPoint;
-    if (pointCount <= 0 || bytes.length != expectedBytes) {
-      throw FormatException(
-        '포인트클라우드 데이터 크기 오류: 예상 $expectedBytes, 수신 ${bytes.length}',
-      );
-    }
-
-    final data = ByteData.sublistView(bytes);
-    final xyz = Float32List(pointCount * 3);
-    var validPointCount = 0;
-    double? minZ;
-    double? maxZ;
-    for (var i = 0; i < pointCount; i++) {
-      final offset = i * bytesPerPoint;
-      final x = data.getFloat32(offset, Endian.little);
-      final y = data.getFloat32(offset + 4, Endian.little);
-      final z = data.getFloat32(offset + 8, Endian.little);
-      if (!x.isFinite || !y.isFinite || !z.isFinite) {
-        continue;
-      }
-      final writeOffset = validPointCount * 3;
-      xyz[writeOffset] = x;
-      xyz[writeOffset + 1] = y;
-      xyz[writeOffset + 2] = z;
-      validPointCount++;
-      minZ = minZ == null ? z : (z < minZ ? z : minZ);
-      maxZ = maxZ == null ? z : (z > maxZ ? z : maxZ);
-    }
-
-    return PointCloudData(
-      xyz: xyz,
-      pointCount: validPointCount,
-      minZ: minZ ?? 0,
-      maxZ: maxZ ?? 1,
-    );
-  }
-
-  double xAt(int index) => xyz[index * 3];
-
-  double yAt(int index) => xyz[index * 3 + 1];
-
-  double zAt(int index) => xyz[index * 3 + 2];
-}
-
-class ProjectedDepthData {
-  final Float32List xyDepth;
-  final int pointCount;
-  final double minDepth;
-  final double maxDepth;
-
-  const ProjectedDepthData({
-    required this.xyDepth,
-    required this.pointCount,
-    required this.minDepth,
-    required this.maxDepth,
-  });
-
-  factory ProjectedDepthData.parse(Uint8List bytes, int pointCount) {
-    const bytesPerPoint = 12;
-    final expectedBytes = pointCount * bytesPerPoint;
-    if (pointCount <= 0 || bytes.length != expectedBytes) {
-      throw FormatException(
-        '투영 깊이 데이터 크기 오류: 예상 $expectedBytes, 수신 ${bytes.length}',
-      );
-    }
-
-    final data = ByteData.sublistView(bytes);
-    final points = Float32List(pointCount * 3);
-    var validPointCount = 0;
-    double? minDepth;
-    double? maxDepth;
-    for (var i = 0; i < pointCount; i++) {
-      final offset = i * bytesPerPoint;
-      final x = data.getFloat32(offset, Endian.little);
-      final y = data.getFloat32(offset + 4, Endian.little);
-      final depth = data.getFloat32(offset + 8, Endian.little);
-      if (!x.isFinite || !y.isFinite || !depth.isFinite || depth <= 0) {
-        continue;
-      }
-      final writeOffset = validPointCount * 3;
-      points[writeOffset] = x;
-      points[writeOffset + 1] = y;
-      points[writeOffset + 2] = depth;
-      validPointCount++;
-      minDepth = minDepth == null
-          ? depth
-          : (depth < minDepth ? depth : minDepth);
-      maxDepth = maxDepth == null
-          ? depth
-          : (depth > maxDepth ? depth : maxDepth);
-    }
-
-    return ProjectedDepthData(
-      xyDepth: points,
-      pointCount: validPointCount,
-      minDepth: minDepth ?? 0,
-      maxDepth: maxDepth ?? 1,
-    );
-  }
-
-  double xAt(int index) => xyDepth[index * 3];
-
-  double yAt(int index) => xyDepth[index * 3 + 1];
-
-  double depthAt(int index) => xyDepth[index * 3 + 2];
-}
-
-class ViewerStreamFrame {
-  final String name;
-  final String kind;
-  final ViewerStreamEncoding encoding;
-  final int payloadIndex;
-  final int? width;
-  final int? height;
-  final int pointCount;
-  final int stride;
-  final double? sourceTimestampMs;
-  final int? frameSequence;
-  final DateTime receivedAt;
-  final Uint8List payloadBytes;
-  final PointCloudData? pointCloud;
-  final ProjectedDepthData? projectedDepth;
-  final String? streamKey;
-
-  const ViewerStreamFrame({
-    required this.name,
-    required this.kind,
-    required this.encoding,
-    required this.payloadIndex,
-    required this.payloadBytes,
-    required this.receivedAt,
-    this.pointCount = 0,
-    this.stride = 1,
-    this.width,
-    this.height,
-    this.sourceTimestampMs,
-    this.frameSequence,
-    this.pointCloud,
-    this.projectedDepth,
-    this.streamKey,
-  });
-
-  factory ViewerStreamFrame.fromPayload({
-    required String name,
-    required String kind,
-    required ViewerStreamEncoding encoding,
-    required int payloadIndex,
-    required Uint8List payloadBytes,
-    required int pointCount,
-    required int stride,
-    int? width,
-    int? height,
-    double? sourceTimestampMs,
-    int? frameSequence,
-    DateTime? receivedAt,
-    String? streamKey,
-  }) {
-    return ViewerStreamFrame(
-      name: name,
-      kind: kind,
-      encoding: encoding,
-      payloadIndex: payloadIndex,
-      width: width,
-      height: height,
-      pointCount: pointCount,
-      stride: stride,
-      sourceTimestampMs: sourceTimestampMs,
-      frameSequence: frameSequence,
-      receivedAt: receivedAt ?? DateTime.now(),
-      payloadBytes: payloadBytes,
-      pointCloud: encoding == ViewerStreamEncoding.pointcloudXyzF32
-          ? PointCloudData.parse(payloadBytes, pointCount)
-          : null,
-      projectedDepth: encoding == ViewerStreamEncoding.projectedDepthXyDepthF32
-          ? ProjectedDepthData.parse(payloadBytes, pointCount)
-          : null,
-      streamKey: streamKey,
-    );
-  }
-
-  String get key => streamKey ?? (kind.isEmpty ? name : kind);
-
-  Uint8List get jpegBytes => payloadBytes;
-
-  bool get isJpeg => encoding == ViewerStreamEncoding.jpeg;
-
-  bool get isPointCloud => encoding == ViewerStreamEncoding.pointcloudXyzF32;
-
-  bool get isProjectedDepth =>
-      encoding == ViewerStreamEncoding.projectedDepthXyDepthF32;
-
-  String get label {
-    if (kind.isNotEmpty) return kind;
-    if (name.isNotEmpty) return name;
-    return 'stream_$payloadIndex';
-  }
-
-  Size? get size {
-    final w = width;
-    final h = height;
-    if (w == null || h == null || w <= 0 || h <= 0) return null;
-    return Size(w.toDouble(), h.toDouble());
-  }
-}
-
-class DetectionPosition {
-  final String className;
-  final double score;
-  final double x;
-  final double y;
-  final double z;
-  final int sampleCount;
-  final int pointcloudX;
-  final int pointcloudY;
-  final bool isCandidate;
-  final int candidateId;
-  final List<double>? bboxCameraM;
-
-  const DetectionPosition({
-    required this.className,
-    required this.score,
-    required this.x,
-    required this.y,
-    required this.z,
-    required this.sampleCount,
-    required this.pointcloudX,
-    required this.pointcloudY,
-    this.isCandidate = false,
-    this.candidateId = 0,
-    this.bboxCameraM,
-  });
-
-  bool containsPoint(double px, double py, double pz) {
-    final bbox = bboxCameraM;
-    if (bbox == null || bbox.length < 6) return false;
-    return px >= bbox[0] &&
-        px <= bbox[3] &&
-        py >= bbox[1] &&
-        py <= bbox[4] &&
-        pz >= bbox[2] &&
-        pz <= bbox[5];
-  }
-}
-
-class _PendingStreamInfo {
-  final String name;
-  final String kind;
-  final ViewerStreamEncoding encoding;
-  final int payloadIndex;
-  final int? width;
-  final int? height;
-  final int? payloadSize;
-  final int pointCount;
-  final int stride;
-  final double? sourceTimestampMs;
-  final int? frameSequence;
-
-  const _PendingStreamInfo({
-    required this.name,
-    required this.kind,
-    required this.encoding,
-    required this.payloadIndex,
-    this.width,
-    this.height,
-    this.payloadSize,
-    this.pointCount = 0,
-    this.stride = 1,
-    this.sourceTimestampMs,
-    this.frameSequence,
-  });
-
-  String get label {
-    if (kind.isNotEmpty) return kind;
-    if (name.isNotEmpty) return name;
-    return 'stream_$payloadIndex';
-  }
-}
-
 /// Receives RTSP streams via media_kit or JPEG frames over WebSocket.
 class FrameReceiverService extends ChangeNotifier {
-  final Player _player = Player();
+  Player? _nativePlayer;
+  Player get _player {
+    if (_disposed) throw StateError('종료된 영상 수신기입니다');
+    if (_nativePlayer != null) return _nativePlayer!;
+    final player = Player();
+    _nativePlayer = player;
+    _playingSubscription = player.stream.playing.listen((playing) {
+      if (_disposed || _transport != StreamTransport.rtsp) return;
+      if (_connected != playing) {
+        _connected = playing;
+        _notifyListeners();
+      }
+    });
+    return player;
+  }
+
   late final VideoController _videoController = VideoController(_player);
 
   StreamSubscription<bool>? _playingSubscription;
   StreamSubscription<dynamic>? _webSocketSubscription;
   WebSocket? _webSocket;
-  bool _closingWebSocket = false;
   bool _connected = false;
   bool _connecting = false;
   String? _errorMessage;
   Uri? _connectedUri;
-  Uint8List? _currentFrame;
-  final Map<String, ViewerStreamFrame> _streams = {};
-  String? _selectedStreamKey;
-  List<_PendingStreamInfo>? _pendingStreams;
-  final Map<int, Uint8List> _pendingPayloads = {};
-  bool _discardPendingFrame = false;
-  Set<String>? _expectedCameraIds;
-  Map<String, dynamic>? _latestMetadata;
-  DateTime? _lastFrameReceivedAt;
-  int _frameCount = 0;
-  double _fps = 0;
-  double? _previousSourceTimestampMs;
+  final _decoder = WebSocketFrameDecoder();
   StreamTransport? _transport;
   bool _disposed = false;
-
-  Size? _frameSize;
-
+  int _connectionGeneration = 0;
+  bool _currentConnection(int generation) =>
+      !_disposed && generation == _connectionGeneration;
+  Map<String, dynamic>? get _latestMetadata => _decoder.latestMetadata;
   bool get connected => _connected;
   bool get connecting => _connecting;
-  String? get errorMessage => _errorMessage;
-  Uint8List? get currentFrame => _currentFrame;
-  Map<String, ViewerStreamFrame> get streams => Map.unmodifiable(_streams);
-  String? get selectedStreamKey => _selectedStreamKey;
-  ViewerStreamFrame? get selectedFrame {
-    final key = _selectedStreamKey;
-    if (key != null) return _streams[key];
-    if (_streams.isEmpty) return null;
-    return _streams.values.first;
-  }
-
-  bool get hasMultiStream => _streams.length > 1;
+  String? get errorMessage => _errorMessage ?? _decoder.errorMessage;
+  Uint8List? get currentFrame => _decoder.currentFrame;
+  Map<String, ViewerStreamFrame> get streams => _decoder.streams;
+  String? get selectedStreamKey => _decoder.selectedStreamKey;
+  ViewerStreamFrame? get selectedFrame => _decoder.selectedFrame;
+  bool get hasMultiStream => _decoder.hasMultiStream;
   Map<String, dynamic>? get latestMetadata => _latestMetadata;
-  Set<String>? get expectedCameraIds =>
-      _expectedCameraIds == null ? null : Set.unmodifiable(_expectedCameraIds!);
-  DateTime? get lastFrameReceivedAt => _lastFrameReceivedAt;
+  Set<String>? get expectedCameraIds => _decoder.expectedCameraIds;
+  DateTime? get lastFrameReceivedAt => _decoder.lastFrameReceivedAt;
   List<DetectionPosition> get detectionPositions =>
       _parseDetectionPositions(_latestMetadata);
   double? get inferenceMs {
@@ -465,53 +154,43 @@ class FrameReceiverService extends ChangeNotifier {
         '_$hour:$minute:$second';
   }
 
-  int get frameCount => _frameCount;
-  double get fps => _fps;
+  int get frameCount => _decoder.frameCount;
+  double get fps => _decoder.fps;
   Uri? get connectedUri => _connectedUri;
-  VideoController get videoController => _videoController;
+  VideoController? get videoController => isRtsp ? _videoController : null;
   StreamTransport? get transport => _transport;
   bool get isRtsp => _transport == StreamTransport.rtsp;
   bool get isWebSocket => _transport == StreamTransport.websocket;
-  Size? get frameSize => _frameSize;
+  Size? get frameSize => _decoder.frameSize;
 
   static const String defaultStreamUrl = 'ws://127.0.0.1:8080';
-
-  FrameReceiverService() {
-    _playingSubscription = _player.stream.playing.listen((isPlaying) {
-      if (_disposed) return;
-      if (_connected != isPlaying) {
-        _connected = isPlaying;
-        _notifyListeners();
-      }
-    });
-  }
 
   Future<void> connect([String streamUrl = defaultStreamUrl]) async {
     if (_disposed) return;
     if (_connected || _connecting) return;
 
+    final generation = ++_connectionGeneration;
     _connecting = true;
     _errorMessage = null;
-    _fps = 0;
-    _frameCount = 0;
-    _previousSourceTimestampMs = null;
+    _decoder.reset();
     _notifyListeners();
 
     try {
       final uri = _normalizeUri(streamUrl);
       await _disconnect();
-      if (_disposed) return;
+      if (!_currentConnection(generation)) return;
+      _connecting = true;
 
       if (_isWebSocketUri(uri)) {
-        await _connectWebSocket(uri);
+        await _connectWebSocket(uri, generation);
       } else {
-        await _connectRtsp(uri);
+        await _connectRtsp(uri, generation);
       }
-      if (_disposed) return;
+      if (!_currentConnection(generation)) return;
 
       _notifyListeners();
     } catch (e) {
-      if (_disposed) return;
+      if (!_currentConnection(generation)) return;
       _connecting = false;
       _connected = false;
       _transport = null;
@@ -522,36 +201,29 @@ class FrameReceiverService extends ChangeNotifier {
 
   Future<void> disconnect() async {
     if (_disposed) return;
+    final generation = ++_connectionGeneration;
     await _disconnect();
-    if (_disposed) return;
+    if (!_currentConnection(generation)) return;
     _errorMessage = null;
     _notifyListeners();
   }
 
   Future<void> _disconnect() async {
     if (_disposed) return;
-    _closingWebSocket = true;
-    _connected = false;
-    _connecting = false;
-    await _closeWebSocket();
-    await _webSocketSubscription?.cancel();
+    final socket = _webSocket;
+    final subscription = _webSocketSubscription;
+    _webSocket = null;
     _webSocketSubscription = null;
-    await _player.stop();
+    _connected = _connecting = false;
     _connectedUri = null;
-    _currentFrame = null;
-    _streams.clear();
-    _selectedStreamKey = null;
-    _pendingStreams = null;
-    _pendingPayloads.clear();
-    _discardPendingFrame = false;
-    _latestMetadata = null;
-    _lastFrameReceivedAt = null;
-    _frameCount = 0;
-    _fps = 0;
-    _previousSourceTimestampMs = null;
+    _decoder.reset();
     _transport = null;
-    _frameSize = null;
-    _closingWebSocket = false;
+    // 자원을 먼저 분리하여 이전 연결의 종료가 새 연결을 지우지 않도록 합니다.
+    await Future.wait<void>([
+      if (subscription != null) subscription.cancel(),
+      if (socket != null) socket.close().then((_) {}),
+      if (_nativePlayer != null) _nativePlayer!.stop(),
+    ]);
   }
 
   Uri _normalizeUri(String rawUrl) {
@@ -568,9 +240,10 @@ class FrameReceiverService extends ChangeNotifier {
     return Uri.parse(normalized);
   }
 
-  Future<void> _connectRtsp(Uri uri) async {
+  Future<void> _connectRtsp(Uri uri, int generation) async {
     _transport = StreamTransport.rtsp;
     await _player.open(Media(uri.toString()), play: true);
+    if (!_currentConnection(generation)) return;
 
     _connected = true;
     _connecting = false;
@@ -578,18 +251,26 @@ class FrameReceiverService extends ChangeNotifier {
     _connectedUri = uri;
   }
 
-  Future<void> _connectWebSocket(Uri uri) async {
+  Future<void> _connectWebSocket(Uri uri, int generation) async {
     _transport = StreamTransport.websocket;
-    _currentFrame = null;
-    _webSocket = await WebSocket.connect(uri.toString());
-
-    _webSocketSubscription = _webSocket!.listen(
-      _onWebSocketData,
+    _decoder.reset();
+    final socket = await WebSocket.connect(uri.toString());
+    if (!_currentConnection(generation)) {
+      await socket.close();
+      return;
+    }
+    _webSocket = socket;
+    _webSocketSubscription = socket.listen(
+      (data) {
+        if (_currentConnection(generation)) _onWebSocketData(data);
+      },
       onError: (Object error, StackTrace stackTrace) {
-        _handleSocketClosed('연결 오류: $error');
+        if (_currentConnection(generation)) {
+          _handleSocketClosed('연결 오류: $error');
+        }
       },
       onDone: () {
-        if (_closingWebSocket || (!_connected && !_connecting)) {
+        if (!_currentConnection(generation) || (!_connected && !_connecting)) {
           return;
         }
         final closeCode = _webSocket?.closeCode;
@@ -600,7 +281,9 @@ class FrameReceiverService extends ChangeNotifier {
             'reason=$closeReason',
         ].join(', ');
         _handleSocketClosed(
-          closeDetail.isEmpty ? '서버가 연결을 종료했어' : '서버가 연결을 종료했어 ($closeDetail)',
+          closeDetail.isEmpty
+              ? '서버가 연결을 종료했습니다'
+              : '서버가 연결을 종료했습니다 ($closeDetail)',
         );
       },
       cancelOnError: false,
@@ -614,436 +297,49 @@ class FrameReceiverService extends ChangeNotifier {
 
   void _onWebSocketData(dynamic data) {
     if (_disposed) return;
-    if (data is String) {
-      _onWebSocketMetadata(data);
-      return;
-    }
-
-    if (data is List<int>) {
-      _onWebSocketPayload(Uint8List.fromList(data));
+    if (_decoder.process(data)) {
+      _errorMessage = null;
+      _notifyListeners();
     }
   }
 
   @visibleForTesting
   void processWebSocketDataForTest(dynamic data) => _onWebSocketData(data);
 
-  void _onWebSocketMetadata(String data) {
-    try {
-      final decoded = jsonDecode(data);
-      if (decoded is! Map<String, dynamic>) return;
-      _failIncompletePendingFrame();
-      _pendingStreams = _parsePendingStreams(decoded);
-      _pendingPayloads.clear();
-      _discardPendingFrame = !_matchesExpectedCameras(decoded);
-      if (!_discardPendingFrame) {
-        _latestMetadata = decoded;
-        _updateFpsFromMetadata(decoded);
-      }
-    } catch (e) {
-      _errorMessage = 'WebSocket 메타데이터 오류: $e';
-      _pendingStreams = null;
-      _pendingPayloads.clear();
-      _discardPendingFrame = false;
-    }
+  void setExpectedCameraIds(Iterable<String>? ids) {
+    if (_disposed) return;
+    _decoder.setExpectedCameraIds(ids);
     _notifyListeners();
   }
 
-  void _updateFpsFromMetadata(Map<String, dynamic> metadataFrame) {
-    final timestamp =
-        metadataFrame['source_timestamp_ms'] ??
-        metadataFrame['wall_timestamp_ms'];
-    if (timestamp is! num) return;
-
-    final currentTimestampMs = timestamp.toDouble();
-    final previousTimestampMs = _previousSourceTimestampMs;
-    if (previousTimestampMs != null) {
-      final frameIntervalMs = currentTimestampMs - previousTimestampMs;
-      if (frameIntervalMs > 0) {
-        _fps = 1000.0 / frameIntervalMs;
-      }
-    }
-    _previousSourceTimestampMs = currentTimestampMs;
-  }
-
-  void _onWebSocketPayload(Uint8List payload) {
-    final pendingStreams = _pendingStreams;
-    if (_discardPendingFrame) {
-      if (pendingStreams == null) {
-        _discardPendingFrame = false;
-        return;
-      }
-      final streamInfo = pendingStreams.firstWhere(
-        (stream) => !_pendingPayloads.containsKey(stream.payloadIndex),
-        orElse: () => const _PendingStreamInfo(
-          name: '',
-          kind: '',
-          encoding: ViewerStreamEncoding.unknown,
-          payloadIndex: -1,
-        ),
-      );
-      if (streamInfo.payloadIndex >= 0) {
-        _pendingPayloads[streamInfo.payloadIndex] = Uint8List(0);
-      }
-      if (_pendingPayloads.length == pendingStreams.length) {
-        _pendingStreams = null;
-        _pendingPayloads.clear();
-        _discardPendingFrame = false;
-      }
-      return;
-    }
-    if (pendingStreams == null) {
-      _setSingleFrame(payload);
-      _notifyListeners();
-      return;
-    }
-
-    final streamInfo = pendingStreams.firstWhere(
-      (stream) => !_pendingPayloads.containsKey(stream.payloadIndex),
-      orElse: () => const _PendingStreamInfo(
-        name: '',
-        kind: '',
-        encoding: ViewerStreamEncoding.unknown,
-        payloadIndex: -1,
-      ),
-    );
-    if (streamInfo.payloadIndex < 0) {
-      _errorMessage = '예상하지 못한 WebSocket 데이터야';
-      _notifyListeners();
-      return;
-    }
-
-    final expectedPayloadSize = streamInfo.payloadSize;
-    if (expectedPayloadSize != null && payload.length != expectedPayloadSize) {
-      _errorMessage =
-          '${streamInfo.label} 데이터 크기 오류: 예상 $expectedPayloadSize, 수신 ${payload.length}';
-      _pendingStreams = null;
-      _pendingPayloads.clear();
-      _notifyListeners();
-      return;
-    }
-
-    _pendingPayloads[streamInfo.payloadIndex] = payload;
-    if (_pendingPayloads.length != pendingStreams.length) {
-      return;
-    }
-
-    final nextStreams = <String, ViewerStreamFrame>{};
-    for (final stream in pendingStreams) {
-      final jpegBytes = _pendingPayloads[stream.payloadIndex];
-      if (jpegBytes == null) {
-        _errorMessage = 'WebSocket 데이터 누락: ${stream.label}';
-        _pendingStreams = null;
-        _pendingPayloads.clear();
-        _notifyListeners();
-        return;
-      }
-      try {
-        final streamKey = _streamKeyFor(stream);
-        final previous =
-            _streams[streamKey ??
-                (stream.kind.isEmpty ? stream.name : stream.kind)];
-        final receivedAt =
-            stream.frameSequence != null &&
-                previous?.frameSequence == stream.frameSequence
-            ? previous!.receivedAt
-            : DateTime.now();
-        final frame = ViewerStreamFrame.fromPayload(
-          name: stream.name,
-          kind: stream.kind,
-          encoding: stream.encoding,
-          payloadIndex: stream.payloadIndex,
-          width: stream.width,
-          height: stream.height,
-          pointCount: stream.pointCount,
-          stride: stream.stride,
-          sourceTimestampMs: stream.sourceTimestampMs,
-          frameSequence: stream.frameSequence,
-          receivedAt: receivedAt,
-          payloadBytes: jpegBytes,
-          streamKey: streamKey,
-        );
-        if (_streamMatchesExpected(stream)) {
-          nextStreams[frame.key] = frame;
-        }
-      } catch (e) {
-        _errorMessage = 'Invalid ${stream.label} payload: $e';
-        _pendingStreams = null;
-        _pendingPayloads.clear();
-        _notifyListeners();
-        return;
-      }
-    }
-
-    if (nextStreams.isEmpty) {
-      _pendingStreams = null;
-      _pendingPayloads.clear();
-      return;
-    }
-    _streams.addAll(nextStreams);
-    _selectedStreamKey = _selectNextStreamKey();
-    _syncSelectedFrameState();
-    _errorMessage = null;
-    _frameCount++;
-    _lastFrameReceivedAt = DateTime.now();
-    _pendingStreams = null;
-    _pendingPayloads.clear();
-    _notifyListeners();
-  }
-
-  void _setSingleFrame(Uint8List payload) {
-    _currentFrame = payload;
-    final detectedSize = _parseJpegSize(payload);
-    _frameSize = detectedSize ?? _frameSize;
-    final frame = ViewerStreamFrame(
-      name: 'camera',
-      kind: 'camera',
-      encoding: ViewerStreamEncoding.jpeg,
-      payloadIndex: 0,
-      width: detectedSize?.width.toInt(),
-      height: detectedSize?.height.toInt(),
-      receivedAt: DateTime.now(),
-      payloadBytes: payload,
-    );
-    _streams
-      ..clear()
-      ..[frame.key] = frame;
-    _selectedStreamKey = frame.key;
-    _syncSelectedFrameState();
-    _errorMessage = null;
-    _frameCount++;
-    _lastFrameReceivedAt = DateTime.now();
-  }
-
-  /// Restricts station preview frames to the globally selected cameras.
-  ///
-  /// `null` disables filtering for non-station streams, while an empty set
-  /// represents an explicitly disabled station preview.
-  void setExpectedCameraIds(Iterable<String>? cameraIds) {
-    final next = cameraIds
-        ?.map((cameraId) => cameraId.trim())
-        .where((cameraId) => cameraId.isNotEmpty)
-        .toSet();
-    if (_disposed || setEquals(_expectedCameraIds, next)) return;
-    _expectedCameraIds = next;
-    _clearVisibleFrames();
-    _notifyListeners();
-  }
-
-  void setExpectedCameraId(String? cameraId) {
-    setExpectedCameraIds(
-      cameraId == null
-          ? null
-          : cameraId.trim().isEmpty
-          ? const <String>[]
-          : [cameraId],
-    );
-  }
-
-  void _clearVisibleFrames() {
-    _currentFrame = null;
-    _streams.clear();
-    _selectedStreamKey = null;
-    _latestMetadata = null;
-    _frameSize = null;
-    _lastFrameReceivedAt = null;
-  }
-
-  bool _matchesExpectedCameras(Map<String, dynamic> metadataFrame) {
-    final expected = _expectedCameraIds;
-    if (expected == null) return true;
-    if (expected.isEmpty) return false;
-
-    final metadata = metadataFrame['metadata'];
-    final nestedCameraId = metadata is Map ? metadata['camera_id'] : null;
-    final nestedCameraIds = metadata is Map ? metadata['camera_ids'] : null;
-    final streamName = metadataFrame['stream_name'];
-    final rawStreams = metadataFrame['streams'];
-    final actual = <String>{
-      if (nestedCameraId is String && nestedCameraId.isNotEmpty) nestedCameraId,
-      if (nestedCameraIds is List) ...nestedCameraIds.whereType<String>(),
-      if (streamName is String && streamName.isNotEmpty) streamName,
-      if (rawStreams is List)
-        for (final stream in rawStreams)
-          if (stream is Map && stream['name'] is String)
-            stream['name'] as String,
-    };
-    return actual.any(expected.contains);
-  }
-
-  bool _streamMatchesExpected(_PendingStreamInfo stream) {
-    final expected = _expectedCameraIds;
-    if (expected == null) return true;
-    return expected.contains(stream.name) || expected.contains(stream.kind);
-  }
-
-  String? _streamKeyFor(_PendingStreamInfo stream) {
-    final expected = _expectedCameraIds;
-    if (expected != null && expected.contains(stream.name)) return stream.name;
-    return null;
-  }
-
-  List<_PendingStreamInfo>? _parsePendingStreams(
-    Map<String, dynamic> metadata,
-  ) {
-    if (metadata['type'] == 'frame') {
-      return [
-        _PendingStreamInfo(
-          name: _metadataString(metadata['stream_name']),
-          kind: _metadataString(metadata['stream_name']),
-          encoding: ViewerStreamEncoding.parse(
-            _metadataString(metadata['payload_encoding'], defaultValue: 'jpeg'),
-          ),
-          payloadIndex: 0,
-          width: _metadataInt(metadata['width']),
-          height: _metadataInt(metadata['height']),
-          payloadSize: _metadataInt(metadata['payload_size']),
-          sourceTimestampMs: _metadataDouble(metadata['source_timestamp_ms']),
-          frameSequence:
-              _metadataInt(metadata['frame_sequence']) ??
-              (metadata['metadata'] is Map
-                  ? _metadataInt(
-                      (metadata['metadata'] as Map)['frame_sequence'],
-                    )
-                  : null),
-        ),
-      ];
-    }
-    if (metadata['type'] != 'viewer_frame') return null;
-    final rawStreams = metadata['streams'];
-    if (rawStreams is! List || rawStreams.isEmpty) return null;
-
-    final streams = <_PendingStreamInfo>[];
-    final indexes = <int>{};
-    for (final rawStream in rawStreams) {
-      if (rawStream is! Map<String, dynamic>) {
-        throw const FormatException('WebSocket 영상 메타데이터가 올바르지 않아');
-      }
-      final payloadIndex = rawStream['payload_index'];
-      if (payloadIndex is! int || payloadIndex < 0) {
-        throw const FormatException('WebSocket payload_index가 올바르지 않아');
-      }
-      if (!indexes.add(payloadIndex)) {
-        throw const FormatException('WebSocket payload_index가 중복됐어');
-      }
-      streams.add(
-        _PendingStreamInfo(
-          name: _metadataString(rawStream['name']),
-          kind: _metadataString(rawStream['kind']),
-          encoding: ViewerStreamEncoding.parse(
-            _metadataString(rawStream['encoding'], defaultValue: 'jpeg'),
-          ),
-          payloadIndex: payloadIndex,
-          width: _metadataInt(rawStream['width']),
-          height: _metadataInt(rawStream['height']),
-          payloadSize: _metadataInt(rawStream['payload_size']),
-          pointCount: _metadataInt(rawStream['point_count']) ?? 0,
-          stride: _metadataInt(rawStream['stride']) ?? 1,
-          sourceTimestampMs: _metadataDouble(rawStream['source_timestamp_ms']),
-          frameSequence: _metadataInt(rawStream['frame_sequence']),
-        ),
-      );
-    }
-    streams.sort((a, b) => a.payloadIndex.compareTo(b.payloadIndex));
-    return streams;
-  }
-
-  void _failIncompletePendingFrame() {
-    final pendingStreams = _pendingStreams;
-    if (pendingStreams == null ||
-        _pendingPayloads.length == pendingStreams.length) {
-      return;
-    }
-    _errorMessage =
-        'WebSocket 프레임 데이터 누락: 예상 ${pendingStreams.length}개, 수신 ${_pendingPayloads.length}개';
-    _pendingStreams = null;
-    _pendingPayloads.clear();
-  }
-
-  String _selectNextStreamKey() {
-    final current = _selectedStreamKey;
-    if (current != null && _streams.containsKey(current)) return current;
-    if (_streams.containsKey('camera')) return 'camera';
-    return _streams.keys.first;
-  }
-
+  void setExpectedCameraId(String? id) => setExpectedCameraIds(
+    id == null
+        ? null
+        : id.isEmpty
+        ? const []
+        : [id],
+  );
   void selectStream(String key) {
-    if (!_streams.containsKey(key) || _selectedStreamKey == key) return;
-    _selectedStreamKey = key;
-    _syncSelectedFrameState();
+    _decoder.selectStream(key);
     _notifyListeners();
-  }
-
-  void _syncSelectedFrameState() {
-    final frame = selectedFrame;
-    if (frame == null) {
-      _currentFrame = null;
-      _frameSize = null;
-      return;
-    }
-    if (!frame.isJpeg) {
-      _currentFrame = null;
-      _frameSize = frame.size;
-      return;
-    }
-
-    _currentFrame = frame.jpegBytes;
-    _frameSize = frame.size ?? _parseJpegSize(frame.jpegBytes);
   }
 
   static String _metadataString(Object? value, {String defaultValue = ''}) =>
       value is String ? value : defaultValue;
-
   static int? _metadataInt(Object? value) =>
       value is num ? value.toInt() : null;
-
   static double? _metadataDouble(Object? value) =>
       value is num ? value.toDouble() : null;
 
-  /// Parses JPEG SOF marker to extract image dimensions.
-  Size? _parseJpegSize(Uint8List bytes) {
-    if (bytes.length < 4) return null;
-    if (bytes[0] != 0xFF || bytes[1] != 0xD8) return null;
-
-    int i = 2;
-    while (i + 4 <= bytes.length) {
-      if (bytes[i] != 0xFF) break;
-      final marker = bytes[i + 1];
-      if (marker == 0xD8 || marker == 0xD9) {
-        i += 2;
-        continue;
-      }
-      if (i + 4 > bytes.length) break;
-      final segLen = (bytes[i + 2] << 8) | bytes[i + 3];
-      if (marker >= 0xC0 &&
-          marker <= 0xC3 &&
-          segLen >= 7 &&
-          i + 9 <= bytes.length) {
-        final h = (bytes[i + 5] << 8) | bytes[i + 6];
-        final w = (bytes[i + 7] << 8) | bytes[i + 8];
-        if (w > 0 && h > 0) return Size(w.toDouble(), h.toDouble());
-      }
-      i += 2 + segLen;
-    }
-    return null;
-  }
-
   bool _isWebSocketUri(Uri uri) => uri.scheme == 'ws' || uri.scheme == 'wss';
-
-  Future<void> _closeWebSocket() async {
-    final socket = _webSocket;
-    _webSocket = null;
-    if (socket != null) {
-      await socket.close();
-    }
-  }
 
   void _handleSocketClosed(String message) {
     if (_disposed) return;
     _errorMessage = message;
-    _closingWebSocket = true;
+    final generation = ++_connectionGeneration;
     unawaited(
       _disconnect().then((_) {
-        if (_disposed) return;
+        if (!_currentConnection(generation)) return;
         _notifyListeners();
       }),
     );
@@ -1060,7 +356,7 @@ class FrameReceiverService extends ChangeNotifier {
     _playingSubscription?.cancel();
     _webSocketSubscription?.cancel();
     _webSocket?.close();
-    _player.dispose();
+    _nativePlayer?.dispose();
     super.dispose();
   }
 }

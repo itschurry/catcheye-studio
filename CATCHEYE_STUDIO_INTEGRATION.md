@@ -90,8 +90,8 @@ Do not include `inspection` in `recordingControlsEnabled`. In `_connect`, keep
 the recording-status request restricted to `hss` and `capture`; otherwise a
 missing `/api/recording` endpoint prevents the WebSocket connection.
 
-단일 검사 모드의 `RemoteCaptureApiService.requestCapture`도 Inspect 연결이면 다음 경로를 사용해.
-별도 CatchEye Capture 앱에 연결했을 때만 기존 `/api/capture/request`를 유지해.
+단일 검사 모드의 `RemoteCaptureApiService.requestCapture`도 Inspect 연결이면 다음 경로를 사용합니다.
+별도 CatchEye Capture 앱에 연결했을 때만 기존 `/api/capture/request`를 유지합니다.
 
 ```http
 POST /api/capture/all
@@ -180,38 +180,39 @@ camera-property, ROI or image-download contracts to this device.
 
 ### 프로파일별 촬영과 요청별 결과 연결
 
-`RemoteCaptureApiService.requestStationCapture`는 `accepted`, `cycle_id`, `error`를 반환해.
-다음 응답을 단일 검사 모드의 캡처 상태 객체로 처리하면 안 돼.
+`RemoteCaptureApiService.requestStationCapture`는 `accepted`, `cycle_id`, `error`를 반환합니다.
+다음 응답을 단일 검사 모드의 캡처 상태 객체로 처리하면 안 됩니다.
 
 ```http
-POST /api/capture/bolt-stud
+POST /api/capture/stud
 ```
 
 ```json
 {"accepted":true,"cycle_id":"<generated-id>","error":""}
 ```
 
-`--station`의 경로와 Studio 촬영 버튼은 YAML의 `set_id`를 기준으로 해. 파일명, `groups` 목록이나 미리보기 선택으로 추측하지 마.
+`--station`의 경로와 Studio 촬영 버튼은 YAML의 `set_id`를 기준으로 합니다. 파일명, `groups` 목록이나 미리보기 선택으로 추측하지 마십시오.
 
 | `set_id` | Studio 촬영 버튼 | POST 경로 | 대상 |
 | --- | --- | --- | --- |
-| `fastener` | `Stud + Bolt Head` | `/api/capture/bolt-stud` | `.101` 스터드, `.102` 볼트 머리 |
-| `fastener` | `Nut + Nut Hole` | `/api/capture/nut` | `.103` 너트, `.104` 너트 홀 |
-| `fastener` | `All Cameras (4)` | `/api/capture/all` | 설정된 네 카메라 |
+| `fastener` | `Bolt Head` | `/api/capture/bolt-head` | 볼트 머리 `.102` |
+| `fastener` | `Stud` | `/api/capture/stud` | 스터드 `.101` |
+| `fastener` | `Nut` | `/api/capture/nut` | 너트 `.103` |
+| `fastener` | `Nut Hole` | `/api/capture/nut-hole` | 너트 홀 `.104` |
 | `bolt_stud` | `All Cameras (2)`만 표시 | `/api/capture/all` | 설정된 스터드·볼트 머리 |
 | `nut` | `All Cameras (2)`만 표시 | `/api/capture/all` | 설정된 너트·너트 홀 |
 
-`StationCaptureTarget`을 명시해 호출하고 POST 본문은 보내지 않아. 서버는 빈 본문과 `{}`만 허용해. `group`·`inspection_id`·`camera_id` 등 필드, 잘못된 JSON·타입은 400이야. 개별 검사 선택 API는 없어. 개별 프로파일의 그룹 경로와 이전 `/api/capture/request`는 404이며 별칭이나 다른 경로로의 재요청은 없어. 등록된 경로에 POST 외 메서드를 쓰면 405야.
+`StationCaptureTarget`을 명시해 호출하고 POST 본문은 보내지 않습니다. 서버는 빈 본문과 `{}`만 허용합니다. `group`·`inspection_id`·`camera_id` 등 필드, 잘못된 JSON·타입은 400입니다. 개별 검사 선택 API는 없습니다. 개별 프로파일의 그룹 경로와 이전 `/api/capture/request`는 404이며 별칭이나 다른 경로로의 재요청은 없습니다. 등록된 경로에 POST 외 메서드를 쓰면 405입니다.
 
-HTTP 409는 대기열 포화, 503은 스테이션 준비 안 됨이야. 200은 접수 성공이지 검사 통과가 아니야. 시간 초과된 POST는 자동 재전송하지 마. 요청마다 별도 사이클을 생성해.
+HTTP 409는 대기열 포화, 503은 스테이션 준비 안 됨입니다. 200은 접수 성공이지 검사 통과가 아닙니다. 시간 초과된 POST는 자동 재전송하지 마십시오. 요청마다 별도 사이클을 생성합니다.
 
-`GET /api/capture/status`에서 `set_id`, `ready`, `busy`, `pending_count`, `max_pending_captures`, `active_cycle_id`, `capture_count`, `groups`, `cameras`, `last_result`, `last_error`를 조회해. `groups`는 그룹 ID별 검사 ID 배열이고, `cameras`는 카메라 ID별 `open`, `frame_sequence`, `last_error`야.
+`GET /api/capture/status`에서 `capture_api_version: 2`, `production_active`, `set_id`, `ready`, `busy`, `pending_count`, `max_pending_captures`, `active_cycle_id`, `capture_count`, `groups`, `cameras`, `last_result`, `last_error`를 조회합니다. `groups`는 그룹 ID별 검사 ID 배열이고, `cameras`는 카메라 ID별 `open`, `frame_sequence`, `last_error`입니다.
 
-전체 촬영과 버튼의 카메라 수는 YAML에 설정된 모든 검사 카메라를 기준으로 해. 미리보기 선택이나 `open:true` 개수가 아니야. 사용하지 않는 카메라의 연결이 닫혀 있다는 것만으로 장비 오류로 판단하지 마. 실제 촬영에서 획득 실패한 카메라는 결과에서 제외하지 않고 `EQUIPMENT_ERROR`로 보고해.
+전체 촬영과 버튼의 카메라 수는 YAML에 설정된 모든 검사 카메라를 기준으로 합니다. 미리보기 선택이나 `open:true` 개수가 아닙니다. 사용하지 않는 카메라의 연결이 닫혀 있다는 것만으로 장비 오류로 판단하지 마십시오. 실제 촬영에서 획득 실패한 카메라는 결과에서 제외하지 않고 `EQUIPMENT_ERROR`로 보고합니다.
 
-`StationCaptureActions`는 그룹·개별 검사 선택 드롭다운 대신 위 버튼을 직접 표시해. 상태 조회 실패나 `set_id` 누락 시 촬영 버튼을 표시하지 않고 오류를 보여줘. 연결 끊김, POST 전송 중, `ready:false`, 대기열 포화 상태에서는 버튼을 비활성화해. 대기열 한도에는 실행 중인 사이클이 포함되지 않아. 좁은 화면에서는 버튼을 여러 줄로 배치해.
+`StationCaptureActions`는 그룹·개별 검사 선택 드롭다운 대신 위 버튼을 직접 표시합니다. 상태 조회 실패, API 버전 불일치 또는 `set_id` 누락 시 촬영 버튼을 표시하지 않고 오류를 표시합니다. 연결 끊김, POST 전송 중, `ready:false`, 대기열 포화 상태에서는 버튼을 비활성화합니다. 대기열 한도에는 실행 중인 사이클이 포함되지 않습니다. 좁은 화면에서는 버튼을 여러 줄로 배치합니다.
 
-Inspect와 Studio는 함께 업데이트해야 해. 구버전 API로 자동 전환하지 않아. GPIO 접점 입력은 이번 구현 범위가 아니야.
+Inspect와 Studio는 함께 업데이트해야 합니다. 구버전 API로 자동 전환하지 않습니다. GPIO 접점 입력은 이번 구현 범위가 아닙니다.
 
 Poll each accepted ID using:
 
@@ -254,15 +255,15 @@ Capture happens when a queued cycle starts executing, not when its POST was acce
 Completed history is bounded (32 by default) and lost on restart; unknown/evicted IDs
 return HTTP 404. Retain the completed result in Studio after polling it. `last_result`
 can belong to another request, so it is not sufficient to correlate simultaneous callers.
-저장이 설정된 결과의 `storage_path`는 YAML `output_dir` 기준 `<분류>/<YYYY-MM-DD>/<cycle_id>` 상대 경로야. 분류는 `bolt_stud`·`nut`·`all`이고 날짜는 장비 현지 접수일이야. 개별 프로파일의 전체 요청은 해당 프로파일 분류에 저장해. 저장 비활성화 시 `storage_path`는 `null`이야. `artifacts`는 해당 사이클 디렉터리 기준 파일명이며, 진행 중 촬영 조회는 기존 `cycle_id`를 사용해. 날짜별 저장 이미지 조회는 아래 archive API에 `storage_path`를 명시해. 별도 `archive/` 디렉터리의 이전 구조는 조회 대상이 아니야.
+저장이 설정된 결과의 `storage_path`는 YAML `output_dir` 기준 `<분류>/<YYYY-MM-DD>/<cycle_id>` 상대 경로입니다. 분류는 `bolt_stud`·`nut`·`all`이고 날짜는 장비 현지 접수일입니다. 개별 프로파일의 전체 요청은 해당 프로파일 분류에 저장합니다. 저장 비활성화 시 `storage_path`는 `null`입니다. `artifacts`는 해당 사이클 디렉터리 기준 파일명이며, 진행 중 촬영 조회는 기존 `cycle_id`를 사용합니다. 날짜별 저장 이미지 조회는 아래 archive API에 `storage_path`를 명시합니다. 별도 `archive/` 디렉터리의 이전 구조는 조회 대상이 아닙니다.
 Saved image downloads are available through the recent-cycle image endpoint and the explicit disk archive image endpoint described below. `artifact_error` indicates a save
 failure and forces aggregate `EQUIPMENT_ERROR`; per-inspection detection results may still exist.
 
 ### Preview source
 
-운영 프로파일의 `set_id`는 `fastener`야. 그룹 `bolt_stud`는 `["bolt_head", "stud"]`, 그룹 `nut`은 `["nut", "nut_hole_alignment"]`로 구성돼. 촬영 버튼은 앞의 프로파일별 계약을 따르고, 미리보기 선택은 별도로 처리해.
+운영 프로파일의 `set_id`는 `fastener`입니다. 그룹 `bolt_stud`는 `["bolt_head", "stud"]`, 그룹 `nut`은 `["nut", "nut_hole_alignment"]`로 구성됩니다. 촬영 버튼은 앞의 프로파일별 계약을 따르고, 미리보기 선택은 별도로 처리합니다.
 
-스터드 검사에는 `stud`, 카메라에는 `stud_camera`를 사용해. fastener에서 스터드는 `/api/capture/bolt-stud`로 볼트 머리와 함께 검사하고, 미리보기 선택은 `{"camera_id":"stud_camera"}`야. 카메라 역할은 스터드 `.101`, 볼트 머리 `.102`, 너트 `.103`, 너트 홀 `.104`이며 IP 설정은 계속 장비 YAML에서 관리해.
+스터드 검사에는 `stud`, 카메라에는 `stud_camera`를 사용합니다. fastener에서 스터드는 `/api/capture/stud`로 독립 검사하고, 미리보기 선택은 `{"camera_id":"stud_camera"}`입니다. 카메라 역할은 스터드 `.101`, 볼트 머리 `.102`, 너트 `.103`, 너트 홀 `.104`이며 IP 설정은 계속 장비 YAML에서 관리합니다.
 
 Studio는 상태 API가 반환하는 ID를 사용하고, 표시명은 "스터드"로 통일하십시오. 스터드의 검사 ID와 검출 `class_name`은 모두 `stud`, 카메라 ID는 `stud_camera`입니다. 이전 이름의 별칭은 제공하지 않으므로 클라이언트의 요청 ID·검출 클래스 필터도 갱신해야 합니다.
 
@@ -293,9 +294,9 @@ with preview disabled and must not depend on receiving a new WebSocket frame.
 
 ### Station acceptance tests
 
-1. `set_id`로 프로파일을 식별해. fastener는 촬영 버튼 3개, bolt_stud/nut은 전체 버튼 1개만 표시하고 각 버튼의 POST 경로·촬영 대상 2/4대를 확인해. 미지원 경로는 404여야 해.
+1. `set_id`로 프로파일을 식별합니다. fastener는 개별 촬영 버튼 4개, bolt_stud/nut은 전체 버튼 1개만 표시하고 각 버튼의 POST 경로·촬영 대상 1/2대를 확인합니다. 미지원 경로는 404여야 합니다.
 2. Select each camera, verify identity/dimensions, and disable preview without blocking capture.
-3. bolt-stud를 요청하고 실행 중일 때 nut를 요청해. 서로 다른 사이클 ID, 선입선출 완료 순서, 두 결과를 확인해.
+3. stud를 요청하고 실행 중일 때 nut를 요청합니다. 서로 다른 사이클 ID, 선입선출 완료 순서, 두 결과를 확인합니다.
 4. Fill the pending queue and display HTTP 409 without automatic retries or lost accepted IDs.
 5. Verify NG, RECHECK, camera timeout, and storage-error presentation independently.
 6. Verify correlated result polling, expiration (404), reconnect and runtime restart behavior.
@@ -303,12 +304,11 @@ with preview disabled and must not depend on receiving a new WebSocket frame.
 8. Validate actual four-camera acquisition and unified-model results on the installation;
    the C++ synthetic tests do not establish synchronized exposure or production throughput.
 9. 단일·다중 선택을 전환하면서 네 카메라의 JPEG 순서·크기·ID를 검증하고, 일부 카메라가 프레임을 반환하지 않아도 메시지 구분이 어긋나지 않는지 확인합니다.
-10. 연결 실패 카메라도 전체 촬영 결과에 포함되는지, 상태 오류·준비 안 됨·POST 전송 중·대기열 포화에서 잘못된 요청이 발생하지 않는지 확인해. 구버전 API로 자동 전환하거나 POST를 재전송하면 안 돼.
+10. 연결 실패 카메라도 전체 촬영 결과에 포함되는지, 상태 오류·준비 안 됨·POST 전송 중·대기열 포화에서 잘못된 요청이 발생하지 않는지 확인합니다. 구버전 API로 자동 전환하거나 POST를 재전송하면 안 됩니다.
 
-Studio의 촬영 버튼·API·테스트는 이 저장소에서 관리하고 Inspect 런타임은 별도 저장소에서 함께 수정해.
-Inspect의 고정 SDK는 HTTP 요청·응답 전체와 WebSocket 연결 협상·송신에 제한 시간을 적용해.
-Studio should still close abandoned connections, reconnect after send timeouts, and
-avoid automatically replaying capture POSTs after a timeout. Hardware smoke results
+Studio의 촬영 버튼·API·테스트는 이 저장소에서 관리하고 Inspect 런타임은 별도 저장소에서 함께 수정합니다.
+Inspect의 고정 SDK는 HTTP 요청·응답 전체와 WebSocket 연결 협상·송신에 제한 시간을 적용합니다.
+Studio는 사용하지 않는 연결을 닫고 HTTP 요청의 연결·본문 수신 전체에 제한 시간을 적용합니다. 연결 종료 후 늦게 완료된 연결은 버리며, 촬영 POST는 자동 재전송하지 않습니다. Hardware smoke results
 and remaining optical qualification are recorded in `docs/FASTENER_VALIDATION.md`.
 
 ### Deployed service connection
@@ -369,7 +369,7 @@ Inspect 구현 순서와 단계별 완료 조건은 [예시 이미지 구현 계
 
 ## 예시 이미지 API v1
 
-상태: **C++ 구현 완료, 설치 옵션으로 활성화**. `--enable-reference-api`로 설치한 fastener 장비에서 아래 API를 제공해. 미설치 장비의 404는 미지원으로 처리해. 일반 검사의 `/api/capture/all`·`bolt-stud`·`nut`, 결과 목록 API와 혼용하지 마.
+상태: **C++ 구현 완료, 설치 옵션으로 활성화**. `--enable-reference-api`로 설치한 fastener 장비에서 아래 API를 제공합니다. 미설치 장비의 404는 미지원으로 처리합니다. 일반 검사의 `/api/capture/bolt-head`·`stud`·`nut`·`nut-hole`, 개별 프로파일의 `all` 및 결과 목록 API와 혼용하지 마십시오.
 
 ### 공통 규칙
 
@@ -498,10 +498,10 @@ v1 한도는 예시 촬영 256건, 예시 버전 512개, 빌드 64건, 적용 64
 
 ### 날짜별 저장 결과 조회
 
-`검사 결과` 화면은 런타임의 최근 결과 목록 대신 디스크의 저장 이력을 사용해.
+`검사 결과` 화면은 런타임의 최근 결과 목록 대신 디스크의 저장 이력을 사용합니다.
 `output_dir/{bolt_stud,nut,all}/YYYY-MM-DD/<cycle_id>/result.json`이 게시된 완료·취소 기록을 조회하므로,
-장비 재시작이나 메모리 이력 제한과 관계없이 파일이 보존된 결과를 볼 수 있어.
-날짜는 장비의 현지 접수일 폴더를 그대로 사용하고, `archive/`·기준 이미지·임시 촬영 폴더는 제외해.
+장비 재시작이나 메모리 이력 제한과 관계없이 파일이 보존된 결과를 볼 수 있습니다.
+날짜는 장비의 현지 접수일 폴더를 그대로 사용하고, `archive/`·기준 이미지·임시 촬영 폴더는 제외합니다.
 
 | 메서드·경로 | 응답·용도 |
 | --- | --- |
@@ -510,17 +510,17 @@ v1 한도는 예시 촬영 256건, 예시 버전 512개, 빌드 64건, 적용 64
 | `GET /api/capture/archive/<분류>/<날짜>/<cycle_id>/image?inspection_id=<id>&kind=raw\|overlay` | 선택한 저장 결과의 PNG |
 
 `storage`는 저장장치의 `path`, `total_bytes`, `available_bytes`, `used_bytes`, `used_percent`와
-검사 데이터의 `capture_bytes`(결과 JSON+PNG 합계), `capture_count`(PNG 개수), `result_count`(검사 건수)를 반환해.
-장치 사용률은 전체 파일시스템 기준이고, 검사 데이터 합계는 위 저장 이력만 포함해.
-각 결과에는 해당 사이클의 JSON+PNG 용량인 `size_bytes`가 추가돼.
+검사 데이터의 `capture_bytes`(결과 JSON+PNG 합계), `capture_count`(PNG 개수), `result_count`(검사 건수)를 반환합니다.
+장치 사용률은 전체 파일시스템 기준이고, 검사 데이터 합계는 위 저장 이력만 포함합니다.
+각 결과에는 해당 사이클의 JSON+PNG 용량인 `size_bytes`가 추가됩니다.
 
-목록은 접수 시각·cycle ID 내림차순이며 `limit`은 1~100, 기본 100이야.
-`next_cursor`는 불투명한 문자열이고 `null`이면 마지막 페이지야. 다음 요청에 그대로 전달해.
+목록은 접수 시각·cycle ID 내림차순이며 `limit`은 1~100, 기본 100입니다.
+`next_cursor`는 불투명한 문자열이고 `null`이면 마지막 페이지입니다. 다음 요청에 그대로 전달합니다.
 잘못된 날짜·커서는 400, 비활성화된 저장은 409, 없는 저장 폴더·삭제된 이미지는 404,
-손상된 결과·안전하게 읽을 수 없는 파일은 오류로 반환해. 심볼릭 링크는 따라가지 않아.
-이미지는 카메라를 다시 촬영하지 않고 `storage_path`와 `inspection_id`·`kind`로 명시한 저장 파일만 읽어.
+손상된 결과·안전하게 읽을 수 없는 파일은 오류로 반환합니다. 심볼릭 링크는 따라가지 않습니다.
+이미지는 카메라를 다시 촬영하지 않고 `storage_path`와 `inspection_id`·`kind`로 명시한 저장 파일만 읽습니다.
 
-Studio는 최초 진입·날짜 선택·새로고침·최신 결과·더 보기에서 조회해. 매초 저장 폴더를 스캔하지 않아.
-삭제된 기록을 클라이언트에 누적 보관하지 않으며 새로고침 때 서버 목록으로 교체해.
-구버전 서버의 API 미지원은 오류로 표시하고 최근 결과 API로 자동 전환하지 않아.
-뷰어의 진행 중 촬영 폴링은 기존 `/api/capture/results/<cycle_id>`를 계속 사용해.
+Studio는 최초 진입·날짜 선택·새로고침·최신 결과·더 보기에서 조회합니다. 매초 저장 폴더를 스캔하지 않습니다.
+삭제된 기록을 클라이언트에 누적 보관하지 않으며 새로고침 때 서버 목록으로 교체합니다.
+구버전 서버의 API 미지원은 오류로 표시하고 최근 결과 API로 자동 전환하지 않습니다.
+뷰어의 진행 중 촬영 폴링은 기존 `/api/capture/results/<cycle_id>`를 계속 사용합니다.

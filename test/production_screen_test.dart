@@ -15,21 +15,26 @@ class FakeProductionApi extends RemoteProductionApiService {
   @override
   Future<RecipeCatalog> recipes(AppSettings settings) async => catalog;
   @override
-  Future<Map<String, dynamic>> status(AppSettings settings) async => {
-    'api_version': 1,
-    'control_epoch': 'boot-1',
-    'session': null,
-    'events': [],
-    'error': '',
-    'plc': {
-      'state': 'DISABLED',
-      'enabled': false,
-      'error': '',
-      'events': [],
-      'rx_map': {},
-      'tx_map': {},
-    },
-  };
+  Future<ProductionStatus> status(AppSettings settings) async =>
+      ProductionStatus.fromJson({
+        'api_version': 1,
+        'control_epoch': 'boot-1',
+        'session': null,
+        'events': [],
+        'error': '',
+        'plc': {
+          'state': 'DISABLED',
+          'host': '',
+          'port': 0,
+          'protocol': 'inspect_words_v1',
+          'result_acknowledged': false,
+          'enabled': false,
+          'error': '',
+          'events': [],
+          'rx_map': <String, dynamic>{},
+          'tx_map': <String, dynamic>{},
+        },
+      });
   @override
   Future<RecipeSlot> save(
     AppSettings settings,
@@ -86,7 +91,7 @@ void main() {
       ], api.catalog.defaults);
       await tester.tap(find.byTooltip('서버 상태 새로고침'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('서버 초안이 다른 곳에서 변경됐어'), findsOneWidget);
+      expect(find.textContaining('서버 초안이 다른 곳에서 변경되었습니다'), findsOneWidget);
       await tester.ensureVisible(find.byKey(const ValueKey('save-recipe')));
       await tester.tap(find.byKey(const ValueKey('save-recipe')));
       await tester.pumpAndSettle();
