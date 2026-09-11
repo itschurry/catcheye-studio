@@ -1,3 +1,4 @@
+import 'package:catcheye_studio/theme/studio_theme.dart';
 import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
@@ -31,11 +32,7 @@ void main() {
           locale: const Locale('ko'),
           supportedLocales: const [Locale('ko')],
           localizationsDelegates: GlobalMaterialLocalizations.delegates,
-          theme: ThemeData.dark().copyWith(
-            textTheme: ThemeData.dark().textTheme.apply(
-              fontFamily: 'NotoSansKR',
-            ),
-          ),
+          theme: buildStudioTheme(),
           home: Scaffold(
             body: Column(
               children: [

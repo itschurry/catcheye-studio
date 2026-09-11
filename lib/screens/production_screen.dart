@@ -21,7 +21,8 @@ class ProductionScreen extends StatefulWidget {
   State<ProductionScreen> createState() => _ProductionScreenState();
 }
 
-class _ProductionScreenState extends State<ProductionScreen> {
+class _ProductionScreenState extends State<ProductionScreen>
+    with SingleTickerProviderStateMixin {
   late final RemoteProductionApiService _api =
       widget.api ?? RemoteProductionApiService();
   final _captureApi = RemoteCaptureApiService();
@@ -33,6 +34,10 @@ class _ProductionScreenState extends State<ProductionScreen> {
   List<RecipePoint> _points = [];
   int _product = 1;
   int _tab = 0;
+  late final TabController _tabs = TabController(length: 4, vsync: this)
+    ..addListener(() {
+      if (_tab != _tabs.index) setState(() => _tab = _tabs.index);
+    });
   bool _dirty = false;
   bool _busy = false;
   bool _polling = false;
@@ -92,6 +97,7 @@ class _ProductionScreenState extends State<ProductionScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _tabs.dispose();
     if (widget.api == null) _api.close();
     _captureApi.close();
     _name.dispose();
@@ -319,6 +325,27 @@ class _ProductionScreenState extends State<ProductionScreen> {
       appBar: AppBar(
         title: const Text('검사 관리'),
         actions: [
+          Tooltip(
+            message: _fresh
+                ? '서버 상태 갱신 ${_time(_updatedAt)}'
+                : '서버 상태를 확인할 수 없습니다',
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _fresh ? Icons.check_circle_outline : Icons.error_outline,
+                  size: 16,
+                  color: _fresh ? Colors.greenAccent : Colors.orangeAccent,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _fresh ? '상태 갱신 ${_time(_updatedAt)}' : '상태 확인 불가',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
           IconButton(
             tooltip: '서버 상태 새로고침',
             onPressed: _busy ? null : _reload,
@@ -328,32 +355,19 @@ class _ProductionScreenState extends State<ProductionScreen> {
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final (index, label) in [
-                  '제품 레시피',
-                  '생산 검사',
-                  'PLC 통신 진단',
-                  'PLC 디버그',
-                ].indexed)
-                  ChoiceChip(
-                    label: Text(label),
-                    selected: _tab == index,
-                    onSelected: (_) => setState(() => _tab = index),
-                  ),
-                Chip(
-                  label: Text(
-                    _fresh ? '상태 갱신 ${_time(_updatedAt)}' : '상태 확인 불가',
-                  ),
-                  avatar: Icon(
-                    _fresh ? Icons.check_circle_outline : Icons.error_outline,
-                    color: _fresh ? Colors.green : Colors.orange,
-                  ),
-                ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TabBar(
+              controller: _tabs,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+              tabs: const [
+                Tab(text: '제품 레시피'),
+                Tab(text: '생산 검사'),
+                Tab(text: 'PLC 통신 진단'),
+                Tab(text: 'PLC 디버그'),
               ],
             ),
           ),
@@ -367,41 +381,47 @@ class _ProductionScreenState extends State<ProductionScreen> {
             ),
           if (_busy) const LinearProgressIndicator(),
           Expanded(
-            child: _catalog == null
-                ? Center(
-                    child: Text(
-                      _busy
-                          ? 'Inspect에서 레시피를 읽는 중…'
-                          : '레시피를 불러올 수 없습니다. Inspect API와 연결 설정을 확인해 주세요.',
-                    ),
-                  )
-                : switch (_tab) {
-                    0 => _recipes(),
-                    1 => _operation(),
-                    2 => _diagnostics(),
-                    _ => PlcDebugPanel(
-                      key: ValueKey('debug-$_endpoint'),
-                      catalog: _catalog!,
-                      status: _status,
-                      fresh: _fresh,
-                      busy: _busy,
-                      captureApi: _captureApi,
-                      onConnect: (simulator) => _plcAction(
-                        simulator ? 'plc/simulator/connect' : 'plc/connect',
-                      ),
-                      onDisconnect: () => _plcAction('plc/disconnect'),
-                      onConfigure: () => setState(() => _tab = 2),
-                      onCapture: (id, product, point, hardware) =>
-                          _plcAction('plc/simulator/capture', {
-                            'simulator_id': id,
-                            'request_id':
-                                RemoteProductionApiService.requestId(),
-                            'product_id': product,
-                            'point_number': point,
-                            'hardware_id': hardware,
-                          }),
-                    ),
-                  },
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1120),
+                child: _catalog == null
+                    ? Center(
+                        child: Text(
+                          _busy
+                              ? 'Inspect에서 레시피를 읽는 중…'
+                              : '레시피를 불러올 수 없습니다. Inspect API와 연결 설정을 확인해 주세요.',
+                        ),
+                      )
+                    : switch (_tab) {
+                        0 => _recipes(),
+                        1 => _operation(),
+                        2 => _diagnostics(),
+                        _ => PlcDebugPanel(
+                          key: ValueKey('debug-$_endpoint'),
+                          catalog: _catalog!,
+                          status: _status,
+                          fresh: _fresh,
+                          busy: _busy,
+                          captureApi: _captureApi,
+                          onConnect: (simulator) => _plcAction(
+                            simulator ? 'plc/simulator/connect' : 'plc/connect',
+                          ),
+                          onDisconnect: () => _plcAction('plc/disconnect'),
+                          onConfigure: () => _tabs.animateTo(2),
+                          onCapture: (id, product, point, hardware) =>
+                              _plcAction('plc/simulator/capture', {
+                                'simulator_id': id,
+                                'request_id':
+                                    RemoteProductionApiService.requestId(),
+                                'product_id': product,
+                                'point_number': point,
+                                'hardware_id': hardware,
+                              }),
+                        ),
+                      },
+              ),
+            ),
           ),
         ],
       ),
@@ -412,6 +432,8 @@ class _ProductionScreenState extends State<ProductionScreen> {
     controller: _scroll,
     padding: const EdgeInsets.all(16),
     children: [
+      _sectionTitle('제품 선택'),
+      const SizedBox(height: 12),
       Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -449,7 +471,9 @@ class _ProductionScreenState extends State<ProductionScreen> {
             ),
         ],
       ),
-      const SizedBox(height: 20),
+      const SizedBox(height: 24),
+      _sectionTitle('제품 정보'),
+      const SizedBox(height: 12),
       TextField(
         key: const ValueKey('recipe-name'),
         controller: _name,
@@ -463,89 +487,54 @@ class _ProductionScreenState extends State<ProductionScreen> {
       const SizedBox(height: 12),
       Text(
         '초안 v${_slot!.revision} · 적용 ${_slot!.activeRevision == null ? '안 됨' : 'v${_slot!.activeRevision}'}${_dirty ? ' · 저장하지 않은 변경' : ''}',
+        style: Theme.of(context).textTheme.bodySmall,
       ),
+      const SizedBox(height: 24),
+      _sectionTitle('촬영 포인트', detail: '${_points.length}개'),
       const SizedBox(height: 8),
-      const Text(
-        '목록 번호가 PLC에서 지정하는 촬영 포인트 번호입니다. 순서를 바꾸면 번호도 변경됩니다. 기대 개수를 비워 두면 초안으로 저장할 수 있지만 생산 검사에는 적용할 수 없습니다.',
+      Text(
+        '순서가 PLC 포인트 번호입니다. 적용하려면 기대 개수를 입력하세요.',
+        style: Theme.of(context).textTheme.bodySmall,
       ),
-      const SizedBox(height: 12),
+      const SizedBox(height: 16),
       for (var i = 0; i < _points.length; i++)
         Card(
           child: Padding(
             padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${i + 1}. ${_points[i].name.isEmpty ? '포인트 이름 미설정' : _points[i].name}',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                Text(
-                  '${inspectionLabels[_points[i].inspectionId]} · 기대 ${_points[i].expectedCount?.toString() ?? '미정'}개',
-                ),
-                Wrap(
-                  spacing: 4,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final details = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TextButton.icon(
-                      onPressed: _busy ? null : () => _editPoint(i),
-                      icon: const Icon(Icons.edit_outlined),
-                      label: const Text('편집'),
+                    Text(
+                      '${i + 1}. ${_points[i].name.isEmpty ? '포인트 이름 미설정' : _points[i].name}',
+                      style: Theme.of(context).textTheme.titleSmall,
                     ),
-                    TextButton.icon(
-                      onPressed: _busy
-                          ? null
-                          : () => setState(() {
-                              _points.insert(
-                                i + 1,
-                                RecipePoint.fromJson(_points[i].toJson()),
-                              );
-                              _dirty = true;
-                            }),
-                      icon: const Icon(Icons.copy),
-                      label: const Text('복제'),
-                    ),
-                    IconButton(
-                      tooltip: '위로 이동',
-                      onPressed: _busy || i == 0
-                          ? null
-                          : () => setState(() {
-                              final point = _points.removeAt(i);
-                              _points.insert(i - 1, point);
-                              _dirty = true;
-                            }),
-                      icon: const Icon(Icons.arrow_upward),
-                    ),
-                    IconButton(
-                      tooltip: '아래로 이동',
-                      onPressed: _busy || i == _points.length - 1
-                          ? null
-                          : () => setState(() {
-                              final point = _points.removeAt(i);
-                              _points.insert(i + 1, point);
-                              _dirty = true;
-                            }),
-                      icon: const Icon(Icons.arrow_downward),
-                    ),
-                    IconButton(
-                      tooltip: '포인트 삭제',
-                      onPressed: _busy
-                          ? null
-                          : () => setState(() {
-                              _points.removeAt(i);
-                              _dirty = true;
-                            }),
-                      icon: const Icon(Icons.delete_outline),
-                    ),
-                    TextButton.icon(
-                      onPressed: _busy
-                          ? null
-                          : () => _preview(_points[i].inspectionId),
-                      icon: const Icon(Icons.videocam_outlined),
-                      label: const Text('카메라 확인'),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${inspectionLabels[_points[i].inspectionId]} · 기대 ${_points[i].expectedCount?.toString() ?? '미정'}개',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
-                ),
-              ],
+                );
+                if (constraints.maxWidth >= 760) {
+                  return Row(
+                    children: [
+                      Expanded(child: details),
+                      const SizedBox(width: 16),
+                      _pointActions(i),
+                    ],
+                  );
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    details,
+                    const SizedBox(height: 12),
+                    _pointActions(i),
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -554,6 +543,7 @@ class _ProductionScreenState extends State<ProductionScreen> {
           padding: EdgeInsets.all(24),
           child: Text('등록된 촬영 포인트가 없습니다. PLC에서 사용할 포인트 번호에 맞춰 추가해 주세요.'),
         ),
+      const SizedBox(height: 8),
       Wrap(
         spacing: 12,
         runSpacing: 8,
@@ -602,6 +592,77 @@ class _ProductionScreenState extends State<ProductionScreen> {
     ],
   );
 
+  Widget _sectionTitle(String title, {String? detail}) => Row(
+    children: [
+      Text(title, style: Theme.of(context).textTheme.titleSmall),
+      if (detail != null) ...[
+        const SizedBox(width: 8),
+        Text(detail, style: Theme.of(context).textTheme.bodySmall),
+      ],
+    ],
+  );
+
+  Widget _pointActions(int i) => Wrap(
+    spacing: 4,
+    children: [
+      TextButton.icon(
+        onPressed: _busy ? null : () => _editPoint(i),
+        icon: const Icon(Icons.edit_outlined),
+        label: const Text('편집'),
+      ),
+      TextButton.icon(
+        onPressed: _busy
+            ? null
+            : () => setState(() {
+                _points.insert(
+                  i + 1,
+                  RecipePoint.fromJson(_points[i].toJson()),
+                );
+                _dirty = true;
+              }),
+        icon: const Icon(Icons.copy),
+        label: const Text('복제'),
+      ),
+      IconButton(
+        tooltip: '위로 이동',
+        onPressed: _busy || i == 0
+            ? null
+            : () => setState(() {
+                final point = _points.removeAt(i);
+                _points.insert(i - 1, point);
+                _dirty = true;
+              }),
+        icon: const Icon(Icons.arrow_upward),
+      ),
+      IconButton(
+        tooltip: '아래로 이동',
+        onPressed: _busy || i == _points.length - 1
+            ? null
+            : () => setState(() {
+                final point = _points.removeAt(i);
+                _points.insert(i + 1, point);
+                _dirty = true;
+              }),
+        icon: const Icon(Icons.arrow_downward),
+      ),
+      IconButton(
+        tooltip: '포인트 삭제',
+        onPressed: _busy
+            ? null
+            : () => setState(() {
+                _points.removeAt(i);
+                _dirty = true;
+              }),
+        icon: const Icon(Icons.delete_outline),
+      ),
+      TextButton.icon(
+        onPressed: _busy ? null : () => _preview(_points[i].inspectionId),
+        icon: const Icon(Icons.videocam_outlined),
+        label: const Text('카메라 확인'),
+      ),
+    ],
+  );
+
   Widget _operation() {
     final capture = _capture;
     final enabled =
@@ -615,8 +676,11 @@ class _ProductionScreenState extends State<ProductionScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text(
-          '제품과 촬영 포인트를 선택하면 실제 카메라로 1회 검사합니다. 수동 검증은 PLC 연결을 해제한 상태에서 사용하세요.',
+        _sectionTitle('수동 검사'),
+        const SizedBox(height: 8),
+        Text(
+          'PLC 연결을 해제한 뒤 제품과 포인트를 선택해 1회 검사하세요.',
+          style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 12),
         for (final slot in _catalog!.products)
@@ -750,24 +814,50 @@ class _ProductionScreenState extends State<ProductionScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text(
-          _fresh ? 'PLC ${plc?.state.code ?? '미설정'}' : 'PLC 상태 확인 불가',
-          style: Theme.of(context).textTheme.titleLarge,
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionTitle(
+                  '연결 상태',
+                  detail: _fresh ? plc?.state.code ?? '미설정' : '확인 불가',
+                ),
+                const SizedBox(height: 20),
+                Wrap(
+                  spacing: 32,
+                  runSpacing: 16,
+                  children: [
+                    _diagnosticField(
+                      'PLC 주소',
+                      plc == null || plc.host.isEmpty
+                          ? '미설정'
+                          : '${plc.host}:${plc.port}',
+                    ),
+                    _diagnosticField('프로토콜', plc?.protocol ?? '확인 불가'),
+                    _diagnosticField(
+                      '최근 수신 / 송신',
+                      '${_millis(plc?.lastRxAtMs)} / ${_millis(plc?.lastTxAtMs)}',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(height: 8),
-        Text(
-          '주소 ${plc?.host ?? ''}:${plc?.port ?? ''} · 프로토콜 ${plc?.protocol ?? ''}',
-        ),
-        Text(
-          '최근 수신 ${_millis(plc?.lastRxAtMs)} / 송신 ${_millis(plc?.lastTxAtMs)}',
-        ),
-        const Text('OK/NG는 이번 촬영 결과입니다. PLC의 결과 수신 여부는 별도로 확인하지 않습니다.'),
         if (plc?.productId != null && plc?.pointNumber != null)
           Text(
             '최근 촬영 요청: 제품 ${plc!.productId} · 포인트 ${plc.pointNumber} · 하드웨어 ${plc.hardwareId}',
           ),
         if (plc?.enabled == false)
-          const Text('현장 IP·포트·신호표가 미설정이어서 PLC 연결은 비활성 상태입니다.'),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              'PLC 연결이 비활성화되어 있습니다. 설정에서 사용 여부와 주소·신호표를 확인하세요.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
         if ((plc?.error ?? '').isNotEmpty)
           SelectableText(
             plc!.error,
@@ -775,9 +865,10 @@ class _ProductionScreenState extends State<ProductionScreen> {
           ),
         if ((_status?.error ?? '').isNotEmpty)
           SelectableText('Inspect 오류: ${_status!.error}'),
-        const Text('PLC 설정은 촬영이 끝나고 연결을 해제한 상태에서 변경할 수 있습니다.'),
+        const SizedBox(height: 4),
         Wrap(
           spacing: 8,
+          runSpacing: 8,
           children: [
             OutlinedButton.icon(
               icon: const Icon(Icons.settings),
@@ -820,7 +911,14 @@ class _ProductionScreenState extends State<ProductionScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
+        Text(
+          '설정 변경은 촬영 종료·PLC 연결 해제 후 가능합니다.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 28),
+        _sectionTitle('송수신 신호'),
+        const SizedBox(height: 8),
         for (final direction in ['rx', 'tx'])
           ExpansionTile(
             title: Text(
@@ -837,13 +935,40 @@ class _ProductionScreenState extends State<ProductionScreen> {
                 ),
             ],
           ),
-        const Divider(height: 24),
-        const Text(
-          '선택 신호 수신 → 제품·포인트·하드웨어 확인 → 촬영·판정 → OK/NG 송신',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        const Text('다음 이동과 재촬영 여부는 PLC에서 결정합니다.'),
         const SizedBox(height: 8),
+        Text(
+          'OK/NG는 촬영 결과의 송신 값입니다. PLC의 수신 여부는 별도로 확인해야 합니다.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 24),
+        ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          title: Text(
+            '통신 동작 안내',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          childrenPadding: const EdgeInsets.only(bottom: 16),
+          expandedCrossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '선택 신호 수신 → 제품·포인트·하드웨어 확인 → 촬영·판정 → OK/NG 송신',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '다음 이동과 재촬영 여부는 PLC에서 결정합니다.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        _sectionTitle('최근 통신 기록', detail: '${events.take(200).length}건'),
+        const SizedBox(height: 12),
+        if (events.isEmpty)
+          Text(
+            '수신된 통신 기록이 없습니다.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         for (final event in events.take(200))
           ListTile(
             dense: true,
@@ -853,6 +978,18 @@ class _ProductionScreenState extends State<ProductionScreen> {
       ],
     );
   }
+
+  Widget _diagnosticField(String label, String value) => SizedBox(
+    width: 240,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 6),
+        SelectableText(value, style: Theme.of(context).textTheme.bodyMedium),
+      ],
+    ),
+  );
 
   String _word(PlcStatus? plc, String direction, int word) {
     final value = _fresh && plc?.state == PlcConnectionState.connected

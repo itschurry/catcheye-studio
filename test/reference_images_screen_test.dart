@@ -1,3 +1,4 @@
+import 'package:catcheye_studio/theme/studio_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -47,11 +48,7 @@ void main() {
           ),
         ],
         child: MaterialApp(
-          theme: ThemeData(
-            brightness: Brightness.dark,
-            useMaterial3: true,
-            fontFamily: 'NotoSansKR',
-          ),
+          theme: buildStudioTheme(),
           home: Scaffold(
             body: ReferenceImagesScreen(
               initialStatus: _FakeReferenceApi.status,
@@ -111,11 +108,7 @@ void main() {
             ),
           ],
           child: MaterialApp(
-            theme: ThemeData(
-              brightness: Brightness.dark,
-              useMaterial3: true,
-              fontFamily: 'NotoSansKR',
-            ),
+            theme: buildStudioTheme(),
             home: Scaffold(
               body: ReferenceImagesScreen(
                 isPhone: isPhone,
@@ -197,11 +190,7 @@ void main() {
           ),
         ],
         child: MaterialApp(
-          theme: ThemeData(
-            brightness: Brightness.dark,
-            useMaterial3: true,
-            fontFamily: 'NotoSansKR',
-          ),
+          theme: buildStudioTheme(),
           home: Scaffold(
             body: ReferenceImagesScreen(
               isPhone: true,
@@ -247,11 +236,7 @@ void main() {
           ),
         ],
         child: MaterialApp(
-          theme: ThemeData(
-            brightness: Brightness.dark,
-            useMaterial3: true,
-            fontFamily: 'NotoSansKR',
-          ),
+          theme: buildStudioTheme(),
           home: Scaffold(
             body: ReferenceImagesScreen(
               initialStatus: _FakeReferenceApi.status,
@@ -289,14 +274,7 @@ void main() {
           ),
           ChangeNotifierProvider(create: (_) => FrameReceiverService()),
         ],
-        child: MaterialApp(
-          theme: ThemeData(
-            brightness: Brightness.dark,
-            useMaterial3: true,
-            fontFamily: 'NotoSansKR',
-          ),
-          home: const AppShell(),
-        ),
+        child: MaterialApp(theme: buildStudioTheme(), home: const AppShell()),
       ),
     );
     await tester.pump();

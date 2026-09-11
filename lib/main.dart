@@ -23,6 +23,7 @@ import 'screens/reference_images_screen.dart';
 import 'screens/roi_editor_screen.dart';
 import 'screens/viewer_screen.dart';
 import 'models/app_settings.dart';
+import 'theme/studio_theme.dart';
 import 'services/frame_receiver_service.dart';
 import 'services/remote_reference_api_service.dart';
 
@@ -92,12 +93,6 @@ class CatchEyeStudioApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const brandOrange = Color(0xFFFF7A2F);
-    const neutralPrimary = Color(0xFFE2E8F0);
-    const appBackground = Color(0xFF151515);
-    const appSurface = Color(0xFF252525);
-    const appSurfaceHigh = Color(0xFF303030);
-
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(
@@ -113,59 +108,7 @@ class CatchEyeStudioApp extends StatelessWidget {
         locale: const Locale('ko'),
         supportedLocales: const [Locale('ko')],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
-        theme: ThemeData(
-          brightness: Brightness.dark,
-          fontFamily: 'NotoSansKR',
-          scaffoldBackgroundColor: appBackground,
-          colorScheme: const ColorScheme.dark(
-            primary: neutralPrimary,
-            onPrimary: Color(0xFF111111),
-            primaryContainer: Color(0xFF4A4A4A),
-            onPrimaryContainer: Colors.white,
-            secondary: brandOrange,
-            onSecondary: Color(0xFF241005),
-            surface: appSurface,
-            onSurface: Color(0xFFEDEDED),
-            surfaceContainerHighest: appSurfaceHigh,
-            outline: Color(0xFF686868),
-          ),
-          dividerColor: const Color(0xFF4A4A4A),
-          useMaterial3: true,
-          filledButtonTheme: FilledButtonThemeData(
-            style: FilledButton.styleFrom(
-              backgroundColor: neutralPrimary,
-              foregroundColor: const Color(0xFF111111),
-              textStyle: const TextStyle(
-                fontFamily: 'NotoSansKR',
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          outlinedButtonTheme: OutlinedButtonThemeData(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: neutralPrimary,
-              side: const BorderSide(color: Color(0xFF666666)),
-              textStyle: const TextStyle(
-                fontFamily: 'NotoSansKR',
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          navigationRailTheme: const NavigationRailThemeData(
-            backgroundColor: appSurface,
-            indicatorColor: Color(0xFF333333),
-            selectedIconTheme: IconThemeData(color: neutralPrimary),
-            selectedLabelTextStyle: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
-            unselectedIconTheme: IconThemeData(color: Color(0xFFA8B9BC)),
-            unselectedLabelTextStyle: TextStyle(
-              color: Color(0xFFA8B9BC),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
+        theme: buildStudioTheme(),
         home: const AppShell(),
       ),
     );
@@ -543,7 +486,7 @@ class _AppSidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 224,
-      color: const Color(0xFF252525),
+      color: Theme.of(context).colorScheme.surface,
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
@@ -582,22 +525,21 @@ class _SidebarButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iconColor = selected
-        ? const Color(0xFFE5E7EB)
-        : const Color(0xFFA3A3A3);
+    final scheme = Theme.of(context).colorScheme;
+    final iconColor = selected ? scheme.onSurface : scheme.onSurfaceVariant;
     return Material(
-      color: selected ? const Color(0xFF3A3A3A) : Colors.transparent,
+      color: selected ? scheme.primaryContainer : Colors.transparent,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
         onTap: onTap,
         child: Container(
-          height: 44,
+          height: 48,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: selected ? const Color(0xFF737373) : Colors.transparent,
+              color: selected ? scheme.outline : Colors.transparent,
             ),
           ),
           child: Row(
@@ -614,9 +556,11 @@ class _SidebarButton extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                    color: selected ? Colors.white : const Color(0xFFA8B9BC),
+                    fontSize: 14,
+                    height: 1.35,
+                    letterSpacing: 0,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                    color: iconColor,
                   ),
                 ),
               ),
@@ -647,7 +591,7 @@ class _BottomNavigation extends StatelessWidget {
   Widget build(BuildContext context) {
     return BottomNavigationBar(
       type: BottomNavigationBarType.fixed,
-      backgroundColor: const Color(0xFF252525),
+      backgroundColor: Theme.of(context).colorScheme.surface,
       currentIndex: visibleItemIndexes.indexOf(selectedIndex),
       showUnselectedLabels: !isPhone,
       onTap: (selectedNavIndex) {

@@ -178,12 +178,9 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
                       color: scheme.secondary,
                     ),
                     const SizedBox(width: 8),
-                    const Text(
+                    Text(
                       '기준 이미지',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const Spacer(),
                     if (status != null) _StateChip(state: status.deviceState),
@@ -219,10 +216,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
                   color: scheme.secondary,
                 ),
                 const SizedBox(width: 8),
-                const Text(
-                  '기준 이미지',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+                Text('기준 이미지', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(width: 12),
                 if (status != null) _StateChip(state: status.deviceState),
                 if (status?.activeModelId case final activeModel?) ...[

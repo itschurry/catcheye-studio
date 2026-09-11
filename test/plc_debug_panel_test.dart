@@ -1,3 +1,4 @@
+import 'package:catcheye_studio/theme/studio_theme.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -87,6 +88,7 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       MaterialApp(
+        theme: buildStudioTheme(),
         home: Scaffold(
           body: PlcDebugPanel(
             catalog: debugCatalog(),
@@ -249,6 +251,7 @@ void main() {
       ChangeNotifierProvider.value(
         value: settings,
         child: MaterialApp(
+          theme: buildStudioTheme(),
           home: Scaffold(
             body: PlcDebugPanel(
               catalog: debugCatalog(),
@@ -286,11 +289,14 @@ void main() {
       await tester.pumpWidget(
         ChangeNotifierProvider.value(
           value: settings,
-          child: MaterialApp(home: ProductionScreen(api: api)),
+          child: MaterialApp(
+            theme: buildStudioTheme(),
+            home: ProductionScreen(api: api),
+          ),
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, 'PLC 디버그'));
+      await tester.tap(find.widgetWithText(Tab, 'PLC 디버그'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('debug-connect')));
       await tester.pumpAndSettle();

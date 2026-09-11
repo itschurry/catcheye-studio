@@ -1,3 +1,4 @@
+import 'package:catcheye_studio/theme/studio_theme.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -55,11 +56,7 @@ Future<void> _mount(
         ),
       ),
       child: MaterialApp(
-        theme: ThemeData(
-          brightness: Brightness.dark,
-          useMaterial3: true,
-          fontFamily: 'NotoSansKR',
-        ),
+        theme: buildStudioTheme(),
         home: Scaffold(body: InspectionResultsScreen(api: api)),
       ),
     ),

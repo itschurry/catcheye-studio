@@ -242,10 +242,7 @@ class _InspectionResultsScreenState extends State<InspectionResultsScreen> {
               children: [
                 Text(
                   '검사 결과 · ${_results.length}건',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
                 if (_lastUpdatedAt != null)
                   Text(

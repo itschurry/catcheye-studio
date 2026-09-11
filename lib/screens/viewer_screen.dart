@@ -953,10 +953,7 @@ class _ViewerScreenState extends State<ViewerScreen>
         children: [
           Icon(Icons.live_tv, size: 20, color: colorScheme.secondary),
           const SizedBox(width: 8),
-          const Text(
-            '실시간 영상',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
+          Text('실시간 영상', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(width: 24),
 
           // Connection controls

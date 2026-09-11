@@ -127,9 +127,12 @@ class _PlcDebugPanelState extends State<PlcDebugPanel> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('PLC 디버그', style: Theme.of(context).textTheme.headlineSmall),
+        Text('연결 대상', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 8),
-        const Text('실제 카메라·추론·이미지 저장을 사용합니다. 연결 대상을 바꾸려면 먼저 연결을 해제하세요.'),
+        Text(
+          '실제 카메라로 촬영합니다. 대상을 바꾸려면 먼저 연결을 해제하세요.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
         const SizedBox(height: 12),
         Wrap(
           spacing: 8,
@@ -151,6 +154,13 @@ class _PlcDebugPanelState extends State<PlcDebugPanel> {
                   ? (_) => setState(() => _simulated = false)
                   : null,
             ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
             FilledButton(
               key: const ValueKey('debug-connect'),
               onPressed:
@@ -197,7 +207,7 @@ class _PlcDebugPanelState extends State<PlcDebugPanel> {
           ),
         const Divider(height: 28),
         if (_simulated) ...[
-          const Text('1. 촬영할 제품·포인트·하드웨어 선택'),
+          Text('1. 촬영 대상', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 12),
           DropdownButtonFormField<int>(
             key: const ValueKey('debug-product'),
@@ -325,7 +335,7 @@ class _PlcDebugPanelState extends State<PlcDebugPanel> {
         ],
         const Divider(height: 28),
         Text(
-          _simulated ? '2. 시뮬레이터가 TCP로 받은 결과' : 'Inspect → 실제 PLC 송신 신호',
+          _simulated ? '2. 시뮬레이터 수신 결과' : 'Inspect → 실제 PLC 송신 신호',
           style: Theme.of(context).textTheme.titleMedium,
         ),
         Wrap(

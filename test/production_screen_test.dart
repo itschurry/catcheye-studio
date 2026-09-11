@@ -1,3 +1,4 @@
+import 'package:catcheye_studio/theme/studio_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -112,6 +113,7 @@ void main() {
       ChangeNotifierProvider.value(
         value: settings,
         child: MaterialApp(
+          theme: buildStudioTheme(),
           home: ValueListenableBuilder<bool>(
             valueListenable: active,
             builder: (context, visible, _) => Offstage(
@@ -145,12 +147,7 @@ void main() {
     active.value = true;
     await tester.pumpAndSettle();
     expect(api.statusReads, greaterThan(readsBeforeHide));
-    expect(
-      tester
-          .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'PLC 통신 진단'))
-          .selected,
-      isTrue,
-    );
+    expect(tester.widget<TabBar>(find.byType(TabBar)).controller!.index, 2);
     await tester.tap(find.text('제품 레시피'));
     await tester.pumpAndSettle();
     expect(find.text('편집 중'), findsOneWidget);
@@ -170,7 +167,10 @@ void main() {
       await tester.pumpWidget(
         ChangeNotifierProvider.value(
           value: settings,
-          child: MaterialApp(home: ProductionScreen(api: api)),
+          child: MaterialApp(
+            theme: buildStudioTheme(),
+            home: ProductionScreen(api: api),
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -221,7 +221,10 @@ void main() {
       await tester.pumpWidget(
         ChangeNotifierProvider.value(
           value: settings,
-          child: MaterialApp(home: ProductionScreen(api: api)),
+          child: MaterialApp(
+            theme: buildStudioTheme(),
+            home: ProductionScreen(api: api),
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -259,7 +262,10 @@ void main() {
       await tester.pumpWidget(
         ChangeNotifierProvider.value(
           value: settings,
-          child: MaterialApp(home: ProductionScreen(api: api)),
+          child: MaterialApp(
+            theme: buildStudioTheme(),
+            home: ProductionScreen(api: api),
+          ),
         ),
       );
       await tester.pumpAndSettle();
