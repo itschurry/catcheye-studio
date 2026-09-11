@@ -10,6 +10,32 @@ import 'production_api_test.dart' show catalogJson;
 
 class FakeProductionApi extends RemoteProductionApiService {
   RecipeCatalog catalog = RecipeCatalog.fromJson(catalogJson());
+  Map<String, dynamic>? lastCapture;
+  @override
+  Future<RecipeSlot> addProduct(AppSettings settings, int count) async {
+    expect(count, catalog.products.length);
+    final slot = RecipeSlot(
+      count + 1,
+      0,
+      const ProductRecipe('', []),
+      null,
+      null,
+    );
+    catalog = RecipeCatalog([...catalog.products, slot], catalog.defaults);
+    return slot;
+  }
+
+  @override
+  Future<ProductionCapture> command(
+    AppSettings settings,
+    String action, {
+    Map<String, dynamic> values = const {},
+  }) async {
+    expect(action, 'capture');
+    lastCapture = values;
+    throw const ProductionApiException(409, 'CAPTURE_BUSY');
+  }
+
   int saves = 0;
   int activations = 0;
   @override
@@ -17,17 +43,16 @@ class FakeProductionApi extends RemoteProductionApiService {
   @override
   Future<ProductionStatus> status(AppSettings settings) async =>
       ProductionStatus.fromJson({
-        'api_version': 1,
+        'api_version': 3,
         'control_epoch': 'boot-1',
-        'session': null,
+        'capture': null,
         'events': [],
         'error': '',
         'plc': {
           'state': 'DISABLED',
           'host': '',
           'port': 0,
-          'protocol': 'inspect_words_v1',
-          'result_acknowledged': false,
+          'protocol': 'inspect_onehot_v2',
           'enabled': false,
           'error': '',
           'events': [],
@@ -97,6 +122,61 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('REVISION_CONFLICT'), findsOneWidget);
       expect(api.catalog.products.first.draft.name, '다른 편집자 변경');
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'products can grow beyond five and manual capture addresses a point directly',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final settings = SettingsProvider();
+      addTearDown(settings.dispose);
+      final api = FakeProductionApi();
+      addTearDown(api.close);
+      const point = RecipePoint(
+        name: 'P1',
+        inspectionId: 'bolt_head',
+        expectedCount: 3,
+        candidateConfidence: .4,
+        presentConfidence: .5,
+        geometry: null,
+      );
+      api.catalog = RecipeCatalog([
+        RecipeSlot(
+          1,
+          1,
+          const ProductRecipe('A', [point]),
+          1,
+          const ProductRecipe('A', [point]),
+        ),
+        ...api.catalog.products.skip(1),
+      ], api.catalog.defaults);
+      await tester.binding.setSurfaceSize(const Size(1280, 950));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        ChangeNotifierProvider.value(
+          value: settings,
+          child: MaterialApp(home: ProductionScreen(api: api)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('add-product')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('product-6')), findsOneWidget);
+      await tester.tap(find.text('검사 진행'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('1. A'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('1회 촬영'));
+      await tester.pumpAndSettle();
+      expect(api.lastCapture, {
+        'product_id': 1,
+        'point_number': 1,
+        'hardware_id': 0,
+        'control_epoch': 'boot-1',
+      });
+      expect(find.text('결과 수신 확인'), findsNothing);
+      expect(find.text('검사 종료·전체 판정'), findsNothing);
       await tester.pumpWidget(const SizedBox());
     },
   );

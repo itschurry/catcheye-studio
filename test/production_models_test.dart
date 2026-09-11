@@ -2,13 +2,13 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:catcheye_studio/models/production.dart';
 
-Map<String, dynamic> sessionJson({
+Map<String, dynamic> captureJson({
   String origin = 'studio',
-  String state = 'READY',
+  String state = 'INSPECTING',
 }) =>
     jsonDecode(
           jsonEncode({
-            'session_id': 'session-1',
+            'capture_id': 'capture-1',
             'product_id': 1,
             'recipe_revision': 2,
             'recipe': {
@@ -27,9 +27,8 @@ Map<String, dynamic> sessionJson({
             'origin': origin,
             'state': state,
             'status': 'PENDING',
-            'step': 0,
+            'point_number': 1,
             'pending_cycle_id': null,
-            'result_request_id': null,
             'error': '',
             'results': [],
           }),
@@ -37,7 +36,7 @@ Map<String, dynamic> sessionJson({
         as Map<String, dynamic>;
 Map<String, dynamic> plcJson() =>
     jsonDecode(
-          '''{"state":"DISABLED","enabled":false,"host":"","port":0,"protocol":"inspect_words_v1","error":"","result_acknowledged":false,"events":[],"rx_map":{},"tx_map":{}}''',
+          '''{"state":"DISABLED","enabled":false,"host":"","port":0,"protocol":"inspect_onehot_v2","error":"","events":[],"rx_map":{},"tx_map":{}}''',
         )
         as Map<String, dynamic>;
 
@@ -45,8 +44,8 @@ void main() {
   test(
     'completed session preserves count mismatch and saved inspection evidence',
     () {
-      final json = sessionJson(state: 'COMPLETED')
-        ..['step'] = 1
+      final json = captureJson(state: 'COMPLETED')
+        ..['point_number'] = 1
         ..['status'] = 'NG'
         ..['results'] = [
           <String, dynamic>{
@@ -70,9 +69,8 @@ void main() {
             },
           },
         ];
-      final session = ProductionSession.fromJson(json);
+      final session = ProductionCapture.fromJson(json);
       expect(session.active, isFalse);
-      expect(session.canCapture, isFalse);
       expect(session.results.single.summaries.single.expectedCount, 3);
       expect(session.results.single.summaries.single.presentCount, 2);
       expect(session.results.single.capture.presentationStatus, 'NG');
@@ -87,39 +85,75 @@ void main() {
       );
     },
   );
-  test('manual controls honor state, pending capture and PLC ownership', () {
-    final ready = ProductionSession.fromJson(sessionJson());
-    expect(ready.canCapture, isTrue);
-    expect(ready.nextPoint!.expectedCount, 3);
-    expect(ready.canEnd, isFalse);
-    final plc = ProductionSession.fromJson(sessionJson(origin: 'plc'));
-    expect(plc.canCapture, isFalse);
-    expect(plc.canAbort, isFalse);
+  test('equipment failure without inspection images preserves its cause', () {
+    final record = ProductionCapture.fromJson(
+      captureJson(state: 'COMPLETED')
+        ..['status'] = 'NG'
+        ..['results'] = [
+          {
+            'cycle_id': 'failed-1',
+            'state': 'COMPLETED',
+            'status': 'EQUIPMENT_ERROR',
+            'reason': 'synthetic detector failure',
+          },
+        ],
+    );
+    expect(record.results.single.reason, 'synthetic detector failure');
+    expect(record.results.single.summaries, isEmpty);
+    expect(record.active, isFalse);
     expect(
-      ProductionSession.fromJson(
-        sessionJson(origin: 'plc', state: 'FAULT'),
-      ).canAbort,
-      isTrue,
+      () => ProductionResult.fromJson({
+        'cycle_id': 'bad',
+        'state': 'COMPLETED',
+        'status': 'OK',
+      }),
+      throwsFormatException,
     );
-    final pending = ProductionSession.fromJson(
-      sessionJson(state: 'INSPECTING')..['pending_cycle_id'] = 'cycle-1',
-    );
-    expect(pending.canCapture, isFalse);
-    expect(pending.canAbort, isFalse);
-    final ack = ProductionSession.fromJson(
-      sessionJson(state: 'WAITING_ACK')..['result_request_id'] = 'result-1',
-    );
-    expect(ack.canAcknowledge, isTrue);
   });
-  test('malformed session is rejected before it can enable a command', () {
+  test('a completed capture releases the next independent request', () {
+    expect(ProductionCapture.fromJson(captureJson()).active, isTrue);
+    expect(
+      ProductionCapture.fromJson(
+        captureJson(state: 'COMPLETED')..['status'] = 'NG',
+      ).active,
+      isFalse,
+    );
+    final expanded = ProductionCapture.fromJson(
+      captureJson()..['product_id'] = 255,
+    );
+    expect(expanded.productId, 255);
+  });
+  test(
+    'hardware zero is preserved and historical records stay unspecified',
+    () {
+      expect(
+        ProductionCapture.fromJson(
+          captureJson()..['hardware_id'] = 0,
+        ).hardwareId,
+        0,
+      );
+      expect(ProductionCapture.fromJson(captureJson()).hardwareId, isNull);
+      expect(PlcStatus.fromJson(plcJson()..['hardware_id'] = 3).hardwareId, 3);
+      for (final invalid in [-1, 4, '0']) {
+        expect(
+          () => ProductionCapture.fromJson(
+            captureJson()..['hardware_id'] = invalid,
+          ),
+          throwsFormatException,
+        );
+      }
+    },
+  );
+  test('malformed capture and removed ACK state fail explicitly', () {
     for (final bad in [
-      sessionJson()..remove('session_id'),
-      sessionJson()..['state'] = 'UNKNOWN',
-      sessionJson()..['step'] = 2,
-      sessionJson()..['origin'] = 'unknown',
-      sessionJson(state: 'WAITING_ACK'),
+      captureJson()..remove('capture_id'),
+      captureJson()..['point_number'] = 0,
+      captureJson()..['point_number'] = 2,
+      captureJson()..['product_id'] = 256,
+      captureJson()..['origin'] = 'unknown',
+      captureJson(state: 'WAITING_ACK'),
     ]) {
-      expect(() => ProductionSession.fromJson(bad), throwsFormatException);
+      expect(() => ProductionCapture.fromJson(bad), throwsFormatException);
     }
   });
   test(
@@ -140,15 +174,15 @@ void main() {
   );
   test('missing API version or session key fails explicitly', () {
     final json = <String, dynamic>{
-      'api_version': 1,
+      'api_version': 3,
       'control_epoch': 'boot-1',
-      'session': null,
+      'capture': null,
       'error': '',
       'events': [],
     };
-    expect(ProductionStatus.fromJson(json).session, isNull);
+    expect(ProductionStatus.fromJson(json).capture, isNull);
     expect(
-      () => ProductionStatus.fromJson({...json}..remove('session')),
+      () => ProductionStatus.fromJson({...json}..remove('capture')),
       throwsFormatException,
     );
     expect(

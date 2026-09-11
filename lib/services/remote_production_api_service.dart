@@ -29,6 +29,12 @@ class RemoteProductionApiService {
 
   Future<RecipeCatalog> recipes(AppSettings settings) async =>
       RecipeCatalog.fromJson(await request(settings, 'GET', 'recipes'));
+  Future<RecipeSlot> addProduct(AppSettings settings, int count) async =>
+      RecipeSlot.fromJson(
+        await request(settings, 'POST', 'products', {
+          'base_product_count': count,
+        }),
+      );
   Future<RecipeSlot> save(
     AppSettings settings,
     RecipeSlot slot,
@@ -48,16 +54,16 @@ class RemoteProductionApiService {
   Future<ProductionStatus> status(AppSettings settings) async =>
       ProductionStatus.fromJson(await request(settings, 'GET', 'status'));
 
-  Future<List<ProductionSession>> sessions(AppSettings settings) async {
-    final response = await request(settings, 'GET', 'sessions');
-    final items = response['sessions'];
+  Future<List<ProductionCapture>> captures(AppSettings settings) async {
+    final response = await request(settings, 'GET', 'captures');
+    final items = response['captures'];
     if (items is! List) throw const FormatException('제품 검사 이력 목록이 필요합니다');
     return List.unmodifiable(
-      items.map((item) => ProductionSession.fromJson(productionObject(item))),
+      items.map((item) => ProductionCapture.fromJson(productionObject(item))),
     );
   }
 
-  Future<ProductionSession> command(
+  Future<ProductionCapture> command(
     AppSettings settings,
     String action, {
     Map<String, dynamic> values = const {},
@@ -70,7 +76,7 @@ class RemoteProductionApiService {
     if (response['accepted'] != true) {
       throw const FormatException('생산 명령이 접수되지 않았습니다');
     }
-    return ProductionSession.fromJson(productionObject(response['session']));
+    return ProductionCapture.fromJson(productionObject(response['capture']));
   }
 
   Future<Map<String, dynamic>> request(

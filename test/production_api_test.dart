@@ -46,6 +46,22 @@ void main() {
     });
     expect(point.toJson()['expected_count'], isNull);
   });
+  test('catalog accepts expansion through product 255 with contiguous IDs', () {
+    final json = catalogJson();
+    final products = json['products'] as List;
+    for (var id = 6; id <= 255; id++) {
+      products.add({
+        ...products.first as Map<String, dynamic>,
+        'product_id': id,
+      });
+    }
+    expect(RecipeCatalog.fromJson(json).products.length, 255);
+    products.add({
+      ...products.first as Map<String, dynamic>,
+      'product_id': 256,
+    });
+    expect(() => RecipeCatalog.fromJson(json), throwsFormatException);
+  });
   test('unsupported or missing catalog is rejected', () {
     expect(
       () => RecipeCatalog.fromJson(catalogJson()..['schema_version'] = 2),
@@ -57,7 +73,7 @@ void main() {
     );
   });
   test(
-    'failed capture is posted once with the exact session and control epoch',
+    'failed capture is posted once with the exact product and point and control epoch',
     () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       addTearDown(() => server.close(force: true));
@@ -68,12 +84,14 @@ void main() {
         expect(request.uri.path, '/api/production/command');
         final body = jsonDecode(await utf8.decoder.bind(request).join()) as Map;
         expect(body['action'], 'capture');
-        expect(body['session_id'], 'session-1');
+        expect(body['product_id'], 6);
+        expect(body['point_number'], 2);
+        expect(body['hardware_id'], 1);
+        expect(body.containsKey('session_id'), false);
         expect(body['control_epoch'], 'boot-1');
-        expect(body['inspection_id'], 'bolt_head');
         expect(body['request_id'], isNotEmpty);
         request.response.statusCode = 409;
-        request.response.write('{"error":"NOT_READY_FOR_TRIGGER"}');
+        request.response.write('{"error":"CAPTURE_BUSY"}');
         await request.response.close();
       });
       addTearDown(subscription.cancel);
@@ -84,9 +102,10 @@ void main() {
           AppSettings(detectorBaseUrl: 'http://127.0.0.1:${server.port}'),
           'capture',
           values: {
-            'session_id': 'session-1',
+            'product_id': 6,
+            'point_number': 2,
+            'hardware_id': 1,
             'control_epoch': 'boot-1',
-            'inspection_id': 'bolt_head',
           },
         ),
         throwsA(

@@ -20,26 +20,50 @@ class PlcSettingsDialog extends StatefulWidget {
 }
 
 class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
-  static const signals = {
+  final signals = <String, Map<String, String>>{
     'rx': {
-      'request_sequence': '요청 순번',
-      'command': '검사 명령',
-      'product_id': '제품 번호',
-      'result_ack': '결과 수신 확인',
-      'heartbeat': '하트비트',
+      'hardware_0': '볼트 머리 선택 (0)',
+      'hardware_1': '스터드 선택 (1)',
+      'hardware_2': '너트 선택 (2)',
+      'hardware_3': '너트 홀 선택 (3)',
     },
-    'tx': {
-      'accepted_sequence': '접수한 요청 순번',
-      'rejected_sequence': '거부한 요청 순번',
-      'result_sequence': '결과 순번',
-      'result_status': '판정 결과',
-      'step': '현재 촬영 포인트',
-      'total': '전체 촬영 포인트',
-      'state': '검사 상태',
-      'heartbeat': '하트비트',
-      'error_code': '오류 코드',
-    },
+    'tx': {'ok': 'OK', 'ng': 'NG', 'heartbeat': 'Heartbeat'},
   };
+  final _selectionNumber = TextEditingController();
+  String _selectionKind = 'product';
+
+  String _selectionLabel(String name) {
+    final match = RegExp(
+      r'^(product|point)_([1-9][0-9]{0,2})$',
+    ).firstMatch(name);
+    if (match == null ||
+        int.parse(match[2]!) > (match[1] == 'product' ? 255 : 200)) {
+      throw FormatException('지원하지 않는 선택 신호: $name');
+    }
+    return '${match[1] == 'product' ? '제품' : '포인트'} ${match[2]} 선택';
+  }
+
+  void _addSelection() {
+    final number = int.tryParse(_selectionNumber.text.trim());
+    if (number == null ||
+        number < 1 ||
+        number > (_selectionKind == 'product' ? 255 : 200)) {
+      setState(() => _error = '제품은 1~255, 포인트는 1~200 번호를 입력하세요.');
+      return;
+    }
+    final name = '${_selectionKind}_$number';
+    if (signals['rx']!.containsKey(name)) {
+      setState(() => _error = '이미 등록된 선택 신호입니다: $name');
+      return;
+    }
+    setState(() {
+      signals['rx']![name] = _selectionLabel(name);
+      // New locations must be assigned explicitly; existing offsets never shift.
+      _fields['rx.$name'] = TextEditingController();
+      _error = null;
+    });
+  }
+
   final _form = GlobalKey<FormState>();
   final _fields = <String, TextEditingController>{};
   int? _revision;
@@ -59,6 +83,7 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
     for (final field in _fields.values) {
       field.dispose();
     }
+    _selectionNumber.dispose();
     super.dispose();
   }
 
@@ -78,15 +103,32 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
       if (revision is! int ||
           revision < 0 ||
           config['enabled'] is! bool ||
-          config['protocol'] != 'inspect_words_v1' ||
+          config['protocol'] != 'inspect_onehot_v2' ||
           !{'little', 'big'}.contains(config['byte_order'])) {
         throw const FormatException('지원하지 않는 PLC 설정 응답입니다');
+      }
+      final rx = productionObject(config['rx']);
+      final tx = productionObject(config['tx']);
+      if (![for (var i = 0; i < 4; i++) 'hardware_$i'].every(rx.containsKey) ||
+          tx.length != 3 ||
+          !signals['tx']!.keys.every(tx.containsKey)) {
+        throw const FormatException('PLC 신호 매핑이 올바르지 않습니다');
+      }
+      final rxLabels = <String, String>{
+        'hardware_0': '볼트 머리 선택 (0)',
+        'hardware_1': '스터드 선택 (1)',
+        'hardware_2': '너트 선택 (2)',
+        'hardware_3': '너트 홀 선택 (3)',
+      };
+      for (final name in rx.keys) {
+        if (!rxLabels.containsKey(name)) rxLabels[name] = _selectionLabel(name);
       }
       if (!mounted) return;
       for (final field in _fields.values) {
         field.dispose();
       }
       _fields.clear();
+      signals['rx'] = rxLabels;
       for (final key in [
         'host',
         'port',
@@ -147,15 +189,21 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
   Future<void> _save() async {
     if (!widget.canSave()) {
       setState(
-        () => _error = '검사를 종료하고 PLC 연결을 해제한 뒤 다시 시도하세요. 장비 연결 상태도 확인하세요.',
+        () => _error = '촬영이 끝나고 PLC 연결을 해제한 뒤 다시 시도하세요. 장비 연결 상태도 확인하세요.',
       );
       return;
     }
     if (!_form.currentState!.validate()) return;
+    if (_enabled &&
+        (!signals['rx']!.keys.any((name) => name.startsWith('product_')) ||
+            !signals['rx']!.keys.any((name) => name.startsWith('point_')))) {
+      setState(() => _error = '제품 선택 신호와 포인트 선택 신호를 각각 하나 이상 추가하세요.');
+      return;
+    }
     int? number(String key) => int.tryParse(_fields[key]!.text.trim());
     final config = <String, dynamic>{
       'enabled': _enabled,
-      'protocol': 'inspect_words_v1',
+      'protocol': 'inspect_onehot_v2',
       'host': _fields['host']!.text.trim(),
       'port': number('port'),
       'rx_words': number('rx_words'),
@@ -273,19 +321,19 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
                     title: const Text('고급 설정 · 프레임과 신호 매핑'),
                     children: [
                       const Text(
-                        'inspect_words_v1 · PLC 프로그램과 동일하게 설정하세요. 워드 위치는 0부터 시작하며 1워드는 2바이트입니다.',
+                        'inspect_onehot_v2 · PLC 프로그램과 동일하게 설정하세요. 신호 위치는 0부터 시작하며 신호 하나는 2바이트의 0/1입니다. 제품·포인트·하드웨어가 각각 하나씩 ON이 되면 1회 촬영합니다. 별도 트리거는 없습니다. 제품 5는 제품 5 선택 신호만 ON입니다. 다음 촬영 전에는 한 종류의 선택을 모두 OFF로 내린 프레임을 보내야 합니다. 예: 하드웨어 전체 OFF → 원하는 하드웨어 하나 ON.',
                       ),
                       const SizedBox(height: 12),
                       _numberField(
                         'rx_words',
                         '수신 워드 수 (PLC → Inspect)',
-                        5,
+                        6,
                         512,
                       ),
                       _numberField(
                         'tx_words',
                         '송신 워드 수 (Inspect → PLC)',
-                        9,
+                        3,
                         512,
                       ),
                       DropdownButtonFormField<String>(
@@ -325,12 +373,89 @@ class _PlcSettingsDialogState extends State<PlcSettingsDialog> {
                         Text(direction.key == 'rx' ? '수신 신호 위치' : '송신 신호 위치'),
                         const SizedBox(height: 12),
                         for (final signal in direction.value.entries)
-                          _numberField(
-                            '${direction.key}.${signal.key}',
-                            '${signal.value} (${direction.key}.${signal.key})',
-                            0,
-                            511,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _numberField(
+                                  '${direction.key}.${signal.key}',
+                                  '${signal.value} (${direction.key}.${signal.key})',
+                                  0,
+                                  511,
+                                ),
+                              ),
+                              if (direction.key == 'rx' &&
+                                  !signal.key.startsWith('hardware_'))
+                                IconButton(
+                                  key: ValueKey('remove-${signal.key}'),
+                                  tooltip: '선택 신호 삭제',
+                                  icon: const Icon(Icons.delete_outline),
+                                  onPressed: _busy
+                                      ? null
+                                      : () => setState(() {
+                                          signals['rx']!.remove(signal.key);
+                                          // Controllers are disposed after the old field leaves the widget tree.
+                                          final controller = _fields.remove(
+                                            'rx.${signal.key}',
+                                          );
+                                          WidgetsBinding.instance
+                                              .addPostFrameCallback(
+                                                (_) => controller?.dispose(),
+                                              );
+                                        }),
+                                ),
+                            ],
                           ),
+                        if (direction.key == 'rx') ...[
+                          const Text(
+                            '제품·포인트를 추가할 때 새 신호에 빈 위치를 지정하세요. 기존 위치는 변경되지 않습니다.',
+                          ),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 130,
+                                child: DropdownButtonFormField<String>(
+                                  key: const ValueKey('selection-kind'),
+                                  initialValue: _selectionKind,
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: 'product',
+                                      child: Text('제품'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'point',
+                                      child: Text('포인트'),
+                                    ),
+                                  ],
+                                  onChanged: _busy
+                                      ? null
+                                      : (value) => setState(
+                                          () => _selectionKind = value!,
+                                        ),
+                                ),
+                              ),
+                              SizedBox(
+                                width: 130,
+                                child: TextField(
+                                  key: const ValueKey('selection-number'),
+                                  controller: _selectionNumber,
+                                  enabled: !_busy,
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                    labelText: '선택 번호',
+                                  ),
+                                ),
+                              ),
+                              OutlinedButton(
+                                onPressed: _busy ? null : _addSelection,
+                                child: const Text('선택 신호 추가'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                        ],
                       ],
                     ],
                   ),

@@ -7,7 +7,7 @@ import 'package:catcheye_studio/widgets/plc_settings_dialog.dart';
 
 Map<String, dynamic> configuration() => {
   'enabled': false,
-  'protocol': 'inspect_words_v1',
+  'protocol': 'inspect_onehot_v2',
   'host': '',
   'port': null,
   'rx_words': null,
@@ -17,27 +17,15 @@ Map<String, dynamic> configuration() => {
   'timeout_ms': 5000,
   'rx': <String, dynamic>{
     for (final name in [
-      'request_sequence',
-      'command',
-      'product_id',
-      'result_ack',
-      'heartbeat',
+      for (var i = 0; i < 4; i++) 'hardware_$i',
+      for (var i = 1; i <= 5; i++) 'product_$i',
+      'point_1',
+      'point_2',
     ])
       name: null,
   },
   'tx': <String, dynamic>{
-    for (final name in [
-      'accepted_sequence',
-      'rejected_sequence',
-      'result_sequence',
-      'result_status',
-      'step',
-      'total',
-      'state',
-      'heartbeat',
-      'error_code',
-    ])
-      name: null,
+    for (final name in ['ok', 'ng', 'heartbeat']) name: null,
   },
 };
 
@@ -101,6 +89,14 @@ Future<void> open(
 }
 
 void main() {
+  testWidgets('hardware selection map is mandatory', (tester) async {
+    final api = SettingsApi();
+    api.config['rx'].remove('hardware_0');
+    await open(tester, api);
+    expect(find.textContaining('PLC 신호 매핑이 올바르지 않습니다'), findsOneWidget);
+    expect(api.writes, 0);
+  });
+
   testWidgets(
     'disabled draft saves address with revision and leaves unknown maps null',
     (tester) async {
@@ -162,13 +158,69 @@ void main() {
   testWidgets('duplicate signal positions cannot be saved', (tester) async {
     final api = SettingsApi();
     api.config['rx_words'] = 23;
-    api.config['rx']['request_sequence'] = 0;
-    api.config['rx']['command'] = 0;
+    api.config['rx']['hardware_0'] = 0;
+    api.config['rx']['product_1'] = 0;
     await open(tester, api);
     await tester.tap(find.text('저장 및 적용'));
     await tester.pumpAndSettle();
     expect(find.textContaining('신호 위치가 중복'), findsOneWidget);
     expect(api.writes, 0);
+  });
+
+  testWidgets('adding product 6 preserves product 5 and point 2 offsets', (
+    tester,
+  ) async {
+    final api = SettingsApi();
+    api.config['rx_words'] = 23;
+    api.config['rx']['product_5'] = 4;
+    api.config['rx']['point_2'] = 6;
+    api.config['rx']['hardware_0'] = 22;
+    await open(tester, api);
+    final number = find.byKey(const ValueKey('selection-number'));
+    await tester.ensureVisible(number);
+    await tester.enterText(number, '6');
+    await tester.ensureVisible(find.text('선택 신호 추가'));
+    await tester.tap(find.text('선택 신호 추가'));
+    await tester.pumpAndSettle();
+    final newField = field('제품 6 선택 (rx.product_6)');
+    await tester.ensureVisible(newField);
+    await tester.enterText(newField, '21');
+    await tester.tap(find.text('저장 및 적용'));
+    await tester.pumpAndSettle();
+    final rx = api.saved!['config']['rx'] as Map;
+    expect(rx['product_5'], 4);
+    expect(rx['point_2'], 6);
+    expect(rx['hardware_0'], 22);
+    expect(rx['product_6'], 21);
+    expect(rx.keys.any((key) => key.toString().contains('bit')), false);
+  });
+
+  testWidgets('point signals can be added and removed without renumbering', (
+    tester,
+  ) async {
+    final api = SettingsApi();
+    await open(tester, api);
+    final kind = find.byKey(const ValueKey('selection-kind'));
+    await tester.ensureVisible(kind);
+    await tester.tap(kind);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('포인트').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('selection-number')), '3');
+    await tester.ensureVisible(find.text('선택 신호 추가'));
+    await tester.tap(find.text('선택 신호 추가'));
+    await tester.pumpAndSettle();
+    expect(field('포인트 3 선택 (rx.point_3)'), findsOneWidget);
+    final remove = find.byKey(const ValueKey('remove-point_1'));
+    await tester.ensureVisible(remove);
+    await tester.tap(remove);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('저장 및 적용'));
+    await tester.pumpAndSettle();
+    final rx = api.saved!['config']['rx'] as Map;
+    expect(rx.containsKey('point_1'), false);
+    expect(rx.containsKey('point_2'), true);
+    expect(rx.containsKey('point_3'), true);
   });
 
   testWidgets('conflict preserves edits and does not retry', (tester) async {
@@ -192,7 +244,7 @@ void main() {
     idle = false;
     await tester.tap(find.text('저장 및 적용'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('검사를 종료하고'), findsOneWidget);
+    expect(find.textContaining('촬영이 끝나고'), findsOneWidget);
     expect(api.writes, 0);
   });
 }
