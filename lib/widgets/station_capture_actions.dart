@@ -24,6 +24,7 @@ class StationCaptureActions extends StatelessWidget {
         connected &&
         !inFlight &&
         current.ready &&
+        !current.productionActive &&
         current.pendingCount < current.maxPendingCaptures;
     return Wrap(
       spacing: 8,

@@ -24,8 +24,10 @@ class RemoteCaptureApiException implements Exception {
 }
 
 enum StationCaptureTarget {
-  boltStud('bolt-stud', 'Stud + Bolt Head'),
-  nut('nut', 'Nut + Nut Hole'),
+  boltHead('bolt-head', '볼트 머리'),
+  stud('stud', '스터드'),
+  nut('nut', '너트'),
+  nutHole('nut-hole', '너트 홀'),
   all('all', '전체 카메라');
 
   const StationCaptureTarget(this.path, this.label);
@@ -113,6 +115,7 @@ class StationCaptureStatus {
   static const supportedSetIds = {'fastener', 'bolt_stud', 'nut'};
 
   final String setId;
+  final bool productionActive;
   final bool ready;
   final bool busy;
   final int pendingCount;
@@ -126,6 +129,7 @@ class StationCaptureStatus {
 
   const StationCaptureStatus({
     required this.setId,
+    this.productionActive = false,
     required this.ready,
     required this.busy,
     required this.pendingCount,
@@ -139,7 +143,12 @@ class StationCaptureStatus {
   });
 
   List<StationCaptureTarget> get captureTargets => switch (setId) {
-    'fastener' => StationCaptureTarget.values,
+    'fastener' => const [
+      StationCaptureTarget.boltHead,
+      StationCaptureTarget.stud,
+      StationCaptureTarget.nut,
+      StationCaptureTarget.nutHole,
+    ],
     'bolt_stud' || 'nut' => const [StationCaptureTarget.all],
     _ => throw StateError('지원하지 않는 검사 구성 set_id: $setId'),
   };
@@ -188,8 +197,16 @@ class StationCaptureStatus {
     if (!supportedSetIds.contains(setId)) {
       throw FormatException('지원하지 않는 검사 구성 set_id: $setId');
     }
+    if (setId == 'fastener' && json['capture_api_version'] != 2) {
+      throw const FormatException(
+        '독립 검사 API v2가 필요해. Inspect와 Studio를 함께 업데이트해.',
+      );
+    }
     return StationCaptureStatus(
       setId: setId,
+      productionActive: setId == 'fastener'
+          ? _requiredBool(json, 'production_active')
+          : false,
       ready: _requiredBool(json, 'ready'),
       busy: _requiredBool(json, 'busy'),
       pendingCount: _optionalInt(json, 'pending_count') ?? 0,
@@ -558,7 +575,7 @@ class StationArchivePage {
       final bytes = result.rawJson['size_bytes'];
       if (path is! String ||
           !RegExp(
-            r'^(bolt_stud|nut|all)/\d{4}-\d{2}-\d{2}/[0-9]+-[0-9]+-[0-9]+$',
+            r'^(bolt_stud|nut|all|bolt_head|stud|nut_hole_alignment)/\d{4}-\d{2}-\d{2}/[0-9]+-[0-9]+-[0-9]+$',
           ).hasMatch(path) ||
           path.split('/')[1] != date ||
           path.split('/').last != result.cycleId ||
@@ -694,7 +711,7 @@ class RemoteCaptureApiService {
     }
     if (storagePath != null &&
         (!RegExp(
-              r'^(bolt_stud|nut|all)/\d{4}-\d{2}-\d{2}/[0-9]+-[0-9]+-[0-9]+$',
+              r'^(bolt_stud|nut|all|bolt_head|stud|nut_hole_alignment)/\d{4}-\d{2}-\d{2}/[0-9]+-[0-9]+-[0-9]+$',
             ).hasMatch(storagePath) ||
             storagePath.split('/').last != cycleId ||
             !_validArchiveDate(storagePath.split('/')[1]))) {

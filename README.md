@@ -1,5 +1,36 @@
 # CatchEye Studio
 
+## Inspect 제품 레시피와 PLC 진단
+
+Inspect 뷰어의 **제품 레시피 · 생산 검사 · PLC 진단** 버튼에서 다음 기능을 사용해.
+
+- 제품 5종의 이름·촬영 순서·검사 항목·기대 개수 편집
+- 포인트 추가·복제·삭제·위/아래 이동, 카메라 실시간 확인
+- 미정 값은 초안 저장, 필수 기준 검증 후 운영 적용
+- 제품 검사 시작·순차 촬영·결과 수신 확인·종료와 회차별 이미지·판정 사유 조회
+- PLC 연결·실제 송수신 워드·요청 접수/거부·결과 송신·PLC 수신 확인 진단
+
+레시피는 연결된 Inspect의 `state/production`에 저장돼. 진행 중인 제품의 레시피는 고정돼.
+PLC 제어 회차를 Studio에서 촬영·종료하지 않고, 오류 회차의 명시적 중단만 지원해.
+상태 조회 실패 시 제어 버튼을 막고 응답이 불확실한 명령을 자동 반복하지 않아.
+
+Inspect의 `/api/production/*` v1과 독립 촬영 `capture_api_version: 2`가 필요해.
+fastener의 기존 두 그룹 버튼은 볼트 머리·스터드·너트·너트 홀 네 개별 버튼으로 바뀌었어.
+구버전 그룹 경로로 전환하지 않아. 서버와 Studio를 함께 업데이트해야 해.
+
+새 파일은 `lib/screens/production_screen.dart`, `lib/services/remote_production_api_service.dart`야.
+화면 테스트와 API 테스트는 `test/production_screen_test.dart`, `test/production_api_test.dart`에 있어.
+
+```bash
+flutter analyze --no-pub
+flutter test --no-pub
+```
+
+이번 작업에서는 앱 빌드와 배포를 수행하지 않아. Inspect의 C++ Docker 빌드는 서버에서 수행해.
+현장 PLC의 IP·포트·워드 길이·신호 위치는 별도 확정이 필요하며, Wi-Fi 자체가 PLC 프로토콜은 아니야.
+Inspect 저장소의 `docs/PRODUCTION_RECIPES.md`가 TCP 신호 규약과 서버 검증 절차의 기준이야.
+
+
 CatchEye 장비의 영상 스트림을 확인하고 원격 설정을 조정하는 Flutter 데스크톱 앱.
 
 현재 버전: `v1.4.0`

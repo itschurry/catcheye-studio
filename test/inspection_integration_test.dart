@@ -19,8 +19,10 @@ void main() {
 
   test('station targets use explicit capture endpoints', () {
     expect(StationCaptureTarget.values.map((target) => target.path), [
-      'bolt-stud',
+      'bolt-head',
+      'stud',
       'nut',
+      'nut-hole',
       'all',
     ]);
   });
@@ -30,6 +32,8 @@ void main() {
     () {
       final status = StationCaptureStatus.fromJson(const {
         'set_id': 'fastener',
+        'capture_api_version': 2,
+        'production_active': false,
         'ready': true,
         'busy': true,
         'pending_count': 1,
@@ -51,7 +55,12 @@ void main() {
       });
       expect(status.pendingCount, 1);
       expect(status.setId, 'fastener');
-      expect(status.captureTargets, StationCaptureTarget.values);
+      expect(
+        status.captureTargets,
+        StationCaptureTarget.values.where(
+          (target) => target != StationCaptureTarget.all,
+        ),
+      );
       expect(status.maxPendingCaptures, 3);
       expect(status.cameras['nut_hole_camera']?.open, isFalse);
 
@@ -380,7 +389,7 @@ void main() {
     final subscription = server.listen((request) async {
       requestCount++;
       expect(request.method, 'POST');
-      expect(request.uri.path, '/api/capture/bolt-stud');
+      expect(request.uri.path, '/api/capture/bolt-head');
       final body = await utf8.decoder.bind(request).join();
       expect(body, isEmpty);
       request.response.statusCode = HttpStatus.conflict;
@@ -398,7 +407,7 @@ void main() {
     await expectLater(
       service.requestStationCapture(
         settings,
-        target: StationCaptureTarget.boltStud,
+        target: StationCaptureTarget.boltHead,
       ),
       throwsA(
         isA<RemoteCaptureApiException>().having(
@@ -446,8 +455,10 @@ void main() {
         expect(accepted.cycleId, 'cycle-${paths.length}');
       }
       expect(paths, [
-        '/api/capture/bolt-stud',
+        '/api/capture/bolt-head',
+        '/api/capture/stud',
         '/api/capture/nut',
+        '/api/capture/nut-hole',
         '/api/capture/all',
       ]);
     },

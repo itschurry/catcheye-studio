@@ -8,8 +8,11 @@ Map<String, dynamic> statusJson(
   String profile, {
   bool ready = true,
   int pending = 0,
+  bool productionActive = false,
 }) => {
   'set_id': profile,
+  'capture_api_version': 2,
+  'production_active': productionActive,
   'ready': ready,
   'busy': false,
   'pending_count': pending,
@@ -91,12 +94,12 @@ void main() {
         );
         expect(
           find.byType(FilledButton),
-          findsNWidgets(profile == 'fastener' ? 3 : 1),
+          findsNWidgets(profile == 'fastener' ? 4 : 1),
         );
         expect(find.byType(DropdownButtonFormField<String>), findsNothing);
         expect(
           find.text('전체 카메라 (${profile == 'fastener' ? 4 : 2})'),
-          findsOneWidget,
+          profile == 'fastener' ? findsNothing : findsOneWidget,
         );
         for (final target in status.captureTargets) {
           final button = find.byKey(ValueKey('station-capture-${target.path}'));
@@ -122,7 +125,7 @@ void main() {
           onCapture: captured.add,
         ),
       );
-      await tester.tap(find.byKey(const ValueKey('station-capture-bolt-stud')));
+      await tester.tap(find.byKey(const ValueKey('station-capture-bolt-head')));
       await tester.pumpWidget(
         screen(
           status: StationCaptureStatus.fromJson(statusJson('nut')),
@@ -130,13 +133,13 @@ void main() {
         ),
       );
       expect(
-        find.byKey(const ValueKey('station-capture-bolt-stud')),
+        find.byKey(const ValueKey('station-capture-bolt-head')),
         findsNothing,
       );
       expect(find.byKey(const ValueKey('station-capture-nut')), findsNothing);
       await tester.tap(find.byKey(const ValueKey('station-capture-all')));
       expect(captured, [
-        StationCaptureTarget.boltStud,
+        StationCaptureTarget.boltHead,
         StationCaptureTarget.all,
       ]);
     },
@@ -151,13 +154,20 @@ void main() {
     expect(find.byType(FilledButton), findsNothing);
   });
 
-  for (final state in ['disconnected', 'inFlight', 'notReady', 'queueFull']) {
+  for (final state in [
+    'disconnected',
+    'inFlight',
+    'notReady',
+    'queueFull',
+    'productionActive',
+  ]) {
     testWidgets('$state disables every capture action', (tester) async {
       final status = StationCaptureStatus.fromJson(
         statusJson(
           'fastener',
           ready: state != 'notReady',
           pending: state == 'queueFull' ? 4 : 0,
+          productionActive: state == 'productionActive',
         ),
       );
       await tester.pumpWidget(
