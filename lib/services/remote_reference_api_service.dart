@@ -432,10 +432,12 @@ class ModelValidationResult {
     required this.reason,
     required this.latencyMs,
     this.detections,
+    this.imageId,
     this.measurements = const {},
   });
 
   final String source;
+  final String? imageId;
   final String className;
   final String status;
   final String reason;
@@ -455,6 +457,9 @@ class ModelValidationResult {
     }
     return ModelValidationResult(
       source: _requiredString(json, 'source'),
+      imageId: json['image_id'] == null
+          ? null
+          : _requiredString(json, 'image_id'),
       className: _requiredString(json, 'class_name'),
       status: _requiredString(json, 'status'),
       reason: _optionalString(json, 'reason'),
@@ -816,19 +821,90 @@ class RemoteReferenceApiService {
     return ReferenceRevision.fromJson(json);
   }
 
+  /// Saves one image while retaining the explicitly supplied images of the same class.
   Future<ReferenceRevision> createRevision(
     AppSettings settings, {
     required String? baseRevisionId,
     required String className,
     required String imageId,
     required List<ReferenceBox> boxes,
+    List<ReferenceRevisionEntry> otherImages = const [],
+    required String bearerToken,
+    String? requestId,
+  }) async {
+    if (otherImages.any((entry) => entry.className != className)) {
+      throw const FormatException('같은 클래스의 기준 이미지만 함께 저장할 수 있습니다');
+    }
+    return _replaceClassSamples(
+      settings,
+      baseRevisionId: baseRevisionId,
+      className: className,
+      samples: [
+        for (final entry in otherImages)
+          {
+            'image_id': entry.imageId,
+            'boxes': (entry.imageId == imageId ? boxes : entry.boxes)
+                .map((box) => box.toJson())
+                .toList(),
+          },
+        if (!otherImages.any((entry) => entry.imageId == imageId))
+          {
+            'image_id': imageId,
+            'boxes': boxes.map((box) => box.toJson()).toList(),
+          },
+      ],
+      bearerToken: bearerToken,
+      requestId: requestId,
+    );
+  }
+
+  Future<ReferenceRevision> replaceClassReferences(
+    AppSettings settings, {
+    required String baseRevisionId,
+    required String className,
+    required List<ReferenceRevisionEntry> samples,
+    required String bearerToken,
+    String? requestId,
+  }) {
+    if (samples.any((entry) => entry.className != className)) {
+      throw const FormatException('같은 클래스의 기준 이미지만 함께 저장할 수 있습니다');
+    }
+    return _replaceClassSamples(
+      settings,
+      baseRevisionId: baseRevisionId,
+      className: className,
+      samples: [
+        for (final entry in samples)
+          {
+            'image_id': entry.imageId,
+            'boxes': entry.boxes.map((box) => box.toJson()).toList(),
+          },
+      ],
+      bearerToken: bearerToken,
+      requestId: requestId,
+    );
+  }
+
+  Future<ReferenceRevision> _replaceClassSamples(
+    AppSettings settings, {
+    required String? baseRevisionId,
+    required String className,
+    required List<Map<String, dynamic>> samples,
     required String bearerToken,
     String? requestId,
   }) async {
     final normalizedClass = _requireId(className, 'class_name');
-    final normalizedImageId = _requireId(imageId, 'image_id');
-    if (boxes.isEmpty || boxes.length > 64) {
-      throw const FormatException('박스는 1~64개가 필요합니다');
+    if (samples.isEmpty || samples.length > 16) {
+      throw const FormatException('클래스별 기준 이미지는 1~16장이 필요합니다');
+    }
+    final ids = <String>{};
+    for (final sample in samples) {
+      final id = _requireId(sample['image_id'] as String, 'image_id');
+      if (!ids.add(id)) throw const FormatException('같은 이미지를 중복 등록할 수 없습니다');
+      final boxes = sample['boxes'] as List;
+      if (boxes.isEmpty || boxes.length > 64) {
+        throw const FormatException('이미지마다 박스는 1~64개가 필요합니다');
+      }
     }
     final json = await _requestJson(
       'POST',
@@ -838,11 +914,8 @@ class RemoteReferenceApiService {
         'request_id': requestId ?? generateRequestId(),
         'base_revision_id': baseRevisionId,
         'entries': [
-          {
-            'class_name': normalizedClass,
-            'image_id': normalizedImageId,
-            'boxes': boxes.map((box) => box.toJson()).toList(growable: false),
-          },
+          for (final sample in samples)
+            {'class_name': normalizedClass, ...sample},
         ],
       },
     );

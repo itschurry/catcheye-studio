@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:catcheye_studio/theme/studio_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -21,6 +22,108 @@ void main() {
           ..addFont(rootBundle.load('assets/fonts/NotoSansCJKkr-Regular.otf'))
           ..addFont(rootBundle.load('assets/fonts/NotoSansCJKkr-Bold.otf')))
         .load();
+  });
+
+  testWidgets('multiple reference images can be added, edited and excluded', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final settings = AppSettings(
+      detectorBaseUrl: 'http://station.test:8090',
+      remoteDeviceKind: RemoteDeviceKind.inspection,
+    );
+    final store = ReferenceCredentialStore(backend: _MemoryCredentialBackend());
+    await store.writeToken(
+      settings,
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    );
+    final api = _MultiReferenceApi();
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(
+            create: (_) => SettingsProvider(initialSettings: settings),
+          ),
+          ChangeNotifierProvider(
+            create: (_) => ReferenceCredentialProvider(store: store),
+          ),
+        ],
+        child: MaterialApp(
+          theme: buildStudioTheme(),
+          home: Scaffold(
+            body: ReferenceImagesScreen(
+              initialStatus: _FakeReferenceApi.status,
+              api: api,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('새 이미지 촬영'));
+    await tester.tap(find.text('새 이미지 촬영'));
+    await tester.pumpAndSettle();
+    final canvas = find.byKey(const ValueKey('img_new'));
+    expect(canvas, findsOneWidget);
+    final rect = tester.getRect(canvas);
+    final gesture = await tester.startGesture(
+      rect.center - const Offset(80, 60),
+    );
+    await gesture.moveBy(const Offset(30, 25));
+    await tester.pump();
+    await gesture.moveBy(const Offset(100, 90));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('개정본 저장'));
+    await tester.pumpAndSettle();
+    expect(api.current.entries.map((e) => e.imageId), [
+      'img_initial',
+      'img_new',
+    ]);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('reference-sample-stud-img_initial')),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const ValueKey('reference-controls')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('reference-sample-stud-img_initial')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('개정본 저장'));
+    await tester.pumpAndSettle();
+    expect(api.current.entries.length, 2);
+    expect(api.serial, 2);
+    final tile = find.byKey(
+      const ValueKey('reference-sample-stud-img_initial'),
+    );
+    await tester.ensureVisible(tile);
+    await tester.tap(
+      find.descendant(of: tile, matching: find.byTooltip('개정본에서 이미지 제외')),
+    );
+    await tester.pumpAndSettle();
+    expect(api.current.entries.single.imageId, 'img_new');
+    final remaining = find.byKey(
+      const ValueKey('reference-sample-stud-img_new'),
+    );
+    await tester.ensureVisible(remaining);
+    expect(
+      tester
+          .widget<IconButton>(
+            find.descendant(of: remaining, matching: find.byType(IconButton)),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('reference screen shows revision examples and model review', (
@@ -449,4 +552,127 @@ class _MemoryCredentialBackend implements SecureCredentialBackend {
 
   @override
   Future<void> write(String key, String value) async => values[key] = value;
+}
+
+class _MultiReferenceApi extends _FakeReferenceApi {
+  int serial = 0;
+  ReferenceRevision current = const ReferenceRevision(
+    revisionId: 'refrev_initial',
+    baseRevisionId: null,
+    createdAtMs: 1,
+    entries: [
+      ReferenceRevisionEntry(
+        className: 'stud',
+        imageId: 'img_initial',
+        imageUrl: '/api/reference/images/img_initial',
+        width: 1280,
+        height: 800,
+        boxes: [ReferenceBox(100, 100, 300, 400)],
+        contextRatio: .1,
+      ),
+    ],
+  );
+  @override
+  Future<ReferenceRevisionList> fetchRevisions(
+    AppSettings settings, {
+    required String bearerToken,
+    int limit = 20,
+    String? cursor,
+  }) async => ReferenceRevisionList(
+    revisions: [
+      ReferenceRevisionSummary(
+        revisionId: current.revisionId,
+        baseRevisionId: current.baseRevisionId,
+        createdAtMs: 1,
+      ),
+    ],
+    nextCursor: null,
+  );
+  @override
+  Future<ReferenceRevision> fetchRevision(
+    AppSettings settings,
+    String revisionId, {
+    required String bearerToken,
+  }) async => current;
+  @override
+  Future<Uint8List> fetchImageUrl(
+    AppSettings settings,
+    String relativeUrl, {
+    required String bearerToken,
+  }) async => base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN6kAAAAASUVORK5CYII=',
+  );
+  @override
+  Future<ReferenceCapture> requestCapture(
+    AppSettings settings,
+    String cameraId, {
+    required String bearerToken,
+    String? requestId,
+  }) async => const ReferenceCapture(
+    captureId: 'capture_new',
+    state: ReferenceCaptureState.ready,
+    error: '',
+    image: ReferenceImageInfo(
+      imageId: 'img_new',
+      cameraId: 'stud_camera',
+      cameraSerial: 'fake',
+      width: 1280,
+      height: 800,
+      capturedAtMs: 1,
+      sourceTimestampMs: 1,
+      url: '/api/reference/images/img_new',
+      sha256: 'test',
+    ),
+  );
+  @override
+  Future<ReferenceRevision> createRevision(
+    AppSettings settings, {
+    required String? baseRevisionId,
+    required String className,
+    required String imageId,
+    required List<ReferenceBox> boxes,
+    List<ReferenceRevisionEntry> otherImages = const [],
+    required String bearerToken,
+    String? requestId,
+  }) async {
+    expect(baseRevisionId, current.revisionId);
+    expect(otherImages.length, current.entries.length);
+    current = ReferenceRevision(
+      revisionId: 'refrev_${++serial}',
+      baseRevisionId: baseRevisionId,
+      createdAtMs: serial,
+      entries: [
+        for (final sample in otherImages)
+          if (sample.imageId != imageId) sample,
+        ReferenceRevisionEntry(
+          className: className,
+          imageId: imageId,
+          imageUrl: '/api/reference/images/$imageId',
+          width: 1280,
+          height: 800,
+          boxes: boxes,
+          contextRatio: .1,
+        ),
+      ],
+    );
+    return current;
+  }
+
+  @override
+  Future<ReferenceRevision> replaceClassReferences(
+    AppSettings settings, {
+    required String baseRevisionId,
+    required String className,
+    required List<ReferenceRevisionEntry> samples,
+    required String bearerToken,
+    String? requestId,
+  }) async {
+    current = ReferenceRevision(
+      revisionId: 'refrev_${++serial}',
+      baseRevisionId: baseRevisionId,
+      createdAtMs: serial,
+      entries: samples,
+    );
+    return current;
+  }
 }

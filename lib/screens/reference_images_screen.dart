@@ -340,6 +340,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
     return Material(
       color: Theme.of(context).colorScheme.surface,
       child: ListView(
+        key: const ValueKey('reference-controls'),
         padding: const EdgeInsets.all(16),
         children: [
           const Text('촬영 대상', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -356,7 +357,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
               for (final cameraId in status.cameraClasses.keys)
                 DropdownMenuItem(value: cameraId, child: Text(cameraId)),
             ],
-            onChanged: _capturing ? null : _selectCamera,
+            onChanged: _capturing || _saving || _loading ? null : _selectCamera,
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
@@ -374,7 +375,7 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
                   child: Text(_classLabel(className)),
                 ),
             ],
-            onChanged: _capturing ? null : _selectClass,
+            onChanged: _capturing || _saving || _loading ? null : _selectClass,
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
@@ -382,7 +383,9 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
                 status.capabilities.referenceCapture &&
                     status.isRunning &&
                     _cameraId != null &&
-                    !_capturing
+                    !_capturing &&
+                    !_saving &&
+                    !_loading
                 ? _startCapture
                 : null,
             icon: _capturing
@@ -478,7 +481,9 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
                   ),
                 ),
             ],
-            onChanged: _saving ? null : _selectBaseRevision,
+            onChanged: _saving || _capturing || _loading
+                ? null
+                : _selectBaseRevision,
           ),
           if (_revisions.isEmpty) ...[
             const SizedBox(height: 8),
@@ -493,17 +498,56 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
-            for (final entry in _currentRevision!.entries)
-              ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: Text(_classLabel(entry.className)),
-                subtitle: Text(
-                  '${entry.width} × ${entry.height} · 박스 ${entry.boxes.length}개',
-                ),
-                trailing: const Icon(Icons.open_in_new, size: 18),
-                onTap: _loading ? null : () => _openRevisionEntry(entry),
+            const Text(
+              '클래스별 최대 16장 · 새 촬영은 추가, 기존 이미지의 박스 편집은 수정',
+              style: TextStyle(fontSize: 12),
+            ),
+            for (final name
+                in _currentRevision!.entries
+                    .map((e) => e.className)
+                    .toSet()) ...[
+              const SizedBox(height: 8),
+              Text(
+                _classLabel(name),
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
+              Text(
+                '${_currentRevision!.entries.where((e) => e.className == name).length} / 16장',
+                style: const TextStyle(fontSize: 12),
+              ),
+              for (final (index, entry)
+                  in _currentRevision!.entries
+                      .where((e) => e.className == name)
+                      .indexed)
+                ListTile(
+                  key: ValueKey(
+                    'reference-sample-${entry.className}-${entry.imageId}',
+                  ),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('이미지 ${index + 1}'),
+                  subtitle: Text(
+                    '${entry.width} × ${entry.height} · 박스 ${entry.boxes.length}개',
+                  ),
+                  trailing: IconButton(
+                    tooltip: '개정본에서 이미지 제외',
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    onPressed:
+                        _loading ||
+                            _saving ||
+                            _capturing ||
+                            _currentRevision!.entries
+                                    .where((e) => e.className == name)
+                                    .length <=
+                                1
+                        ? null
+                        : () => _removeReferenceImage(entry),
+                  ),
+                  onTap: _loading || _saving || _capturing
+                      ? null
+                      : () => _openRevisionEntry(entry),
+                ),
+            ],
           ],
         ],
       ),
@@ -563,6 +607,8 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
         status.capabilities.referenceRevisions &&
         _editorImage != null &&
         _baseRevisionId != null &&
+        _currentRevision?.revisionId == _baseRevisionId &&
+        !_loading &&
         _className != null &&
         _boxes.isNotEmpty &&
         !_saving;
@@ -1133,7 +1179,14 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
     final session = _pollSession;
     final image = _editorImage;
     final className = _className;
-    if (image == null || className == null || _boxes.isEmpty) return;
+    if (image == null || className == null || _boxes.isEmpty || _loading) {
+      return;
+    }
+    if (_currentRevision == null ||
+        _currentRevision!.revisionId != _baseRevisionId) {
+      _showMessage('기준 개정본을 먼저 불러와 주세요.', error: true);
+      return;
+    }
     if (_boxes.any((box) => !box.isValidFor(image.width, image.height))) {
       _showMessage('원본 이미지 범위를 벗어난 박스가 있습니다.', error: true);
       return;
@@ -1150,12 +1203,16 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
         className: className,
         imageId: image.imageId,
         boxes: _boxes,
+        otherImages: _currentRevision!.entries
+            .where((e) => e.className == className)
+            .toList(),
         bearerToken: token,
         requestId: _revisionRequestId,
       );
       if (!mounted || session != _pollSession) return;
       setState(() {
         _baseRevisionId = revision.revisionId;
+        _currentRevision = revision;
         _revisionRequestId = null;
         _revisions = [
           ReferenceRevisionSummary(
@@ -1166,7 +1223,9 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
           ..._revisions.where((item) => item.revisionId != revision.revisionId),
         ];
       });
-      _showMessage('${_displayId(revision.revisionId)} 저장 완료.');
+      _showMessage(
+        '${_displayId(revision.revisionId)} 저장 완료 · ${_classLabel(className)} ${revision.entries.where((e) => e.className == className).length}장. 모델을 빌드·적용해야 검사에 반영됩니다.',
+      );
       unawaited(_reload());
     } catch (error) {
       if (mounted && session == _pollSession) {
@@ -1176,6 +1235,60 @@ class _ReferenceImagesScreenState extends State<ReferenceImagesScreen> {
       if (mounted && session == _pollSession) {
         setState(() => _saving = false);
       }
+    }
+  }
+
+  Future<void> _removeReferenceImage(ReferenceRevisionEntry entry) async {
+    if (_saving || _loading || _currentRevision == null) return;
+    final revision = _currentRevision!;
+    final remaining = revision.entries
+        .where(
+          (e) => e.className == entry.className && e.imageId != entry.imageId,
+        )
+        .toList();
+    if (remaining.isEmpty) return;
+    final session = _pollSession;
+    setState(() {
+      _saving = true;
+      _revisionRequestId = null;
+    });
+    try {
+      final settings = context.read<SettingsProvider>().settings;
+      final token = await _readToken(settings);
+      if (!mounted || session != _pollSession) return;
+      final saved = await _api.replaceClassReferences(
+        settings,
+        baseRevisionId: revision.revisionId,
+        className: entry.className,
+        samples: remaining,
+        bearerToken: token,
+      );
+      if (!mounted || session != _pollSession) return;
+      setState(() {
+        _baseRevisionId = saved.revisionId;
+        _currentRevision = saved;
+        _revisions = [
+          ReferenceRevisionSummary(
+            revisionId: saved.revisionId,
+            baseRevisionId: saved.baseRevisionId,
+            createdAtMs: saved.createdAtMs,
+          ),
+          ..._revisions,
+        ];
+        if (_editorImage?.imageId == entry.imageId &&
+            _className == entry.className) {
+          _editorImage = null;
+          _imageBytes = null;
+          _boxes = const [];
+        }
+      });
+      _showMessage('이미지를 제외한 개정본 저장 완료. 모델 빌드·적용 후 반영됩니다.');
+    } catch (error) {
+      if (mounted && session == _pollSession) {
+        _showMessage(_describeError(error), error: true);
+      }
+    } finally {
+      if (mounted && session == _pollSession) setState(() => _saving = false);
     }
   }
 
